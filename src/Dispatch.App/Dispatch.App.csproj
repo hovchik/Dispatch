@@ -5,7 +5,11 @@
     <RootNamespace>Dispatch.App</RootNamespace>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationIcon>Assets\dispatch.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Dispatch.Infrastructure\Dispatch.Infrastructure.csproj" />
   </ItemGroup>

@@ -1,3 +1,5 @@
+<p align="center"><img src="src/Dispatch.App/Assets/dispatch-logo.svg" width="96" alt="Dispatch logo" /></p>
+
 # Dispatch
 
 A clean, fast, cross-platform API client (Postman-style) built on **.NET 10** and **Avalonia 11**.
