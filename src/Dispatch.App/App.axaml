@@ -1,0 +1,147 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Dispatch.App.App"
+             RequestedThemeVariant="Dark">
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <!-- Brand accent (used by Fluent for primary buttons, focus, selection). -->
+      <Color x:Key="SystemAccentColor">#FF6C37</Color>
+      <Color x:Key="SystemAccentColorDark1">#E85A28</Color>
+      <Color x:Key="SystemAccentColorDark2">#CC4E22</Color>
+      <Color x:Key="SystemAccentColorLight1">#FF8559</Color>
+      <Color x:Key="SystemAccentColorLight2">#FF9E7A</Color>
+
+      <FontFamily x:Key="MonoFont">Cascadia Code, Consolas, JetBrains Mono, Menlo, monospace</FontFamily>
+
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="AppBackgroundBrush" Color="#1B1C1F" />
+          <SolidColorBrush x:Key="SurfaceBrush" Color="#232428" />
+          <SolidColorBrush x:Key="SurfaceAltBrush" Color="#2A2B30" />
+          <SolidColorBrush x:Key="DividerBrush" Color="#34363C" />
+          <SolidColorBrush x:Key="HoverBrush" Color="#303238" />
+          <SolidColorBrush x:Key="MutedTextBrush" Color="#9AA0A6" />
+          <SolidColorBrush x:Key="ErrorSurfaceBrush" Color="#3A2023" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F4F5F7" />
+          <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="SurfaceAltBrush" Color="#F0F1F4" />
+          <SolidColorBrush x:Key="DividerBrush" Color="#E2E4E8" />
+          <SolidColorBrush x:Key="HoverBrush" Color="#ECEEF1" />
+          <SolidColorBrush x:Key="MutedTextBrush" Color="#6B7280" />
+          <SolidColorBrush x:Key="ErrorSurfaceBrush" Color="#FDECEC" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+
+      <!-- Icons (24x24 path data). -->
+      <StreamGeometry x:Key="IconPlus">M11,5 H13 V11 H19 V13 H13 V19 H11 V13 H5 V11 H11 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconClose">M6.4,5 L12,10.6 L17.6,5 L19,6.4 L13.4,12 L19,17.6 L17.6,19 L12,13.4 L6.4,19 L5,17.6 L10.6,12 L5,6.4 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconTrash">M9,3 H15 V5 H20 V7 H4 V5 H9 Z M6,8 H18 L17,21 H7 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconFolder">M3,5 H10 L12,7 H21 V19 H3 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconCopy">M8,3 H20 V17 H8 Z M4,7 H6 V19 H16 V21 H4 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconMoon">M12,3 A9,9 0 1 0 21,12 A7,7 0 1 1 12,3 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconSave">M5,3 H17 L21,7 V21 H3 V3 Z M7,5 V9 H15 V5 Z M12,13 A3,3 0 1 0 12.01,13 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconSend">M3,20 L21,12 L3,4 L3,10 L15,12 L3,14 Z</StreamGeometry>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.method">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBox.mono">
+      <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+      <Setter Property="FontSize" Value="12.5" />
+    </Style>
+
+    <!-- Compact, borderless inputs used in key/value grids. -->
+    <Style Selector="TextBox.cell">
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="8,5" />
+    </Style>
+
+    <Style Selector="Button.icon">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="6" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.icon PathIcon">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Height" Value="14" />
+    </Style>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+
+    <!-- Fluent's default tab headers are very large; make them fit a dense tool UI. -->
+    <Style Selector="TabItem">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Padding" Value="10,0" />
+    </Style>
+
+    <!-- Request tab strip -->
+    <Style Selector="ListBox.tabs">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.tabs ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,1,0" />
+      <Setter Property="CornerRadius" Value="6,6,0,0" />
+    </Style>
+    <Style Selector="ListBox.tabs ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    </Style>
+    <Style Selector="ListBox.tabs ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+    </Style>
+
+    <Style Selector="ListBox.tabs Button.tabclose.dirty">
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="ListBox.tabs ListBoxItem:pointerover Button.tabclose">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="ListBox.tabs ListBoxItem:pointerover Ellipse.dirtydot">
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+
+    <!-- Selectable list rows in the sidebar (history). -->
+    <Style Selector="ListBox.plain">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.plain ListBoxItem">
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+  </Application.Styles>
+</Application>

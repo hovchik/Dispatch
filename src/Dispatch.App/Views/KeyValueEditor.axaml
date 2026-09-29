@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Dispatch.App.ViewModels"
+             x:Class="Dispatch.App.Views.KeyValueEditor"
+             x:DataType="vm:KeyValueListViewModel">
+
+  <Border Classes="card" ClipToBounds="True">
+    <DockPanel>
+      <!-- Header -->
+      <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceAltBrush}"
+              BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="36,*,*,36" Height="30">
+          <TextBlock Grid.Column="1" Classes="section" Text="{Binding KeyWatermark}" Margin="8,0" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="2" Classes="section" Text="{Binding ValueWatermark}" Margin="8,0" VerticalAlignment="Center" />
+        </Grid>
+      </Border>
+
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Rows}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:KeyValueRowViewModel">
+              <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="36,*,*,36">
+                  <CheckBox Grid.Column="0" IsChecked="{Binding Enabled}" IsVisible="{Binding !IsPlaceholder}"
+                            HorizontalAlignment="Center" MinWidth="0" Padding="0"
+                            ToolTip.Tip="Include this row" />
+                  <TextBox Grid.Column="1" Classes="cell" Text="{Binding Key}" Watermark="{Binding KeyWatermark}" />
+                  <Border Grid.Column="1" Width="1" HorizontalAlignment="Right" Background="{DynamicResource DividerBrush}" />
+                  <TextBox Grid.Column="2" Classes="cell" Text="{Binding Value}" Watermark="{Binding ValueWatermark}" />
+                  <Button Grid.Column="3" Classes="icon" Command="{Binding RemoveCommand}"
+                          IsVisible="{Binding !IsPlaceholder}" ToolTip.Tip="Remove">
+                    <PathIcon Data="{StaticResource IconTrash}" />
+                  </Button>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </DockPanel>
+  </Border>
+</UserControl>

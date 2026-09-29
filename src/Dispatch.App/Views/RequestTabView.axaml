@@ -1,0 +1,237 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Dispatch.App.ViewModels"
+             xmlns:views="using:Dispatch.App.Views"
+             xmlns:conv="using:Dispatch.App.Converters"
+             xmlns:domain="using:Dispatch.Domain"
+             x:Class="Dispatch.App.Views.RequestTabView"
+             x:DataType="vm:RequestTabViewModel">
+
+  <Grid RowDefinitions="Auto,Auto,*" Margin="20,14,20,12">
+
+    <!-- Name + save -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <TextBox Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" MinWidth="220"
+                 BorderThickness="0" Background="Transparent" Padding="4,4" Watermark="Request name" />
+        <TextBlock Text="Unsaved" Classes="muted" VerticalAlignment="Center" FontSize="12"
+                   IsVisible="{Binding !IsSaved}" />
+      </StackPanel>
+
+      <Button Grid.Column="1" x:Name="SaveButton" Command="{Binding SaveCommand}" Padding="12,6"
+              ToolTip.Tip="Save (Ctrl+S)">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <PathIcon Data="{StaticResource IconSave}" Width="13" Height="13" />
+          <TextBlock Text="Save" />
+        </StackPanel>
+      </Button>
+
+      <Popup Grid.Column="1" IsOpen="{Binding IsSavePopupOpen, Mode=TwoWay}" PlacementTarget="{Binding #SaveButton}"
+             Placement="BottomEdgeAlignedRight" IsLightDismissEnabled="True">
+        <Border Classes="card" Padding="16" Width="320" BoxShadow="0 8 24 0 #40000000">
+          <StackPanel Spacing="10">
+            <TextBlock Text="Save request" FontWeight="SemiBold" FontSize="14" />
+            <TextBlock Text="Name" Classes="section" />
+            <TextBox Text="{Binding SaveName}" />
+            <TextBlock Text="Collection" Classes="section" />
+            <ComboBox ItemsSource="{Binding SaveTargets}" SelectedItem="{Binding SaveTarget}"
+                      HorizontalAlignment="Stretch" PlaceholderText="A new collection will be created">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:CollectionNodeViewModel">
+                  <TextBlock Text="{Binding Name}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,6,0,0">
+              <Button Content="Cancel" Command="{Binding CancelSaveCommand}" />
+              <Button Content="Save" Classes="accent" Command="{Binding ConfirmSaveCommand}" IsDefault="True" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </Popup>
+    </Grid>
+
+    <!-- Request line: METHOD | URL | Send -->
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+      <Border Classes="card" CornerRadius="6" Padding="0">
+        <Grid ColumnDefinitions="Auto,1,*">
+          <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.Methods}" SelectedItem="{Binding Method}"
+                    MinWidth="110" BorderThickness="0" Background="Transparent" VerticalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="domain:HttpVerb">
+                <TextBlock Text="{Binding Converter={x:Static conv:MethodFullTextConverter.Instance}}"
+                           Foreground="{Binding Converter={x:Static conv:MethodBrushConverter.Instance}}"
+                           FontWeight="Bold" FontFamily="{StaticResource MonoFont}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <Border Grid.Column="1" Background="{DynamicResource DividerBrush}" />
+          <TextBox Grid.Column="2" Classes="mono" Text="{Binding Url}" BorderThickness="0" Background="Transparent"
+                   Watermark="Enter URL, e.g. {{baseUrl}}/users?page=1" VerticalContentAlignment="Center"
+                   MinHeight="38">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding SendCommand}" />
+            </TextBox.KeyBindings>
+          </TextBox>
+        </Grid>
+      </Border>
+
+      <Panel Grid.Column="1" Margin="10,0,0,0" MinWidth="110">
+        <Button Classes="accent" Command="{Binding SendCommand}" IsVisible="{Binding !IsSending}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Center"
+                VerticalContentAlignment="Center" ToolTip.Tip="Send (Ctrl+Enter)">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Data="{StaticResource IconSend}" Width="13" Height="13" />
+            <TextBlock Text="Send" FontWeight="SemiBold" />
+          </StackPanel>
+        </Button>
+        <Button Command="{Binding SendCancelCommand}" IsVisible="{Binding IsSending}" Content="Cancel"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Center"
+                VerticalContentAlignment="Center" />
+      </Panel>
+    </Grid>
+
+    <!-- Request editors / response, split vertically -->
+    <Grid Grid.Row="2" RowDefinitions="*,6,1.3*">
+      <TabControl Grid.Row="0" Padding="0">
+        <TabItem>
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Params" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Params.ActiveCount}" Classes="muted" FontSize="11" VerticalAlignment="Center"
+                         IsVisible="{Binding Params.HasActive}" />
+            </StackPanel>
+          </TabItem.Header>
+          <views:KeyValueEditor DataContext="{Binding Params}" Margin="0,8,0,0" />
+        </TabItem>
+
+        <TabItem>
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Headers" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Headers.ActiveCount}" Classes="muted" FontSize="11" VerticalAlignment="Center"
+                         IsVisible="{Binding Headers.HasActive}" />
+            </StackPanel>
+          </TabItem.Header>
+          <views:KeyValueEditor DataContext="{Binding Headers}" Margin="0,8,0,0" />
+        </TabItem>
+
+        <TabItem Header="Body">
+          <DockPanel Margin="0,8,0,0">
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+              <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.BodyModes}" SelectedItem="{Binding BodyMode}" MinWidth="200">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="domain:BodyMode">
+                    <TextBlock Text="{Binding Converter={x:Static conv:EnumLabelConverter.Instance}}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Grid.Column="1" Text="{Binding BodyError}" Foreground="#EF4444" Margin="12,0"
+                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              <Button Grid.Column="2" Content="Beautify" Command="{Binding BeautifyCommand}"
+                      IsVisible="{Binding CanBeautify}" />
+            </Grid>
+
+            <Panel>
+              <TextBlock IsVisible="{Binding IsBodyNone}" Classes="muted" HorizontalAlignment="Center"
+                         VerticalAlignment="Center" Text="This request does not have a body." />
+              <TextBox IsVisible="{Binding IsBodyText}" Classes="mono" Text="{Binding BodyText}"
+                       AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                       ScrollViewer.VerticalScrollBarVisibility="Auto" />
+              <Panel IsVisible="{Binding IsBodyForm}">
+                <views:KeyValueEditor DataContext="{Binding FormFields}" />
+              </Panel>
+            </Panel>
+          </DockPanel>
+        </TabItem>
+
+        <TabItem Header="Auth">
+          <Grid ColumnDefinitions="240,*" Margin="0,12,0,0">
+            <StackPanel Spacing="8" Margin="0,0,24,0">
+              <TextBlock Text="Type" Classes="section" />
+              <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.AuthModes}" SelectedItem="{Binding AuthMode}"
+                        HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="domain:AuthMode">
+                    <TextBlock Text="{Binding Converter={x:Static conv:EnumLabelConverter.Instance}}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0"
+                         Text="The authorization header is generated when you send the request. Values can use {{variables}}." />
+            </StackPanel>
+
+            <Panel Grid.Column="1" MaxWidth="560" HorizontalAlignment="Left">
+              <TextBlock IsVisible="{Binding IsAuthNone}" Classes="muted"
+                         Text="This request does not use any authorization." />
+
+              <StackPanel IsVisible="{Binding IsAuthBearer}" Spacing="6">
+                <TextBlock Text="Token" Classes="section" />
+                <TextBox Classes="mono" Text="{Binding BearerToken}" Watermark="Token or {{token}}" MinWidth="360" />
+              </StackPanel>
+
+              <StackPanel IsVisible="{Binding IsAuthBasic}" Spacing="6">
+                <TextBlock Text="Username" Classes="section" />
+                <TextBox Text="{Binding BasicUsername}" MinWidth="360" />
+                <TextBlock Text="Password" Classes="section" Margin="0,6,0,0" />
+                <TextBox Text="{Binding BasicPassword}" PasswordChar="•" MinWidth="360" />
+              </StackPanel>
+
+              <StackPanel IsVisible="{Binding IsAuthApiKey}" Spacing="6">
+                <TextBlock Text="Key" Classes="section" />
+                <TextBox Text="{Binding ApiKeyName}" MinWidth="360" />
+                <TextBlock Text="Value" Classes="section" Margin="0,6,0,0" />
+                <TextBox Classes="mono" Text="{Binding ApiKeyValue}" MinWidth="360" />
+                <TextBlock Text="Add to" Classes="section" Margin="0,6,0,0" />
+                <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.ApiKeyLocations}"
+                          SelectedItem="{Binding ApiKeyLocation}" MinWidth="200">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="domain:ApiKeyLocation">
+                      <TextBlock Text="{Binding Converter={x:Static conv:EnumLabelConverter.Instance}}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+            </Panel>
+          </Grid>
+        </TabItem>
+      </TabControl>
+
+      <GridSplitter Grid.Row="1" Background="Transparent" ResizeDirection="Rows" />
+      <Border Grid.Row="1" Height="1" Background="{DynamicResource DividerBrush}" VerticalAlignment="Center"
+              IsHitTestVisible="False" />
+
+      <!-- Response -->
+      <Panel Grid.Row="2" Margin="0,6,0,0">
+        <StackPanel IsVisible="{Binding IsSending}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+          <ProgressBar IsIndeterminate="True" Width="220" />
+          <TextBlock Text="Sending request…" Classes="muted" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+          <StackPanel.IsVisible>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="!IsSending" />
+              <Binding Path="Response" Converter="{x:Static ObjectConverters.IsNull}" />
+            </MultiBinding>
+          </StackPanel.IsVisible>
+          <TextBlock Text="Response" FontWeight="SemiBold" HorizontalAlignment="Center" />
+          <TextBlock Classes="muted" HorizontalAlignment="Center"
+                     Text="Enter a URL and click Send (Ctrl+Enter) to get a response." />
+        </StackPanel>
+
+        <!-- Visibility is bound on a wrapper: an element's own bindings use the DataContext it sets. -->
+        <Panel>
+          <Panel.IsVisible>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="!IsSending" />
+              <Binding Path="Response" Converter="{x:Static ObjectConverters.IsNotNull}" />
+            </MultiBinding>
+          </Panel.IsVisible>
+          <views:ResponseView DataContext="{Binding Response}" />
+        </Panel>
+      </Panel>
+    </Grid>
+  </Grid>
+</UserControl>

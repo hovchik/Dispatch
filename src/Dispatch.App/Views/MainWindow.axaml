@@ -1,0 +1,150 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Dispatch.App.ViewModels"
+        xmlns:views="using:Dispatch.App.Views"
+        xmlns:conv="using:Dispatch.App.Converters"
+        x:Class="Dispatch.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Dispatch"
+        Width="1360" Height="860" MinWidth="900" MinHeight="560"
+        WindowStartupLocation="CenterScreen">
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendCommand}" />
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    <KeyBinding Gesture="Ctrl+T" Command="{Binding NewTabCommand}" />
+    <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseSelectedTabCommand}" />
+  </Window.KeyBindings>
+
+  <Grid RowDefinitions="Auto,Auto,*">
+
+    <!-- Top bar -->
+    <Border Grid.Row="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource DividerBrush}"
+            BorderThickness="0,0,0,1" Padding="14,8">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Border Width="22" Height="22" CornerRadius="6" Background="#FF6C37">
+            <PathIcon Data="{StaticResource IconSend}" Width="12" Height="12" Foreground="White" />
+          </Border>
+          <TextBlock Text="Dispatch" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <Button Grid.Column="1" Margin="20,0,0,0" Command="{Binding NewTabCommand}" Padding="10,5"
+                ToolTip.Tip="New request (Ctrl+T)">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconPlus}" Width="12" Height="12" />
+            <TextBlock Text="New" />
+          </StackPanel>
+        </Button>
+
+        <ComboBox Grid.Column="3" ItemsSource="{Binding Environments.Choices}"
+                  SelectedItem="{Binding Environments.Active}" MinWidth="200"
+                  ToolTip.Tip="Active environment: its variables replace {{placeholders}} when sending">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:EnvironmentItemViewModel">
+              <TextBlock Text="{Binding Name}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <Button Grid.Column="4" Classes="icon" Margin="8,0,0,0" Command="{Binding ToggleThemeCommand}"
+                ToolTip.Tip="Toggle light / dark theme">
+          <PathIcon Data="{StaticResource IconMoon}" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <!-- Error banner -->
+    <Border Grid.Row="1" Background="{DynamicResource ErrorSurfaceBrush}" Padding="14,8"
+            IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <Grid ColumnDefinitions="*,Auto">
+        <SelectableTextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" VerticalAlignment="Center" />
+        <Button Grid.Column="1" Classes="icon" Command="{Binding DismissErrorCommand}" ToolTip.Tip="Dismiss">
+          <PathIcon Data="{StaticResource IconClose}" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2" ColumnDefinitions="300,Auto,*">
+      <!-- Sidebar -->
+      <Border Grid.Column="0" Background="{DynamicResource SurfaceBrush}" MinWidth="220">
+        <TabControl Padding="0" Margin="6,0,0,0">
+          <TabItem Header="Collections">
+            <views:CollectionsView DataContext="{Binding Collections}" />
+          </TabItem>
+          <TabItem Header="History">
+            <views:HistoryView DataContext="{Binding History}" />
+          </TabItem>
+          <TabItem Header="Environments">
+            <views:EnvironmentsView DataContext="{Binding Environments}" />
+          </TabItem>
+        </TabControl>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Width="1" Background="{DynamicResource DividerBrush}" ResizeDirection="Columns" />
+
+      <!-- Workspace -->
+      <Grid Grid.Column="2" RowDefinitions="Auto,*">
+        <Border Grid.Row="0" Background="{DynamicResource AppBackgroundBrush}" Padding="8,6,8,0"
+                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="*,Auto">
+            <ListBox Classes="tabs" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:RequestTabViewModel">
+                  <Grid ColumnDefinitions="Auto,*,Auto" Width="190" Height="34" Background="Transparent"
+                        ToolTip.Tip="{Binding Url}">
+                    <TextBlock Classes="method" Margin="10,0,6,0"
+                               Text="{Binding Method, Converter={x:Static conv:MethodTextConverter.Instance}}"
+                               Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+                    <TextBlock Grid.Column="1" Text="{Binding DisplayName}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                    <Panel Grid.Column="2" Width="26">
+                      <!-- Dirty tabs show a dot; hovering the tab swaps it for the close button. -->
+                      <Ellipse Classes="dirtydot" Width="7" Height="7" Fill="#FF6C37" IsVisible="{Binding IsDirty}"
+                               IsHitTestVisible="False" />
+                      <Button Classes="icon tabclose" Classes.dirty="{Binding IsDirty}"
+                              Command="{Binding CloseCommand}" ToolTip.Tip="Close (Ctrl+W)">
+                        <PathIcon Data="{StaticResource IconClose}" Width="10" Height="10" />
+                      </Button>
+                    </Panel>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <Button Grid.Column="1" Classes="icon" Command="{Binding NewTabCommand}" Margin="4,0,0,4"
+                    ToolTip.Tip="New request (Ctrl+T)">
+              <PathIcon Data="{StaticResource IconPlus}" />
+            </Button>
+          </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}">
+          <Panel>
+            <ContentControl Content="{Binding SelectedTab}" IsVisible="{Binding HasTabs}">
+              <ContentControl.ContentTemplate>
+                <DataTemplate x:DataType="vm:RequestTabViewModel">
+                  <views:RequestTabView />
+                </DataTemplate>
+              </ContentControl.ContentTemplate>
+            </ContentControl>
+
+            <StackPanel IsVisible="{Binding !HasTabs}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Spacing="12">
+              <TextBlock Text="No open requests" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" />
+              <TextBlock Classes="muted" HorizontalAlignment="Center"
+                         Text="Open one from a collection or history, or start a new one." />
+              <Button Classes="accent" Content="New request" Command="{Binding NewTabCommand}"
+                      HorizontalAlignment="Center" Padding="16,8" />
+            </StackPanel>
+          </Panel>
+        </Border>
+      </Grid>
+    </Grid>
+  </Grid>
+</Window>

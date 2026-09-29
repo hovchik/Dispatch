@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Dispatch.App.ViewModels"
+             xmlns:conv="using:Dispatch.App.Converters"
+             xmlns:domain="using:Dispatch.Domain"
+             x:Class="Dispatch.App.Views.ResponseView"
+             x:DataType="vm:ResponseViewModel">
+
+  <Grid RowDefinitions="Auto,*">
+    <!-- Transport error (DNS, timeout, invalid URL, ...) -->
+    <Border Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding HasError}" VerticalAlignment="Top"
+            Background="{DynamicResource ErrorSurfaceBrush}" CornerRadius="6" Padding="16" Margin="0,8,0,0">
+      <StackPanel Spacing="6">
+        <TextBlock Text="Could not get a response" FontWeight="SemiBold" Foreground="#EF4444" />
+        <SelectableTextBlock Text="{Binding Error}" TextWrapping="Wrap" />
+        <SelectableTextBlock Text="{Binding EffectiveUrl}" Classes="muted" FontFamily="{StaticResource MonoFont}"
+                             IsVisible="{Binding EffectiveUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </Border>
+
+    <!-- Status line -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="18" Margin="4,4,4,0" HorizontalAlignment="Right"
+                IsVisible="{Binding HasResponse}" ZIndex="1">
+      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <TextBlock Text="Status" Classes="muted" />
+        <TextBlock Text="{Binding StatusText}" FontWeight="SemiBold"
+                   Foreground="{Binding StatusCode, Converter={x:Static conv:StatusBrushConverter.Instance}}" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <TextBlock Text="Time" Classes="muted" />
+        <TextBlock Text="{Binding TimeText}" FontWeight="SemiBold" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <TextBlock Text="Size" Classes="muted" />
+        <TextBlock Text="{Binding SizeText}" FontWeight="SemiBold" />
+      </StackPanel>
+    </StackPanel>
+
+    <TabControl Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding HasResponse}" Padding="0">
+      <TabItem Header="Body">
+        <DockPanel Margin="0,8,0,0">
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+            <ToggleButton IsChecked="{Binding ShowPretty}" Content="Pretty" Padding="10,4" />
+            <Button Classes="icon" Command="{Binding CopyBodyCommand}" ToolTip.Tip="Copy body">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Data="{StaticResource IconCopy}" />
+                <TextBlock Text="{Binding CopyFeedback, FallbackValue=Copy, TargetNullValue=Copy}" />
+              </StackPanel>
+            </Button>
+            <TextBlock IsVisible="{Binding IsTruncated}" Classes="muted" VerticalAlignment="Center"
+                       Text="Large response: only the first 5 MB is shown." />
+          </StackPanel>
+          <TextBox Classes="mono" Text="{Binding DisplayBody, Mode=OneWay}" IsReadOnly="True"
+                   AcceptsReturn="True" TextWrapping="NoWrap"
+                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto" />
+        </DockPanel>
+      </TabItem>
+      <TabItem>
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Headers" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding HeaderCount}" Classes="muted" FontSize="11" VerticalAlignment="Center" />
+          </StackPanel>
+        </TabItem.Header>
+        <Border Classes="card" Margin="0,8,0,0">
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Headers}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="domain:ResponseHeader">
+                  <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,7">
+                    <Grid ColumnDefinitions="220,*">
+                      <SelectableTextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                      <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap"
+                                           FontFamily="{StaticResource MonoFont}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Border>
+      </TabItem>
+    </TabControl>
+  </Grid>
+</UserControl>

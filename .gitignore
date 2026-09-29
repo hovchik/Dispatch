@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.db
+*.db-shm
+*.db-wal
+TestResults/
+.build/
