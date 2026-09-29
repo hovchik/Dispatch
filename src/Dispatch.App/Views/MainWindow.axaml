@@ -99,11 +99,26 @@
                 <DataTemplate x:DataType="vm:RequestTabViewModel">
                   <Grid ColumnDefinitions="Auto,*,Auto" Width="190" Height="34" Background="Transparent"
                         ToolTip.Tip="{Binding Url}">
+                    <Grid.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem Header="Rename" Command="{Binding BeginRenameCommand}" />
+                        <MenuItem Header="Close" Command="{Binding CloseCommand}" />
+                      </ContextMenu>
+                    </Grid.ContextMenu>
                     <TextBlock Classes="method" Margin="10,0,6,0"
                                Text="{Binding Method, Converter={x:Static conv:MethodTextConverter.Instance}}"
                                Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
                     <TextBlock Grid.Column="1" Text="{Binding DisplayName}" VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" />
+                               TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsRenaming}"
+                               DoubleTapped="OnTabTitleDoubleTapped" />
+                    <TextBox Grid.Column="1" Classes="tabrename" Text="{Binding RenameText}"
+                             IsVisible="{Binding IsRenaming}" VerticalAlignment="Center"
+                             LostFocus="OnTabRenameLostFocus">
+                      <TextBox.KeyBindings>
+                        <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}" />
+                        <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}" />
+                      </TextBox.KeyBindings>
+                    </TextBox>
                     <Panel Grid.Column="2" Width="26">
                       <!-- Dirty tabs show a dot; hovering the tab swaps it for the close button. -->
                       <Ellipse Classes="dirtydot" Width="7" Height="7" Fill="#FF6C37" IsVisible="{Binding IsDirty}"
