@@ -6,6 +6,7 @@
         x:Class="Dispatch.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Dispatch"
+        Icon="/Assets/dispatch.ico"
         Width="1360" Height="860" MinWidth="900" MinHeight="560"
         WindowStartupLocation="CenterScreen">
 
@@ -23,9 +24,8 @@
             BorderThickness="0,0,0,1" Padding="14,8">
       <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-          <Border Width="22" Height="22" CornerRadius="6" Background="#FF6C37">
-            <PathIcon Data="{StaticResource IconSend}" Width="12" Height="12" Foreground="White" />
-          </Border>
+          <Image Source="/Assets/dispatch-logo.png" Width="24" Height="24"
+                 RenderOptions.BitmapInterpolationMode="HighQuality" />
           <TextBlock Text="Dispatch" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
         </StackPanel>
 
