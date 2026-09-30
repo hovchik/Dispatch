@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Dispatch.App.ViewModels"
+             xmlns:conv="using:Dispatch.App.Converters"
              x:Class="Dispatch.App.Views.KeyValueEditor"
              x:DataType="vm:KeyValueListViewModel">
 
@@ -29,9 +30,14 @@
           <!-- Header -->
           <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceAltBrush}"
                   BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
-            <Grid ColumnDefinitions="36,*,*,36" Height="30">
+            <Grid ColumnDefinitions="36,*,*,Auto,36" Height="30">
               <TextBlock Grid.Column="1" Classes="section" Text="{Binding KeyWatermark}" Margin="8,0" VerticalAlignment="Center" />
               <TextBlock Grid.Column="2" Classes="section" Text="{Binding ValueWatermark}" Margin="8,0" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="3" Classes="section" Text="SECRET" Margin="8,0" VerticalAlignment="Center"
+                         IsVisible="{Binding SupportsSecret}"
+                         ToolTip.Tip="Secret values are masked, encrypted at rest and never exported" />
+              <TextBlock Grid.Column="3" Classes="section" Text="TYPE" Margin="8,0" VerticalAlignment="Center"
+                         IsVisible="{Binding SupportsFile}" />
             </Grid>
           </Border>
 
@@ -40,14 +46,33 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:KeyValueRowViewModel">
                   <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
-                    <Grid ColumnDefinitions="36,*,*,36">
+                    <Grid ColumnDefinitions="36,*,*,Auto,36">
                       <CheckBox Grid.Column="0" IsChecked="{Binding Enabled}" IsVisible="{Binding !IsPlaceholder}"
                                 HorizontalAlignment="Center" MinWidth="0" Padding="0"
                                 ToolTip.Tip="Include this row" />
                       <TextBox Grid.Column="1" Classes="cell" Text="{Binding Key}" Watermark="{Binding KeyWatermark}" />
                       <Border Grid.Column="1" Width="1" HorizontalAlignment="Right" Background="{DynamicResource DividerBrush}" />
-                      <TextBox Grid.Column="2" Classes="cell" Text="{Binding Value}" Watermark="{Binding ValueWatermark}" />
-                      <Button Grid.Column="3" Classes="icon" Command="{Binding RemoveCommand}"
+                      <TextBox Grid.Column="2" Classes="cell" Text="{Binding Value}" Watermark="{Binding ValueWatermark}"
+                               PasswordChar="{Binding MaskChar}" IsReadOnly="{Binding IsFile}" />
+
+                      <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" Margin="4,0">
+                        <ToggleButton IsChecked="{Binding IsSecret}" IsVisible="{Binding SupportsSecret}"
+                                      Classes="icon" Padding="6" Background="Transparent" BorderThickness="0"
+                                      ToolTip.Tip="Secret: mask and encrypt this value">
+                          <PathIcon Data="{StaticResource IconKey}" Width="13" Height="13" />
+                        </ToggleButton>
+                        <ComboBox IsVisible="{Binding SupportsFile}" Classes="compact" MinWidth="72"
+                                  SelectedIndex="{Binding IsFile, Converter={x:Static conv:BoolIndexConverter.Instance}}">
+                          <ComboBoxItem Content="Text" />
+                          <ComboBoxItem Content="File" />
+                        </ComboBox>
+                        <Button IsVisible="{Binding IsFile}" Classes="icon" Command="{Binding ChooseFileCommand}"
+                                ToolTip.Tip="Choose file">
+                          <PathIcon Data="{StaticResource IconFile}" />
+                        </Button>
+                      </StackPanel>
+
+                      <Button Grid.Column="4" Classes="icon" Command="{Binding RemoveCommand}"
                               IsVisible="{Binding !IsPlaceholder}" ToolTip.Tip="Remove">
                         <PathIcon Data="{StaticResource IconTrash}" />
                       </Button>

@@ -35,6 +35,7 @@ public sealed class DispatchDbContext(DbContextOptions<DispatchDbContext> option
             b.ToTable("Collections");
             b.HasKey(c => c.Id);
             b.Property(c => c.Name).IsRequired().HasMaxLength(200);
+            b.Property(c => c.Variables).HasJsonConversion();
             b.HasMany(c => c.Requests)
                 .WithOne()
                 .HasForeignKey(r => r.CollectionId)
@@ -47,11 +48,17 @@ public sealed class DispatchDbContext(DbContextOptions<DispatchDbContext> option
             b.HasKey(r => r.Id);
             b.Property(r => r.Name).IsRequired().HasMaxLength(200);
             b.Property(r => r.Url).IsRequired();
+            b.Property(r => r.Kind).HasConversion<string>().HasMaxLength(20);
             b.Property(r => r.Method).HasConversion<string>().HasMaxLength(10);
             b.Property(r => r.QueryParams).HasJsonConversion();
             b.Property(r => r.Headers).HasJsonConversion();
             b.Property(r => r.Body).HasJsonConversion();
             b.Property(r => r.Auth).HasJsonConversion();
+            b.Property(r => r.Protocol).HasJsonConversion();
+            b.Property(r => r.Settings).HasJsonConversion();
+            b.Property(r => r.Assertions).HasJsonConversion();
+            b.Property(r => r.Extractions).HasJsonConversion();
+            b.Property(r => r.Examples).HasJsonConversion();
             b.HasIndex(r => r.CollectionId);
         });
 
@@ -67,8 +74,10 @@ public sealed class DispatchDbContext(DbContextOptions<DispatchDbContext> option
         {
             b.ToTable("History");
             b.HasKey(h => h.Id);
+            b.Property(h => h.Kind).HasConversion<string>().HasMaxLength(20);
             b.Property(h => h.Method).HasConversion<string>().HasMaxLength(10);
             b.Property(h => h.Request).HasJsonConversion();
+            b.Property(h => h.Response).HasNullableJsonConversion();
             b.HasIndex(h => h.Timestamp);
         });
 
@@ -105,6 +114,22 @@ internal static class JsonColumn
             v => Deserialize<T>(Serialize(v)));
 
         property.HasConversion(converter, comparer).HasColumnType("TEXT").IsRequired();
+        return property;
+    }
+
+    /// <summary>Like <see cref="HasJsonConversion{T}"/> for an optional value (NULL column when absent).</summary>
+    internal static PropertyBuilder<T?> HasNullableJsonConversion<T>(this PropertyBuilder<T?> property) where T : class
+    {
+        var converter = new ValueConverter<T?, string?>(
+            v => v == null ? null : Serialize(v),
+            s => s == null ? null : JsonSerializer.Deserialize<T>(s, Options));
+
+        var comparer = new ValueComparer<T?>(
+            (a, b) => (a == null ? null : Serialize(a)) == (b == null ? null : Serialize(b)),
+            v => v == null ? 0 : Serialize(v).GetHashCode(),
+            v => v == null ? null : JsonSerializer.Deserialize<T>(Serialize(v), Options));
+
+        property.HasConversion(converter, comparer).HasColumnType("TEXT").IsRequired(false);
         return property;
     }
 }

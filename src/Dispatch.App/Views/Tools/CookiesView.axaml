@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:views="using:Dispatch.App.Views"
+             xmlns:conv="using:Dispatch.App.Converters"
+             xmlns:abs="using:Dispatch.Application.Abstractions"
+             x:Class="Dispatch.App.Views.Tools.CookiesView"
+             x:DataType="tools:CookiesViewModel"
+             x:Name="Root">
+  <DockPanel Margin="18">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
+      <StackPanel Spacing="4">
+        <TextBlock Text="Cookie jar" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Cookies set by responses are sent automatically with later requests to the same domain (unless disabled in a request's Settings)." />
+      </StackPanel>
+      <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshCommand}" VerticalAlignment="Top" Margin="8,0,0,0" />
+      <Button Grid.Column="2" Content="Clear all" Command="{Binding ClearCommand}" VerticalAlignment="Top" Margin="8,0,0,0" />
+    </Grid>
+
+    <Panel>
+      <TextBlock Classes="muted" Text="No cookies stored." IsVisible="{Binding IsEmpty}" HorizontalAlignment="Center" Margin="20" />
+      <Grid RowDefinitions="Auto,*" IsVisible="{Binding !IsEmpty}">
+        <Grid ColumnDefinitions="180,160,*,90,110,36" Margin="8,0,8,6">
+          <TextBlock Classes="section" Text="DOMAIN" />
+          <TextBlock Grid.Column="1" Classes="section" Text="NAME" />
+          <TextBlock Grid.Column="2" Classes="section" Text="VALUE" />
+          <TextBlock Grid.Column="3" Classes="section" Text="FLAGS" />
+          <TextBlock Grid.Column="4" Classes="section" Text="EXPIRES" />
+        </Grid>
+        <ScrollViewer Grid.Row="1">
+          <ItemsControl ItemsSource="{Binding Cookies}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="abs:CookieInfo">
+                <Border Classes="message">
+                  <Grid ColumnDefinitions="180,160,*,90,110,36">
+                    <TextBlock Text="{Binding Domain}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <SelectableTextBlock Grid.Column="2" Text="{Binding Value}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                         TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                      <TextBlock Text="Secure" Classes="muted" FontSize="11" IsVisible="{Binding Secure}" />
+                      <TextBlock Text="HttpOnly" Classes="muted" FontSize="11" IsVisible="{Binding HttpOnly}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="4" Classes="muted" FontSize="11" VerticalAlignment="Center"
+                               Text="{Binding Expires, StringFormat='{}{0:g}', TargetNullValue='Session'}" />
+                    <Button Grid.Column="5" Classes="icon" ToolTip.Tip="Delete"
+                            Command="{Binding #Root.((tools:CookiesViewModel)DataContext).DeleteCommand}" CommandParameter="{Binding}">
+                      <PathIcon Data="{StaticResource IconTrash}" />
+                    </Button>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
+    </Panel>
+  </DockPanel>
+</UserControl>

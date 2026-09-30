@@ -42,6 +42,8 @@ public sealed partial class EnvironmentsViewModel(
         if (value is null)
         {
             Active = None;
+            // The picker ignores the correction while it is still updating; re-announce afterwards.
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(Active)));
             return;
         }
         _ = settings.SetAsync(SettingKeys.ActiveEnvironmentId, value.IsNone ? null : value.Id.ToString());
@@ -59,6 +61,25 @@ public sealed partial class EnvironmentsViewModel(
     }
 
     [ObservableProperty] private string? _error;
+
+    /// <summary>Writes variables set by extraction rules / scripts into the active environment and saves it.</summary>
+    public async Task ApplyUpdatesAsync(IReadOnlyDictionary<string, string> updates)
+    {
+        if (updates.Count == 0 || Active.IsNone)
+            return;
+        var model = Active.ToModel();
+        var changed = false;
+        foreach (var (name, value) in updates)
+            changed |= model.SetVariable(name, value);
+        if (!changed)
+            return;
+        Active.Variables.Load(model.Variables);
+        await Guard(async () =>
+        {
+            await repository.SaveAsync(model);
+            Active.IsDirty = false;
+        });
+    }
 
     internal Task SaveAsync(EnvironmentItemViewModel item) => Guard(async () =>
     {
@@ -90,14 +111,26 @@ public sealed partial class EnvironmentsViewModel(
         }
     }
 
+    /// <summary>
+    /// Syncs Choices with Items in place: clearing the list would make the picker drop its selection
+    /// (pushing null back into Active mid-update, where the correction gets lost).
+    /// </summary>
     private void RebuildChoices()
     {
-        var active = Active;
-        Choices.Clear();
-        Choices.Add(None);
-        foreach (var i in Items)
-            Choices.Add(i);
-        Active = Choices.Contains(active) ? active : None;
+        var wanted = Items.Prepend(None).ToList();
+        for (var i = Choices.Count - 1; i >= 0; i--)
+            if (!wanted.Contains(Choices[i]))
+                Choices.RemoveAt(i);
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            var index = Choices.IndexOf(wanted[i]);
+            if (index < 0)
+                Choices.Insert(i, wanted[i]);
+            else if (index != i)
+                Choices.Move(index, i);
+        }
+        if (!Choices.Contains(Active))
+            Active = None;
     }
 }
 
@@ -120,7 +153,7 @@ public sealed partial class EnvironmentItemViewModel : ObservableObject
         _owner = owner;
         Id = model.Id;
         _name = model.Name;
-        Variables = new KeyValueListViewModel("Variable", "Value");
+        Variables = new KeyValueListViewModel("Variable", "Value", supportsSecret: true);
         Variables.Load(model.Variables);
         Variables.Changed += (_, _) => IsDirty = true;
     }

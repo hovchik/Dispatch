@@ -1,0 +1,107 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:views="using:Dispatch.App.Views"
+             xmlns:conv="using:Dispatch.App.Converters"
+             xmlns:mock="using:Dispatch.Infrastructure.Mock"
+             x:Class="Dispatch.App.Views.Tools.MockServerView"
+             x:DataType="tools:MockServerViewModel">
+  <Grid ColumnDefinitions="300,*" Margin="18">
+    <ScrollViewer Margin="0,0,16,0">
+      <StackPanel Spacing="10">
+        <TextBlock Text="Mock server" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Text="{Binding Hint}" Classes="muted" TextWrapping="Wrap" />
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
+          <TextBlock Classes="label" Text="HTTP port" />
+          <NumericUpDown Grid.Column="1" Value="{Binding Port}" Minimum="0" Maximum="65535" Width="116" FormatString="0" />
+          <TextBlock Grid.Row="1" Classes="label" Text="gRPC port (h2c, optional)" />
+          <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding GrpcPort}" Minimum="0" Maximum="65535" Width="116" FormatString="0" />
+          <TextBlock Grid.Row="2" Classes="label" Text="Latency (ms)" />
+          <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding LatencyMs}" Minimum="0" Maximum="600000" Width="116" FormatString="0" />
+          <TextBlock Grid.Row="3" Classes="label" Text="± Jitter (ms)" />
+          <NumericUpDown Grid.Row="3" Grid.Column="1" Value="{Binding JitterMs}" Minimum="0" Maximum="600000" Width="116" FormatString="0" />
+          <TextBlock Grid.Row="4" Classes="label" Text="Error rate (%)" />
+          <NumericUpDown Grid.Row="4" Grid.Column="1" Value="{Binding ErrorRatePercent}" Minimum="0" Maximum="100" Width="116" FormatString="0" />
+          <TextBlock Grid.Row="5" Classes="label" Text="Error status" />
+          <NumericUpDown Grid.Row="5" Grid.Column="1" Value="{Binding ErrorStatus}" Minimum="100" Maximum="599" Width="116" FormatString="0" />
+          <TextBlock Grid.Row="6" Classes="label" Text="Dropped connections (%)" />
+          <NumericUpDown Grid.Row="6" Grid.Column="1" Value="{Binding DropRatePercent}" Minimum="0" Maximum="100" Width="116" FormatString="0" />
+        </Grid>
+        <CheckBox Content="Allow CORS" IsChecked="{Binding Cors}" />
+        <CheckBox Content="Listen on all interfaces (not just localhost)" IsChecked="{Binding Public}" />
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StartCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" />
+              <TextBlock Text="Start" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StopCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconStop}" Width="11" Height="11" />
+              <TextBlock Text="Stop" />
+            </StackPanel>
+          </Button>
+        </Grid>
+        <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                   Text="Examples are matched by method and path ({id} segments match anything), then by the example's status/headers. Bodies may use {{pathParam}}, {{queryParam}} and {{$guid}}-style variables." />
+      </StackPanel>
+    </ScrollViewer>
+
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,150,Auto,*">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Ellipse Width="9" Height="9" Fill="#22A06B" IsVisible="{Binding IsRunning}" Margin="0,0,8,0" VerticalAlignment="Center" />
+        <SelectableTextBlock Grid.Column="1" Text="{Binding Status}" TextWrapping="Wrap" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <Button Grid.Column="2" Command="{Binding CopyUrlCommand}" IsEnabled="{Binding IsRunning}" Margin="8,0,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
+            <TextBlock Text="Copy URL" />
+          </StackPanel>
+        </Button>
+      </Grid>
+      <TextBlock Grid.Row="1" Classes="section" Text="ROUTES" Margin="0,12,0,4" />
+      <Border Grid.Row="2" Classes="card" Padding="8">
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Routes}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <SelectableTextBlock Text="{Binding}" FontFamily="{StaticResource MonoFont}" FontSize="12" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+      <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,12,0,4">
+        <TextBlock Classes="section" Text="REQUEST LOG" VerticalAlignment="Center" />
+        <Button Grid.Column="1" Content="Clear" Command="{Binding ClearLogCommand}" Padding="8,2" FontSize="11" />
+      </Grid>
+      <Border Grid.Row="4" Classes="card" Padding="0">
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Log}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="mock:MockLogEntry">
+                <Border Classes="message">
+                  <Grid ColumnDefinitions="90,64,*,48,70">
+                    <TextBlock Text="{Binding Time, StringFormat='{}{0:HH:mm:ss.fff}'}" Classes="muted" FontSize="11"
+                               FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding Method}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="2">
+                      <TextBlock Text="{Binding Path}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Matched, StringFormat='→ {0}', TargetNullValue='no matching example'}" Classes="muted" FontSize="11" />
+                      <TextBlock Text="{Binding Note}" Classes="muted" FontSize="11"
+                                 IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="3" Text="{Binding Status}" FontWeight="SemiBold" VerticalAlignment="Center"
+                               Foreground="{Binding Status, Converter={x:Static conv:StatusBrushConverter.Instance}}" />
+                    <TextBlock Grid.Column="4" Text="{Binding Milliseconds, StringFormat='{}{0:0} ms'}" Classes="muted"
+                               TextAlignment="Right" VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

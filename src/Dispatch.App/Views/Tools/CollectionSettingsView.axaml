@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:views="using:Dispatch.App.Views"
+             xmlns:conv="using:Dispatch.App.Converters"
+             x:Class="Dispatch.App.Views.Tools.CollectionSettingsView"
+             x:DataType="tools:CollectionSettingsViewModel">
+  <DockPanel Margin="18">
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" Margin="0,12,0,0">
+      <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Classes="muted" />
+      <Button Classes="accent" Content="Save" Command="{Binding SaveCommand}" Padding="18,6" />
+    </StackPanel>
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,*" ColumnDefinitions="140,*" >
+      <TextBlock Classes="label" Text="Name" />
+      <TextBox Grid.Column="1" Text="{Binding Name}" Margin="0,0,0,8" />
+      <TextBlock Grid.Row="1" Classes="label" Text="Description" VerticalAlignment="Top" Margin="0,6,10,0" />
+      <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Description}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" Margin="0,0,0,8" />
+      <TextBlock Grid.Row="2" Classes="label" Text="OpenAPI contract" />
+      <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+        <TextBox Text="{Binding SpecLocation}" Watermark="Path or URL to an OpenAPI document" />
+        <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseSpecCommand}" Margin="8,0,0,0" />
+      </Grid>
+      <TextBlock Grid.Row="3" Grid.Column="1" Classes="muted" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12"
+                 Text="Assertions of type “Matches OpenAPI contract” validate responses against this document." />
+      <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Classes="section" Margin="0,4,0,6"
+                 Text="COLLECTION VARIABLES (override globals, overridden by the active environment)" />
+      <Border Grid.Row="5" Grid.ColumnSpan="2" Classes="card" Padding="0">
+        <views:KeyValueEditor DataContext="{Binding Variables}" />
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

@@ -1,6 +1,8 @@
+using System.Data;
 using Dispatch.Application.Abstractions;
 using Dispatch.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Dispatch.Infrastructure.Persistence;
 
@@ -12,7 +14,8 @@ public sealed class DatabaseInitializer(IDbContextFactory<DispatchDbContext> fac
     public async Task InitializeAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        await db.Database.EnsureCreatedAsync(ct);
+        if (!await db.Database.EnsureCreatedAsync(ct))
+            await UpgradeSchemaAsync(db, ct);
 
         if (await db.Settings.AnyAsync(s => s.Key == SeededKey, ct))
             return;
@@ -73,5 +76,70 @@ public sealed class DatabaseInitializer(IDbContextFactory<DispatchDbContext> fac
 
         db.Settings.Add(new SettingEntry { Key = SeededKey, Value = "1" });
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Adds columns that newer versions of the model introduced to a database created by an older version.
+    /// (EnsureCreated only creates missing databases; it never alters existing tables.)
+    /// </summary>
+    private static async Task UpgradeSchemaAsync(DispatchDbContext db, CancellationToken ct)
+    {
+        var connection = db.Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open)
+            await connection.OpenAsync(ct);
+
+        foreach (var entity in db.Model.GetEntityTypes())
+        {
+            var table = entity.GetTableName();
+            if (table is null)
+                continue;
+
+            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = $"PRAGMA table_info(\"{table}\")";
+                await using var reader = await command.ExecuteReaderAsync(ct);
+                while (await reader.ReadAsync(ct))
+                    existing.Add(reader.GetString(1));
+            }
+            if (existing.Count == 0)
+                continue; // table is missing entirely; not expected for EnsureCreated databases
+
+            var storeObject = StoreObjectIdentifier.Table(table, entity.GetSchema());
+            foreach (var property in entity.GetProperties())
+            {
+                var column = property.GetColumnName(storeObject);
+                if (column is null || existing.Contains(column))
+                    continue;
+
+                var type = property.GetColumnType();
+                var definition = property.IsNullable
+                    ? $"\"{column}\" {type} NULL"
+                    : $"\"{column}\" {type} NOT NULL DEFAULT {DefaultLiteral(property)}";
+                // A plain command: the JSON default literal contains braces, which ExecuteSqlRaw treats as placeholders.
+                await using var alter = connection.CreateCommand();
+                alter.CommandText = $"ALTER TABLE \"{table}\" ADD COLUMN {definition}";
+                await alter.ExecuteNonQueryAsync(ct);
+            }
+        }
+    }
+
+    private static string DefaultLiteral(IProperty property)
+    {
+        var clr = property.ClrType;
+        if (property.GetValueConverter() is { } converter && converter.ProviderClrType == typeof(string))
+        {
+            if (clr.IsEnum)
+                return $"'{Enum.GetNames(clr)[0]}'";
+            if (clr != typeof(string))
+            {
+                // JSON column: an empty list or a default-constructed object.
+                var json = typeof(System.Collections.IEnumerable).IsAssignableFrom(clr)
+                    ? "[]"
+                    : JsonColumn.Serialize(Activator.CreateInstance(clr));
+                return $"'{json.Replace("'", "''")}'";
+            }
+        }
+        return clr == typeof(string) ? "''" : "0";
     }
 }

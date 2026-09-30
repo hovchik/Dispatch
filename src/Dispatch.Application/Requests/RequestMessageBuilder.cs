@@ -102,8 +102,44 @@ public sealed class RequestMessageBuilder : IRequestMessageBuilder
         BodyMode.FormUrlEncoded => new FormUrlEncodedContent(body.FormFields
             .Where(f => f.IsActive)
             .Select(f => new KeyValuePair<string, string>(resolve(f.Key), resolve(f.Value)))),
+        BodyMode.Multipart => BuildMultipart(body, resolve),
+        BodyMode.Binary => BuildBinary(resolve(body.FilePath)),
         _ => throw new RequestBuildException($"Unsupported body mode: {body.Mode}")
     };
+
+    private static MultipartFormDataContent BuildMultipart(RequestBody body, Func<string, string> resolve)
+    {
+        var content = new MultipartFormDataContent();
+        foreach (var field in body.FormFields.Where(f => f.IsActive))
+        {
+            var name = resolve(field.Key);
+            if (field.IsFile)
+            {
+                var path = resolve(field.Value);
+                if (!File.Exists(path))
+                    throw new RequestBuildException($"File not found for form field '{name}': {path}");
+                var file = new ByteArrayContent(File.ReadAllBytes(path));
+                file.Headers.ContentType = new MediaTypeHeaderValue(MimeTypes.For(path));
+                content.Add(file, name, Path.GetFileName(path));
+            }
+            else
+            {
+                content.Add(new StringContent(resolve(field.Value), Encoding.UTF8), name);
+            }
+        }
+        return content;
+    }
+
+    private static ByteArrayContent BuildBinary(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            throw new RequestBuildException("Choose a file to send as the binary body.");
+        if (!File.Exists(path))
+            throw new RequestBuildException($"File not found: {path}");
+        var content = new ByteArrayContent(File.ReadAllBytes(path));
+        content.Headers.ContentType = new MediaTypeHeaderValue(MimeTypes.For(path));
+        return content;
+    }
 
     private static void AddHeader(HttpRequestMessage message, string name, string value)
     {

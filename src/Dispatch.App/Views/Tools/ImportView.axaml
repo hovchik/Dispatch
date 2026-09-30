@@ -1,0 +1,65 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:views="using:Dispatch.App.Views"
+             xmlns:conv="using:Dispatch.App.Converters"
+             x:Class="Dispatch.App.Views.Tools.ImportView"
+             x:DataType="tools:ImportViewModel">
+  <DockPanel Margin="18">
+    <StackPanel DockPanel.Dock="Top" Spacing="6">
+      <TextBlock Text="Import" FontSize="18" FontWeight="SemiBold" />
+      <TextBlock Classes="muted" TextWrapping="Wrap" Text="{x:Static tools:ImportViewModel.SupportedFormats}" />
+    </StackPanel>
+
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
+      <TextBlock Text="{Binding Status}" TextWrapping="Wrap"
+                 IsVisible="{Binding Status, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <ProgressBar IsIndeterminate="True" Width="120" IsVisible="{Binding IsBusy}" VerticalAlignment="Center" />
+        <Button Classes="accent" Content="Import" Command="{Binding ImportCommand}" IsEnabled="{Binding HasPreview}" Padding="18,6" />
+      </StackPanel>
+    </StackPanel>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="0,14,0,0">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Command="{Binding ChooseFilesCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconFile}" Width="12" Height="12" />
+            <TextBlock Text="Choose files…" />
+          </StackPanel>
+        </Button>
+        <Button Command="{Binding ChooseFolderCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconFolder}" Width="12" Height="12" />
+            <TextBlock Text="Dispatch folder…" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+
+      <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,10,0,0">
+        <TextBox Text="{Binding Url}" Watermark="…or a URL: https://api.example.com/openapi.json, a WSDL (?wsdl)…" />
+        <Button Grid.Column="1" Content="Fetch" Command="{Binding ImportUrlCommand}" Margin="8,0,0,0" />
+      </Grid>
+
+      <Grid Grid.Row="2" RowDefinitions="Auto,*,Auto" Margin="0,10,0,0">
+        <TextBlock Classes="section" Text="OR PASTE (cURL, JSON, YAML, .http, HAR…)" />
+        <TextBox Grid.Row="1" Classes="mono" Text="{Binding PastedText}" AcceptsReturn="True" TextWrapping="NoWrap"
+                 Margin="0,6,0,0" Watermark="curl -X POST https://api.example.com/users -H 'Content-Type: application/json' -d '{&quot;name&quot;:&quot;Ada&quot;}'" />
+        <Button Grid.Row="2" Content="Parse" Command="{Binding ParseTextCommand}" HorizontalAlignment="Right" Margin="0,8,0,0" />
+      </Grid>
+
+      <Border Grid.Row="3" Classes="card" Margin="0,10,0,0" Padding="12" IsVisible="{Binding HasPreview}">
+        <StackPanel Spacing="4">
+          <TextBlock Classes="section" Text="PREVIEW" />
+          <ItemsControl ItemsSource="{Binding PreviewLines}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

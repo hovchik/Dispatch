@@ -4,6 +4,7 @@
     <Project Path="src/Dispatch.Application/Dispatch.Application.csproj" />
     <Project Path="src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj" />
     <Project Path="src/Dispatch.App/Dispatch.App.csproj" />
+    <Project Path="src/Dispatch.Cli/Dispatch.Cli.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Dispatch.Tests/Dispatch.Tests.csproj" />
