@@ -1,5 +1,6 @@
 using Dispatch.Application.Abstractions;
 using Dispatch.Application.Requests;
+using Dispatch.Infrastructure.Auth;
 using Dispatch.Infrastructure.Http;
 using Dispatch.Infrastructure.Persistence;
 using Dispatch.Infrastructure.Protocols;
@@ -36,6 +37,9 @@ public static class DependencyInjection
         services.AddSingleton<CookieJar>();
         services.AddSingleton<ICookieJar>(sp => sp.GetRequiredService<CookieJar>());
         services.AddSingleton<SessionVariables>();
+        services.AddSingleton<SystemBrowserInteraction>();
+        services.AddSingleton<IOAuth2Interaction>(sp => sp.GetRequiredService<SystemBrowserInteraction>());
+        services.AddSingleton<IOAuth2TokenProvider, OAuth2TokenProvider>();
 
         services.AddSingleton<IRequestExecutor, HttpRequestExecutor>();
         services.AddSingleton<IRequestMessageBuilder, RequestMessageBuilder>();

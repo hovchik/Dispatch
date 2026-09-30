@@ -62,8 +62,7 @@ public enum OAuth2GrantType
     ClientCredentials,
     Password,
     AuthorizationCode,
-    DeviceCode,
-    Implicit
+    DeviceCode
 }
 
 public enum HttpVersionPreference
