@@ -8,10 +8,10 @@ A clean, fast, cross-platform API client (Postman-style) built on **.NET 10** an
 
 | Area | What you get |
 |---|---|
-| Request builder | GET / POST / PUT / PATCH / DELETE / HEAD / OPTIONS, URL bar ⇄ Params table two-way sync, headers, per-row enable/disable |
-| Body | JSON, Text, XML (with **Beautify**), `x-www-form-urlencoded` |
+| Request builder | GET / POST / PUT / PATCH / DELETE / HEAD / OPTIONS, URL bar ⇄ Params table two-way sync, headers, per-row enable/disable; new requests start with editable default headers (`Accept`, `User-Agent`, `Accept-Encoding`, `Connection`, `Cache-Control`); **Bulk Edit** for params, headers and form fields (`key: value` per line, `//` disables a line); rename a request in place (name field or double-click its tab) |
+| Body | JSON, Text, XML (with **Beautify**), `x-www-form-urlencoded`; choosing a body type keeps the `Content-Type` header in sync unless you set a custom one |
 | Auth | Bearer token, Basic, API key (header or query) |
-| Response | Status (color-coded), time, size, pretty/raw body (JSON & XML), headers, copy; binary and >5 MB bodies handled safely |
+| Response | Status (color-coded), time, size, pretty/raw body formatted by `Content-Type` (JSON, XML, HTML, JavaScript, form, text; switchable), headers, copy; binary and >5 MB bodies handled safely |
 | Collections | Create / rename / delete, save requests (Ctrl+S), duplicate, search |
 | Environments | `{{variable}}` substitution in URL, params, headers, body and auth; nested variables; active env remembered |
 | History | Last 500 sends, re-open in a new tab |

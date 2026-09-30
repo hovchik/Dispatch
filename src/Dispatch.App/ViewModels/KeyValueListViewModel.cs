@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dispatch.Application.Requests;
 using Dispatch.Domain;
 
 namespace Dispatch.App.ViewModels;
@@ -8,17 +9,25 @@ namespace Dispatch.App.ViewModels;
 /// <summary>
 /// Editable key/value table (params, headers, form fields, variables). Like Postman, it always keeps
 /// one empty "placeholder" row at the bottom; typing into it turns it into a real row.
+/// Lists that <see cref="SupportsBulkEdit"/> can also be edited as <c>key: value</c> lines.
 /// </summary>
 public sealed partial class KeyValueListViewModel : ObservableObject
 {
     private bool _suppressChanged;
+    private bool _syncingBulk;
 
-    public KeyValueListViewModel(string keyWatermark = "Key", string valueWatermark = "Value")
+    public KeyValueListViewModel(string keyWatermark = "Key", string valueWatermark = "Value", bool supportsBulkEdit = false)
     {
         KeyWatermark = keyWatermark;
         ValueWatermark = valueWatermark;
+        SupportsBulkEdit = supportsBulkEdit;
         EnsurePlaceholderRow();
     }
+
+    public bool SupportsBulkEdit { get; }
+
+    [ObservableProperty] private bool _isBulkEdit;
+    [ObservableProperty] private string _bulkText = string.Empty;
 
     public ObservableCollection<KeyValueRowViewModel> Rows { get; } = [];
     public string KeyWatermark { get; }
@@ -45,7 +54,73 @@ public sealed partial class KeyValueListViewModel : ObservableObject
         {
             _suppressChanged = false;
         }
+        if (!_syncingBulk)
+            RefreshBulkText();
         RaiseChanged();
+    }
+
+    /// <summary>Sets the value of the first row named <paramref name="key"/> (case-insensitive), adding the row if missing.</summary>
+    public void SetValue(string key, string value)
+    {
+        var row = Find(key);
+        if (row is null)
+            Rows.Insert(Rows.Count - 1, new KeyValueRowViewModel(this, key, value, enabled: true));
+        else
+            row.Value = value;
+        EnsurePlaceholderRow();
+        RefreshBulkText();
+        RaiseChanged();
+    }
+
+    public void RemoveKey(string key)
+    {
+        if (Find(key) is { } row)
+            Remove(row);
+    }
+
+    public string? GetValue(string key) => Find(key)?.Value;
+
+    private KeyValueRowViewModel? Find(string key) =>
+        Rows.FirstOrDefault(r => !r.IsPlaceholder && string.Equals(r.Key.Trim(), key, StringComparison.OrdinalIgnoreCase));
+
+    // ---- Bulk edit ---------------------------------------------------------------------------
+
+    [RelayCommand]
+    private void ToggleBulkEdit() => IsBulkEdit = !IsBulkEdit;
+
+    partial void OnIsBulkEditChanged(bool value) => RefreshBulkText();
+
+    partial void OnBulkTextChanged(string value)
+    {
+        if (_syncingBulk || !IsBulkEdit)
+            return;
+
+        _syncingBulk = true;
+        try
+        {
+            Load(KeyValueBulkText.Parse(value));
+        }
+        finally
+        {
+            _syncingBulk = false;
+        }
+    }
+
+    /// <summary>Rewrites the bulk text from the rows (only while it's shown, so the user's typing isn't reformatted).</summary>
+    private void RefreshBulkText()
+    {
+        if (!IsBulkEdit || _syncingBulk)
+            return;
+
+        _syncingBulk = true;
+        try
+        {
+            BulkText = KeyValueBulkText.Format(ToItems());
+        }
+        finally
+        {
+            _syncingBulk = false;
+        }
     }
 
     public List<KeyValueItem> ToItems() => Rows
@@ -66,6 +141,7 @@ public sealed partial class KeyValueListViewModel : ObservableObject
     {
         Rows.Remove(row);
         EnsurePlaceholderRow();
+        RefreshBulkText();
         RaiseChanged();
     }
 

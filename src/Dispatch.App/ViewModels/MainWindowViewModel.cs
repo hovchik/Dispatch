@@ -102,7 +102,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
     // ---- Commands ------------------------------------------------------------------------------
 
     [RelayCommand]
-    private void NewTab() => AddTab(new ApiRequest { Method = HttpVerb.Get });
+    private void NewTab() => AddTab(new ApiRequest { Method = HttpVerb.Get, Headers = DefaultHeaders.Create() });
 
     [RelayCommand]
     private void CloseSelectedTab()

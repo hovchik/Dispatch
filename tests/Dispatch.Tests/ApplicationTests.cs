@@ -217,3 +217,136 @@ public class BodyFormatterTests
     public void Leaves_plain_text_untouched() =>
         Assert.Equal("hello {", BodyFormatter.Pretty("hello {", "text/plain"));
 }
+
+public class BodyFormatDetectionTests
+{
+    [Theory]
+    [InlineData("application/json", BodyFormat.Json)]
+    [InlineData("application/problem+json; charset=utf-8", BodyFormat.Json)]
+    [InlineData("text/html", BodyFormat.Html)]
+    [InlineData("application/xhtml+xml", BodyFormat.Html)]
+    [InlineData("application/soap+xml", BodyFormat.Xml)]
+    [InlineData("text/javascript", BodyFormat.JavaScript)]
+    [InlineData("application/x-www-form-urlencoded", BodyFormat.Form)]
+    [InlineData("text/css", BodyFormat.Text)]
+    public void Detects_format_from_content_type(string contentType, BodyFormat expected) =>
+        Assert.Equal(expected, BodyFormatter.Detect(contentType, "{}"));
+
+    [Theory]
+    [InlineData("""{"a":1}""", BodyFormat.Json)]
+    [InlineData("<!DOCTYPE html><html></html>", BodyFormat.Html)]
+    [InlineData("<a><b/></a>", BodyFormat.Xml)]
+    [InlineData("hello {", BodyFormat.Text)]
+    public void Sniffs_body_when_content_type_is_missing_or_generic(string body, BodyFormat expected)
+    {
+        Assert.Equal(expected, BodyFormatter.Detect(null, body));
+        Assert.Equal(expected, BodyFormatter.Detect("text/plain", body));
+    }
+
+    [Fact]
+    public void Json_sent_as_html_is_not_reformatted_as_json() =>
+        Assert.Equal("""{"a":1}""", BodyFormatter.Pretty("""{"a":1}""", "text/html"));
+
+    [Fact]
+    public void Indents_html_and_keeps_leaf_elements_on_one_line()
+    {
+        var pretty = BodyFormatter.Pretty(
+            "<!DOCTYPE html><html><head><title>Home</title><meta charset=\"utf-8\"></head>" +
+            "<body><ul><li>One<li>Two</ul><p>a &lt; b</p></body></html>", "text/html");
+
+        var expected = string.Join(Environment.NewLine,
+            "<!DOCTYPE html>",
+            "<html>",
+            "  <head>",
+            "    <title>Home</title>",
+            "    <meta charset=\"utf-8\">",
+            "  </head>",
+            "  <body>",
+            "    <ul>",
+            "      <li>",
+            "        One",
+            "      <li>",
+            "        Two",
+            "    </ul>",
+            "    <p>a &lt; b</p>",
+            "  </body>",
+            "</html>");
+        Assert.Equal(expected, pretty);
+    }
+
+    [Fact]
+    public void Keeps_script_content_verbatim()
+    {
+        var pretty = BodyFormatter.FormatHtml("<div><script>if (a < b) {\n  go();\n}</script></div>");
+
+        Assert.Contains("if (a < b) {\n  go();\n}", pretty);
+        Assert.EndsWith("</div>", pretty);
+    }
+
+    [Fact]
+    public void Decodes_form_bodies() =>
+        Assert.Equal($"name: Hovo Test{Environment.NewLine}city: Երևան",
+            BodyFormatter.Pretty("name=Hovo+Test&city=%D4%B5%D6%80%D6%87%D5%A1%D5%B6", "application/x-www-form-urlencoded"));
+}
+
+public class KeyValueBulkTextTests
+{
+    [Fact]
+    public void Round_trips_rows_including_disabled_ones()
+    {
+        var items = new List<KeyValueItem>
+        {
+            new("Content-Type", "application/json"),
+            new("X-Debug", "1", enabled: false),
+            new("redirect", "https://a.test/x?y=1")
+        };
+
+        var text = KeyValueBulkText.Format(items);
+        var parsed = KeyValueBulkText.Parse(text);
+
+        Assert.Equal("Content-Type: application/json" + Environment.NewLine + "// X-Debug: 1"
+                     + Environment.NewLine + "redirect: https://a.test/x?y=1", text);
+        Assert.Equal(items.Select(i => (i.Key, i.Value, i.Enabled)), parsed.Select(i => (i.Key, i.Value, i.Enabled)));
+    }
+
+    [Fact]
+    public void Parses_loose_input()
+    {
+        var parsed = KeyValueBulkText.Parse("Accept:*/*\r\n\r\n  //Authorization :  Bearer x \nflag\n");
+
+        Assert.Collection(parsed,
+            a => Assert.Equal(("Accept", "*/*", true), (a.Key, a.Value, a.Enabled)),
+            b => Assert.Equal(("Authorization", "Bearer x", false), (b.Key, b.Value, b.Enabled)),
+            c => Assert.Equal(("flag", "", true), (c.Key, c.Value, c.Enabled)));
+    }
+}
+
+public class DefaultHeadersTests
+{
+    [Fact]
+    public void New_requests_get_editable_copies_of_the_defaults()
+    {
+        var first = DefaultHeaders.Create();
+        first[0].Value = "changed";
+
+        Assert.Equal("*/*", DefaultHeaders.Create()[0].Value);
+        Assert.Contains(first, h => h.Key == "User-Agent" && h.Value == RequestMessageBuilder.DefaultUserAgent);
+    }
+
+    [Fact]
+    public void Default_headers_are_sent()
+    {
+        using var message = new RequestMessageBuilder().Build(
+            new ApiRequest { Url = "https://a.test", Headers = DefaultHeaders.Create() }, new Dictionary<string, string>());
+
+        Assert.Equal("no-cache", message.Headers.CacheControl?.ToString());
+        Assert.Contains("gzip", message.Headers.AcceptEncoding.ToString());
+    }
+
+    [Theory]
+    [InlineData("application/json", true)]
+    [InlineData("", true)]
+    [InlineData("application/vnd.api+json", false)]
+    public void Recognises_generated_content_types(string value, bool expected) =>
+        Assert.Equal(expected, DefaultHeaders.IsGeneratedContentType(value));
+}

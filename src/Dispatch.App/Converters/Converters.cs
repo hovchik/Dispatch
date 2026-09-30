@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Dispatch.Application.Formatting;
 using Dispatch.Domain;
 
 namespace Dispatch.App.Converters;
@@ -101,6 +102,12 @@ public sealed class EnumLabelConverter : IValueConverter
         AuthMode.ApiKey => "API Key",
         ApiKeyLocation.Header => "Header",
         ApiKeyLocation.QueryParam => "Query Params",
+        BodyFormat.Json => "JSON",
+        BodyFormat.Xml => "XML",
+        BodyFormat.Html => "HTML",
+        BodyFormat.JavaScript => "JavaScript",
+        BodyFormat.Form => "Form",
+        BodyFormat.Text => "Text",
         null => string.Empty,
         _ => value.ToString() ?? string.Empty
     };

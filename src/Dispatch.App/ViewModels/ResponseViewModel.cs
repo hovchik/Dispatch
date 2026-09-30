@@ -14,26 +14,46 @@ public sealed partial class ResponseViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(DisplayBody))]
     private bool _showPretty = true;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayBody))]
+    private string _prettyBody;
+
+    [ObservableProperty] private BodyFormat _selectedFormat;
     [ObservableProperty] private string? _copyFeedback;
 
-    private ResponseViewModel(ApiResponse response, string prettyBody, IClipboardService clipboard)
+    private ResponseViewModel(ApiResponse response, BodyFormat format, string prettyBody, IClipboardService clipboard)
     {
         _clipboard = clipboard;
         Model = response;
-        PrettyBody = prettyBody;
+        _selectedFormat = format;
+        _prettyBody = prettyBody;
     }
+
+    public static IReadOnlyList<BodyFormat> Formats { get; } = Enum.GetValues<BodyFormat>();
 
     /// <summary>Formats the body off the UI thread so large payloads don't freeze the window.</summary>
     public static async Task<ResponseViewModel> CreateAsync(ApiResponse response, IClipboardService clipboard)
     {
-        var pretty = response.HasResponse
-            ? await Task.Run(() => BodyFormatter.Pretty(response.Body, response.ContentType))
-            : string.Empty;
-        return new ResponseViewModel(response, pretty, clipboard);
+        if (!response.HasResponse)
+            return new ResponseViewModel(response, BodyFormat.Text, string.Empty, clipboard);
+
+        var (format, pretty) = await Task.Run(() =>
+        {
+            var detected = BodyFormatter.Detect(response.ContentType, response.Body);
+            return (detected, BodyFormatter.Pretty(response.Body, detected));
+        });
+        return new ResponseViewModel(response, format, pretty, clipboard);
+    }
+
+    /// <summary>The user picked another format (e.g. the server sent JSON as text/plain): re-format the body.</summary>
+    async partial void OnSelectedFormatChanged(BodyFormat value)
+    {
+        var pretty = await Task.Run(() => BodyFormatter.Pretty(Model.Body, value));
+        if (SelectedFormat == value)
+            PrettyBody = pretty;
     }
 
     public ApiResponse Model { get; }
-    public string PrettyBody { get; }
     public string RawBody => Model.Body;
     public string DisplayBody => ShowPretty ? PrettyBody : RawBody;
 
@@ -44,6 +64,7 @@ public sealed partial class ResponseViewModel : ObservableObject
     public string StatusText => $"{Model.StatusCode} {Model.ReasonPhrase}";
     public string TimeText => Format.Duration(Model.Elapsed);
     public string SizeText => Format.Bytes(Model.SizeBytes);
+    public string? ContentType => Model.ContentType;
     public bool IsTruncated => Model.IsBodyTruncated;
     public string? EffectiveUrl => Model.EffectiveUrl;
     public IReadOnlyList<ResponseHeader> Headers => Model.Headers;

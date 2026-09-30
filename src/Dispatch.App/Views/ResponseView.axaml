@@ -3,6 +3,7 @@
              xmlns:vm="using:Dispatch.App.ViewModels"
              xmlns:conv="using:Dispatch.App.Converters"
              xmlns:domain="using:Dispatch.Domain"
+             xmlns:fmt="using:Dispatch.Application.Formatting"
              x:Class="Dispatch.App.Views.ResponseView"
              x:DataType="vm:ResponseViewModel">
 
@@ -41,6 +42,15 @@
         <DockPanel Margin="0,8,0,0">
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
             <ToggleButton IsChecked="{Binding ShowPretty}" Content="Pretty" Padding="10,4" />
+            <ComboBox ItemsSource="{x:Static vm:ResponseViewModel.Formats}" SelectedItem="{Binding SelectedFormat}"
+                      IsEnabled="{Binding ShowPretty}" MinWidth="110" Padding="10,4"
+                      ToolTip.Tip="{Binding ContentType, StringFormat='Content-Type: {0}', TargetNullValue='No Content-Type header'}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="fmt:BodyFormat">
+                  <TextBlock Text="{Binding Converter={x:Static conv:EnumLabelConverter.Instance}}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
             <Button Classes="icon" Command="{Binding CopyBodyCommand}" ToolTip.Tip="Copy body">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <PathIcon Data="{StaticResource IconCopy}" />

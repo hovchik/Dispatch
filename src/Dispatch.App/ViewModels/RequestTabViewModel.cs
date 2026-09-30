@@ -51,9 +51,9 @@ public sealed partial class RequestTabViewModel : ObservableObject
         _host = host;
         _requestId = request.Id;
 
-        Params = new KeyValueListViewModel("Parameter", "Value");
-        Headers = new KeyValueListViewModel("Header", "Value");
-        FormFields = new KeyValueListViewModel("Field", "Value");
+        Params = new KeyValueListViewModel("Parameter", "Value", supportsBulkEdit: true);
+        Headers = new KeyValueListViewModel("Header", "Value", supportsBulkEdit: true);
+        FormFields = new KeyValueListViewModel("Field", "Value", supportsBulkEdit: true);
 
         Load(request);
 
@@ -98,10 +98,14 @@ public sealed partial class RequestTabViewModel : ObservableObject
     [ObservableProperty] private ResponseViewModel? _response;
     [ObservableProperty] private string? _bodyError;
 
-    // Save-as popup state (used when the request doesn't belong to a collection yet).
+    // Save-as popup state (used when the request doesn't belong to a collection yet). The name is
+    // whatever the tab is called, so the popup only asks for the collection.
     [ObservableProperty] private bool _isSavePopupOpen;
-    [ObservableProperty] private string _saveName = string.Empty;
     [ObservableProperty] private CollectionNodeViewModel? _saveTarget;
+
+    // Inline rename of the tab header (double-click the tab title).
+    [ObservableProperty] private bool _isRenaming;
+    [ObservableProperty] private string _renameText = string.Empty;
 
     public bool IsSaved => CollectionId is not null;
     public bool IsBodyNone => BodyMode == BodyMode.None;
@@ -215,7 +219,27 @@ public sealed partial class RequestTabViewModel : ObservableObject
     }
 
     partial void OnMethodChanged(HttpVerb value) => MarkDirty();
-    partial void OnBodyModeChanged(BodyMode value) => MarkDirty();
+    partial void OnBodyModeChanged(BodyMode value)
+    {
+        if (!_loading)
+            SyncContentTypeHeader(value);
+        MarkDirty();
+    }
+
+    /// <summary>
+    /// Like Postman, picking a body type updates the Content-Type header, unless the user typed a custom one.
+    /// </summary>
+    private void SyncContentTypeHeader(BodyMode mode)
+    {
+        var current = Headers.GetValue(DefaultHeaders.ContentType);
+        if (current is not null && !DefaultHeaders.IsGeneratedContentType(current))
+            return;
+
+        if (DefaultHeaders.ContentTypeFor(mode) is { } contentType)
+            Headers.SetValue(DefaultHeaders.ContentType, contentType);
+        else
+            Headers.RemoveKey(DefaultHeaders.ContentType);
+    }
     partial void OnBodyTextChanged(string value)
     {
         BodyError = null;
@@ -258,7 +282,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
     {
         if (CollectionId is null)
         {
-            SaveName = DisplayName;
+            CommitRename();
             SaveTarget ??= SaveTargets.FirstOrDefault();
             IsSavePopupOpen = true;
             return;
@@ -280,8 +304,6 @@ public sealed partial class RequestTabViewModel : ObservableObject
             return;
         }
         CollectionId = target.Id;
-        if (!string.IsNullOrWhiteSpace(SaveName))
-            Name = SaveName.Trim();
         IsSavePopupOpen = false;
         await PersistAsync();
     }
@@ -326,4 +348,24 @@ public sealed partial class RequestTabViewModel : ObservableObject
 
     [RelayCommand]
     private void Close() => _host.CloseTab(this);
+
+    [RelayCommand]
+    private void BeginRename()
+    {
+        RenameText = Name;
+        IsRenaming = true;
+    }
+
+    [RelayCommand]
+    private void CommitRename()
+    {
+        if (!IsRenaming)
+            return;
+        if (!string.IsNullOrWhiteSpace(RenameText))
+            Name = RenameText.Trim();
+        IsRenaming = false;
+    }
+
+    [RelayCommand]
+    private void CancelRename() => IsRenaming = false;
 }
