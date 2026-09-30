@@ -73,6 +73,9 @@ public sealed class ApiResponse
     /// <summary>Variables set by extraction rules and scripts during this send.</summary>
     public IReadOnlyDictionary<string, string> VariableUpdates { get; set; } = new Dictionary<string, string>();
 
+    /// <summary>The subset of <see cref="VariableUpdates"/> written to the environment (to be persisted by the caller).</summary>
+    public IReadOnlyDictionary<string, string> EnvironmentUpdates { get; set; } = new Dictionary<string, string>();
+
     /// <summary>Set when an OAuth 2.0 token was fetched or refreshed, so the caller can cache it on the request.</summary>
     public AuthSettings? RefreshedAuth { get; set; }
 
@@ -82,14 +85,4 @@ public sealed class ApiResponse
 
     public static ApiResponse Failed(string error, TimeSpan elapsed, string? url = null, RequestKind kind = RequestKind.Http) =>
         new() { Error = error, Elapsed = elapsed, EffectiveUrl = url, Kind = kind };
-
-    /// <summary>A copy with a different body (e.g. a JSON view of a binary protocol payload).</summary>
-    public ApiResponse WithBody(string body, string? contentType = null) => new()
-    {
-        Kind = Kind, StatusCode = StatusCode, ReasonPhrase = ReasonPhrase, Succeeded = Succeeded, Elapsed = Elapsed,
-        SizeBytes = SizeBytes, ContentType = contentType ?? ContentType, Body = body, IsBodyTruncated = IsBodyTruncated,
-        Headers = Headers, Trailers = Trailers, Messages = Messages, Timings = Timings, RawRequest = RawRequest,
-        EffectiveUrl = EffectiveUrl, Error = Error, TestResults = TestResults, ScriptLog = ScriptLog,
-        VariableUpdates = VariableUpdates
-    };
 }

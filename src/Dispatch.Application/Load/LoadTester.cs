@@ -99,7 +99,9 @@ public sealed class LoadTester(IRequestSender sender)
             throw new ArgumentException("Choose at least one request.");
         var users = Math.Max(1, options.VirtualUsers);
         var samples = new List<Sample>(capacity: 4096);
-        var errorSamples = new List<string>();
+        // Distinct error messages with how often each occurred, in first-seen order.
+        var errorSamples = new Dictionary<string, int>(StringComparer.Ordinal);
+        var errorOrder = new List<string>();
         var gate = new Lock();
         var active = 0;
         var clock = Stopwatch.StartNew();
@@ -170,8 +172,17 @@ public sealed class LoadTester(IRequestSender sender)
                         lock (gate)
                         {
                             samples.Add(new Sample(request.Name, response.Elapsed.TotalMilliseconds, status, error, (int)clock.Elapsed.TotalSeconds));
-                            if (error && errorSamples.Count < MaxErrorSamples)
-                                errorSamples.Add($"{request.Name}: {DescribeError(response, failedChecks)}");
+                            if (error)
+                            {
+                                var message = $"{request.Name}: {DescribeError(response, failedChecks)}";
+                                if (errorSamples.TryGetValue(message, out var count))
+                                    errorSamples[message] = count + 1;
+                                else if (errorOrder.Count < MaxErrorSamples)
+                                {
+                                    errorSamples[message] = 1;
+                                    errorOrder.Add(message);
+                                }
+                            }
                         }
 
                         if (options.ThinkTimeMs > 0)
@@ -213,7 +224,7 @@ public sealed class LoadTester(IRequestSender sender)
             PerRequest = all.GroupBy(s => s.Request).Select(g => new LoadRequestStats(g.Key, g.Count(), g.Count(s => s.Error),
                 LatencyStats.From(g.Select(s => s.Ms).ToList()), g.GroupBy(s => s.Status).ToDictionary(x => x.Key, x => x.Count()))).ToList(),
             Timeline = Timeline(all, 0),
-            SampleErrors = errorSamples
+            SampleErrors = errorOrder.Select(m => errorSamples[m] == 1 ? m : $"{m} (×{errorSamples[m]})").ToList()
         };
 
         LoadSnapshot Snapshot()

@@ -3,6 +3,8 @@
         xmlns:vm="using:Dispatch.App.ViewModels"
         xmlns:views="using:Dispatch.App.Views"
         xmlns:conv="using:Dispatch.App.Converters"
+        xmlns:domain="using:Dispatch.Domain"
+        xmlns:tools="using:Dispatch.App.ViewModels.Tools"
         x:Class="Dispatch.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="Dispatch"
@@ -15,9 +17,13 @@
     <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
     <KeyBinding Gesture="Ctrl+T" Command="{Binding NewTabCommand}" />
     <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseSelectedTabCommand}" />
+    <KeyBinding Gesture="Ctrl+K" Command="{Binding OpenPaletteCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding OpenPaletteCommand}" />
+    <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenImportCommand}" />
   </Window.KeyBindings>
 
-  <Grid RowDefinitions="Auto,Auto,*">
+  <Panel>
+  <Grid RowDefinitions="Auto,Auto,Auto,*">
 
     <!-- Top bar -->
     <Border Grid.Row="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource DividerBrush}"
@@ -29,12 +35,72 @@
           <TextBlock Text="Dispatch" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
         </StackPanel>
 
-        <Button Grid.Column="1" Margin="20,0,0,0" Command="{Binding NewTabCommand}" Padding="10,5"
-                ToolTip.Tip="New request (Ctrl+T)">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Data="{StaticResource IconPlus}" Width="12" Height="12" />
-            <TextBlock Text="New" />
-          </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="20,0,0,0">
+          <SplitButton Command="{Binding NewTabCommand}" Padding="10,5" ToolTip.Tip="New HTTP request (Ctrl+T); arrow for other protocols">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconPlus}" Width="12" Height="12" />
+              <TextBlock Text="New" />
+            </StackPanel>
+            <SplitButton.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                <MenuItem Header="HTTP" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.Http}" />
+                <MenuItem Header="GraphQL" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.GraphQl}" />
+                <MenuItem Header="gRPC" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.Grpc}" />
+                <MenuItem Header="SOAP" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.Soap}" />
+                <Separator />
+                <MenuItem Header="WebSocket" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.WebSocket}" />
+                <MenuItem Header="Server-Sent Events" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.Sse}" />
+                <MenuItem Header="Socket.IO" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.SocketIo}" />
+                <Separator />
+                <MenuItem Header="MQTT" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.Mqtt}" />
+                <MenuItem Header="Kafka" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.Kafka}" />
+                <MenuItem Header="AMQP (RabbitMQ)" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.Amqp}" />
+                <Separator />
+                <MenuItem Header="TCP" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.Tcp}" />
+                <MenuItem Header="UDP" Command="{Binding NewRequestCommand}" CommandParameter="{x:Static domain:RequestKind.Udp}" />
+              </MenuFlyout>
+            </SplitButton.Flyout>
+          </SplitButton>
+          <Button Classes="tool" Margin="8,0,0,0" Command="{Binding OpenImportCommand}"
+                  ToolTip.Tip="Import Postman, OpenAPI, Insomnia, HAR, WSDL, .proto, .http or cURL (Ctrl+O)">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconImport}" />
+              <TextBlock Text="Import" />
+            </StackPanel>
+          </Button>
+          <Button Classes="tool" Command="{Binding OpenRunnerCommand}" ToolTip.Tip="Run the current collection with assertions and reports">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconPlay}" />
+              <TextBlock Text="Runner" />
+            </StackPanel>
+          </Button>
+          <Button Classes="tool" Command="{Binding OpenMockServerCommand}" ToolTip.Tip="Serve the current collection's saved examples locally">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconServer}" />
+              <TextBlock Text="Mock" />
+            </StackPanel>
+          </Button>
+          <Button Classes="tool" Command="{Binding OpenLoadTestCommand}" ToolTip.Tip="Load test requests with virtual users">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconChart}" />
+              <TextBlock Text="Load test" />
+            </StackPanel>
+          </Button>
+          <Button Classes="tool" Command="{Binding OpenCookiesCommand}" ToolTip.Tip="Cookie jar">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconCookie}" />
+              <TextBlock Text="Cookies" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+
+        <Button Grid.Column="2" HorizontalAlignment="Center" MinWidth="240" Margin="12,0" Padding="10,5"
+                Command="{Binding OpenPaletteCommand}" ToolTip.Tip="Search requests and commands (Ctrl+K)">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <PathIcon Data="{StaticResource IconSearch}" Width="12" Height="12" Foreground="{DynamicResource MutedTextBrush}" />
+            <TextBlock Grid.Column="1" Text="Search requests &amp; commands" Classes="muted" Margin="8,0,16,0" />
+            <TextBlock Grid.Column="2" Text="Ctrl K" Classes="muted" FontSize="11" FontFamily="{StaticResource MonoFont}" />
+          </Grid>
         </Button>
 
         <ComboBox Grid.Column="3" ItemsSource="{Binding Environments.Choices}"
@@ -65,7 +131,18 @@
       </Grid>
     </Border>
 
-    <Grid Grid.Row="2" ColumnDefinitions="300,Auto,*">
+    <!-- Info banner -->
+    <Border Grid.Row="2" Background="{DynamicResource SurfaceAltBrush}" Padding="14,6"
+            IsVisible="{Binding InfoMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <Grid ColumnDefinitions="*,Auto">
+        <SelectableTextBlock Text="{Binding InfoMessage}" TextWrapping="Wrap" FontSize="12" VerticalAlignment="Center" />
+        <Button Grid.Column="1" Classes="icon" Command="{Binding DismissInfoCommand}" ToolTip.Tip="Dismiss">
+          <PathIcon Data="{StaticResource IconClose}" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="3" ColumnDefinitions="300,Auto,*">
       <!-- Sidebar -->
       <Border Grid.Column="0" Background="{DynamicResource SurfaceBrush}" MinWidth="220">
         <TabControl Padding="0" Margin="6,0,0,0">
@@ -107,8 +184,8 @@
                       </ContextMenu>
                     </Grid.ContextMenu>
                     <TextBlock Classes="method" Margin="10,0,6,0"
-                               Text="{Binding Method, Converter={x:Static conv:MethodTextConverter.Instance}}"
-                               Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+                               Text="{Binding Badge, Converter={x:Static conv:MethodTextConverter.Instance}}"
+                               Foreground="{Binding Badge, Converter={x:Static conv:BadgeBrushConverter.Instance}}" />
                     <!-- Requests not yet saved to a collection show their title in italics. -->
                     <TextBlock Grid.Column="1" Text="{Binding DisplayName}" VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsRenaming}"
@@ -193,4 +270,37 @@
       </Grid>
     </Grid>
   </Grid>
+
+  <!-- Command palette (Ctrl+K) -->
+  <Border Background="#66000000" IsVisible="{Binding Palette.IsOpen}" PointerPressed="OnPaletteBackdropPressed">
+    <Border Classes="card" Width="620" MaxHeight="480" VerticalAlignment="Top" Margin="0,80,0,0" Padding="0"
+            BoxShadow="0 12 40 0 #60000000">
+      <DockPanel>
+        <TextBox x:Name="PaletteQuery" DockPanel.Dock="Top" Text="{Binding Palette.Query}" Margin="10"
+                 Watermark="Type a request name, URL or command…">
+          <TextBox.KeyBindings>
+            <KeyBinding Gesture="Enter" Command="{Binding Palette.RunCommand}" />
+            <KeyBinding Gesture="Escape" Command="{Binding Palette.CloseCommand}" />
+            <KeyBinding Gesture="Down" Command="{Binding Palette.MoveCommand}" CommandParameter="down" />
+            <KeyBinding Gesture="Up" Command="{Binding Palette.MoveCommand}" CommandParameter="up" />
+          </TextBox.KeyBindings>
+        </TextBox>
+        <TextBlock DockPanel.Dock="Top" Classes="muted" Margin="16,0,16,10" Text="No matches."
+                   IsVisible="{Binding Palette.Items.Count, Converter={x:Static conv:IsZeroConverter.Instance}}" />
+        <ListBox x:Name="PaletteList" Classes="plain" ItemsSource="{Binding Palette.Items}"
+                 SelectedItem="{Binding Palette.Selected}" Margin="6,0,6,6">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="tools:PaletteItem">
+              <Grid ColumnDefinitions="*,Auto" Background="Transparent" Tapped="OnPaletteItemTapped">
+                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="1" Text="{Binding Hint}" Classes="muted" FontSize="11" Margin="12,0,0,0"
+                           MaxWidth="280" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+  </Border>
+  </Panel>
 </Window>

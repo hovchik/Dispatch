@@ -6,11 +6,22 @@
              x:DataType="vm:HistoryViewModel">
 
   <DockPanel>
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="12,10,10,6">
-      <TextBlock Text="RECENT REQUESTS" Classes="section" VerticalAlignment="Center" />
-      <Button Grid.Column="1" Content="Clear" Command="{Binding ClearCommand}" Padding="10,4"
-              IsVisible="{Binding !IsEmpty}" />
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="10,10,10,6">
+      <TextBox Text="{Binding Filter}" Watermark="Filter by URL, status or name" />
+      <Button Grid.Column="1" Content="Clear" Command="{Binding ClearCommand}" Padding="10,4" Margin="6,0,0,0"
+              IsVisible="{Binding !IsEmpty}" ToolTip.Tip="Delete all history" />
     </Grid>
+
+    <Border DockPanel.Dock="Top" Classes="card" Margin="10,0,10,6" Padding="10,6"
+            IsVisible="{Binding CompareBase, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock TextWrapping="Wrap" FontSize="12" VerticalAlignment="Center"
+                   Text="Comparing: pick a second entry and choose “Compare with selected”." />
+        <Button Grid.Column="1" Classes="icon" Command="{Binding CancelCompareCommand}" ToolTip.Tip="Cancel">
+          <PathIcon Data="{StaticResource IconClose}" />
+        </Button>
+      </Grid>
+    </Border>
 
     <TextBlock DockPanel.Dock="Top" Text="{Binding Error}" Foreground="#EF4444" TextWrapping="Wrap" Margin="12,0"
                IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
@@ -20,19 +31,29 @@
                  Text="Requests you send will appear here." IsVisible="{Binding IsEmpty}" />
 
       <ListBox Classes="plain" ItemsSource="{Binding Items}">
+        <ListBox.Styles>
+          <Style Selector="ListBoxItem" x:DataType="vm:HistoryItemViewModel">
+            <Setter Property="IsVisible" Value="{Binding IsVisible}" />
+          </Style>
+        </ListBox.Styles>
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="vm:HistoryItemViewModel">
-            <Grid ColumnDefinitions="40,*,Auto" RowDefinitions="Auto,Auto" Background="Transparent"
+            <Grid ColumnDefinitions="44,*,Auto" RowDefinitions="Auto,Auto" Background="Transparent"
                   Tapped="OnItemTapped" ToolTip.Tip="{Binding Url}">
               <Grid.ContextMenu>
                 <ContextMenu>
                   <MenuItem Header="Open in new tab" Command="{Binding OpenCommand}" />
+                  <MenuItem Header="{Binding CompareHeader}" Command="{Binding CompareCommand}"
+                            IsEnabled="{Binding CanCompare}">
+                    <MenuItem.Icon><PathIcon Data="{StaticResource IconDiff}" Width="12" Height="12" /></MenuItem.Icon>
+                  </MenuItem>
+                  <Separator />
                   <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
                 </ContextMenu>
               </Grid.ContextMenu>
               <TextBlock Grid.RowSpan="2" Classes="method"
-                         Text="{Binding Method, Converter={x:Static conv:MethodTextConverter.Instance}}"
-                         Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+                         Text="{Binding Badge, Converter={x:Static conv:MethodTextConverter.Instance}}"
+                         Foreground="{Binding Badge, Converter={x:Static conv:BadgeBrushConverter.Instance}}" />
               <TextBlock Grid.Column="1" Text="{Binding Url}" TextTrimming="CharacterEllipsis"
                          FontFamily="{StaticResource MonoFont}" FontSize="12" />
               <TextBlock Grid.Column="2" Text="{Binding StatusText}" FontWeight="SemiBold" FontSize="11"
@@ -42,6 +63,8 @@
                           Margin="0,2,0,0">
                 <TextBlock Text="{Binding WhenText}" Classes="muted" FontSize="11" />
                 <TextBlock Text="{Binding ElapsedText}" Classes="muted" FontSize="11" />
+                <TextBlock Text="◆ compare base" FontSize="11" Foreground="#FF6C37"
+                           IsVisible="{Binding IsCompareBase}" />
               </StackPanel>
             </Grid>
           </DataTemplate>

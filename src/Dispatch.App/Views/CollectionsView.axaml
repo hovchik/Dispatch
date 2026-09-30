@@ -7,7 +7,7 @@
 
   <DockPanel>
     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="10,10,10,6">
-      <TextBox Text="{Binding Filter}" Watermark="Search collections" />
+      <TextBox Text="{Binding Filter}" Watermark="Search requests" />
       <Button Grid.Column="1" Classes="icon" Margin="6,0,0,0" Command="{Binding NewCollectionCommand}"
               ToolTip.Tip="New collection">
         <PathIcon Data="{StaticResource IconPlus}" />
@@ -19,7 +19,7 @@
 
     <Panel>
       <TextBlock Classes="muted" TextWrapping="Wrap" Margin="16" TextAlignment="Center"
-                 Text="No collections yet. Click + to create one, or save a request."
+                 Text="No collections yet. Click + to create one, save a request, or import a Postman / OpenAPI / HAR file."
                  IsVisible="{Binding Items.Count, Converter={x:Static conv:IsZeroConverter.Instance}}" />
 
       <TreeView ItemsSource="{Binding Items}" Padding="4,0">
@@ -32,12 +32,39 @@
         </TreeView.Styles>
 
         <TreeView.DataTemplates>
-          <TreeDataTemplate DataType="vm:CollectionNodeViewModel" ItemsSource="{Binding Requests}">
+          <TreeDataTemplate DataType="vm:CollectionNodeViewModel" ItemsSource="{Binding Children}">
             <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent">
               <Grid.ContextMenu>
                 <ContextMenu>
                   <MenuItem Header="Add request" Command="{Binding AddRequestCommand}" />
                   <MenuItem Header="Rename" Command="{Binding StartRenameCommand}" />
+                  <MenuItem Header="Settings &amp; variables…" Command="{Binding ActionCommand}"
+                            CommandParameter="{x:Static vm:CollectionAction.Settings}" />
+                  <Separator />
+                  <MenuItem Header="Run collection…" Command="{Binding ActionCommand}"
+                            CommandParameter="{x:Static vm:CollectionAction.Run}">
+                    <MenuItem.Icon><PathIcon Data="{StaticResource IconPlay}" Width="12" Height="12" /></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="Load test…" Command="{Binding ActionCommand}"
+                            CommandParameter="{x:Static vm:CollectionAction.LoadTest}">
+                    <MenuItem.Icon><PathIcon Data="{StaticResource IconChart}" Width="12" Height="12" /></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="Mock server…" Command="{Binding ActionCommand}"
+                            CommandParameter="{x:Static vm:CollectionAction.Mock}">
+                    <MenuItem.Icon><PathIcon Data="{StaticResource IconServer}" Width="12" Height="12" /></MenuItem.Icon>
+                  </MenuItem>
+                  <Separator />
+                  <MenuItem Header="Export">
+                    <MenuItem.Icon><PathIcon Data="{StaticResource IconExport}" Width="12" Height="12" /></MenuItem.Icon>
+                    <MenuItem Header="Dispatch file (.json)…" Command="{Binding ActionCommand}"
+                              CommandParameter="{x:Static vm:CollectionAction.ExportDispatch}" />
+                    <MenuItem Header="Folder, one file per request (git-friendly)…" Command="{Binding ActionCommand}"
+                              CommandParameter="{x:Static vm:CollectionAction.ExportFolder}" />
+                    <MenuItem Header="Postman collection v2.1…" Command="{Binding ActionCommand}"
+                              CommandParameter="{x:Static vm:CollectionAction.ExportPostman}" />
+                    <MenuItem Header=".http file…" Command="{Binding ActionCommand}"
+                              CommandParameter="{x:Static vm:CollectionAction.ExportHttp}" />
+                  </MenuItem>
                   <Separator />
                   <MenuItem Header="Delete collection" Command="{Binding DeleteCommand}" />
                 </ContextMenu>
@@ -47,34 +74,64 @@
                         Foreground="{DynamicResource MutedTextBrush}" />
               <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" FontWeight="SemiBold"
                          TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsRenaming}" />
-              <TextBox Grid.Column="1" Text="{Binding EditName}" IsVisible="{Binding IsRenaming}"
-                       AttachedToVisualTree="OnRenameBoxAttached" LostFocus="OnRenameBoxLostFocus"
-                       MinHeight="26" Padding="6,2">
+              <TextBox Grid.Column="1" Classes="rename" Text="{Binding EditName}" IsVisible="{Binding IsRenaming}"
+                       LostFocus="OnRenameBoxLostFocus" MinHeight="26" Padding="6,2">
                 <TextBox.KeyBindings>
                   <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}" />
                   <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}" />
                 </TextBox.KeyBindings>
               </TextBox>
-              <TextBlock Grid.Column="2" Text="{Binding Requests.Count}" Classes="muted" FontSize="11"
+              <TextBlock Grid.Column="2" Text="{Binding RequestCount}" Classes="muted" FontSize="11"
                          VerticalAlignment="Center" Margin="8,0,4,0" />
             </Grid>
           </TreeDataTemplate>
 
+          <TreeDataTemplate DataType="vm:FolderNodeViewModel" ItemsSource="{Binding Children}">
+            <Grid ColumnDefinitions="Auto,*" Background="Transparent" ToolTip.Tip="{Binding Path}">
+              <Grid.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="Add request" Command="{Binding AddRequestCommand}" />
+                  <MenuItem Header="Rename folder" Command="{Binding StartRenameCommand}" />
+                </ContextMenu>
+              </Grid.ContextMenu>
+              <PathIcon Data="{StaticResource IconFolder}" Width="12" Height="12" Margin="0,0,8,0" Opacity="0.7"
+                        Foreground="{DynamicResource MutedTextBrush}" />
+              <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsRenaming}" />
+              <TextBox Grid.Column="1" Classes="rename" Text="{Binding EditName}" IsVisible="{Binding IsRenaming}"
+                       LostFocus="OnRenameBoxLostFocus" MinHeight="26" Padding="6,2">
+                <TextBox.KeyBindings>
+                  <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}" />
+                  <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}" />
+                </TextBox.KeyBindings>
+              </TextBox>
+            </Grid>
+          </TreeDataTemplate>
+
           <DataTemplate DataType="vm:RequestNodeViewModel">
-            <Grid ColumnDefinitions="40,*" Background="Transparent" Tapped="OnRequestTapped"
+            <Grid ColumnDefinitions="44,*" Background="Transparent" Tapped="OnRequestTapped"
                   ToolTip.Tip="{Binding Model.Url}">
               <Grid.ContextMenu>
                 <ContextMenu>
                   <MenuItem Header="Open" Command="{Binding OpenCommand}" />
                   <MenuItem Header="Duplicate" Command="{Binding DuplicateCommand}" />
+                  <MenuItem Header="Move to folder…" Command="{Binding StartMoveCommand}" />
                   <Separator />
                   <MenuItem Header="Delete" Command="{Binding DeleteCommand}" />
                 </ContextMenu>
               </Grid.ContextMenu>
-              <TextBlock Classes="method" Text="{Binding Method, Converter={x:Static conv:MethodTextConverter.Instance}}"
-                         Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+              <TextBlock Classes="method" Text="{Binding Badge, Converter={x:Static conv:MethodTextConverter.Instance}}"
+                         Foreground="{Binding Badge, Converter={x:Static conv:BadgeBrushConverter.Instance}}" />
               <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"
-                         TextTrimming="CharacterEllipsis" />
+                         TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsMoving}" />
+              <TextBox Grid.Column="1" Classes="rename" Text="{Binding MoveTarget}" IsVisible="{Binding IsMoving}"
+                       Watermark="folder/sub-folder (empty = root)" LostFocus="OnRenameBoxLostFocus"
+                       MinHeight="26" Padding="6,2">
+                <TextBox.KeyBindings>
+                  <KeyBinding Gesture="Enter" Command="{Binding CommitMoveCommand}" />
+                  <KeyBinding Gesture="Escape" Command="{Binding CancelMoveCommand}" />
+                </TextBox.KeyBindings>
+              </TextBox>
             </Grid>
           </DataTemplate>
         </TreeView.DataTemplates>

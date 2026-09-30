@@ -209,6 +209,7 @@ public sealed class RequestSender : IRequestSender
         foreach (var (k, v) in variables.EnvironmentUpdates)
             updates[k] = v;
         response.VariableUpdates = updates;
+        response.EnvironmentUpdates = new Dictionary<string, string>(variables.EnvironmentUpdates, StringComparer.Ordinal);
 
         // Outside a collection run, runtime values and globals persist for the rest of the session.
         if (options.Variables is null)

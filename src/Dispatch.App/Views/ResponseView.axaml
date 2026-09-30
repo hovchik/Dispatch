@@ -17,16 +17,28 @@
         <SelectableTextBlock Text="{Binding Error}" TextWrapping="Wrap" />
         <SelectableTextBlock Text="{Binding EffectiveUrl}" Classes="muted" FontFamily="{StaticResource MonoFont}"
                              IsVisible="{Binding EffectiveUrl, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <ItemsControl ItemsSource="{Binding Messages}" IsVisible="{Binding HasMessages}" Margin="0,6,0,0">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:MessageItemViewModel">
+              <TextBlock Text="{Binding Content}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
       </StackPanel>
     </Border>
 
-    <!-- Status line: sits on the right of the Body/Headers tab strip. -->
+    <!-- Status line: sits on the right of the tab strip. -->
     <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="4,0" HorizontalAlignment="Right"
                 Height="30" IsVisible="{Binding HasResponse}" ZIndex="1">
+      <Border CornerRadius="10" Padding="8,2" VerticalAlignment="Center" IsVisible="{Binding HasTests}"
+              Background="{Binding AllTestsPassed, Converter={x:Static conv:PassBrushConverter.Instance}}" Opacity="0.9">
+        <TextBlock Text="{Binding TestsSummary, StringFormat='Tests {0}'}" FontWeight="SemiBold" FontSize="12" Foreground="White" />
+      </Border>
       <Border CornerRadius="10" Padding="8,2" VerticalAlignment="Center"
-              Background="{Binding StatusCode, Converter={x:Static conv:StatusBrushConverter.Tint}}">
-        <TextBlock Text="{Binding StatusText}" FontWeight="SemiBold" FontSize="12"
-                   Foreground="{Binding StatusCode, Converter={x:Static conv:StatusBrushConverter.Instance}}" />
+              Background="{Binding StatusColorCode, Converter={x:Static conv:StatusBrushConverter.Tint}}">
+        <TextBlock Text="{Binding StatusText}" FontWeight="SemiBold" FontSize="12" MaxWidth="360" TextTrimming="CharacterEllipsis"
+                   ToolTip.Tip="{Binding StatusText}"
+                   Foreground="{Binding StatusColorCode, Converter={x:Static conv:StatusBrushConverter.Instance}}" />
       </Border>
       <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" ToolTip.Tip="Response time">
         <TextBlock Text="Time" Classes="muted" FontSize="12" />
@@ -60,9 +72,14 @@
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
-            <TextBlock Grid.Column="2" IsVisible="{Binding IsTruncated}" Classes="muted" FontSize="12"
-                       VerticalAlignment="Center" Margin="10,0" TextTrimming="CharacterEllipsis"
-                       Text="Large response: only the first 5 MB is shown." />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0" Spacing="6">
+              <TextBox Classes="mono" Text="{Binding Filter}" Watermark="Filter: $.items[*].id or //xpath" MinWidth="240" MinHeight="28"
+                       FontSize="12" ToolTip.Tip="Show only what a JSONPath or XPath selects. Ctrl+F in the body searches text." />
+              <TextBlock Text="{Binding FilterError}" Foreground="#EF4444" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                         MaxWidth="260" />
+              <TextBlock IsVisible="{Binding IsTruncated}" Classes="muted" FontSize="12" VerticalAlignment="Center"
+                         Text="Only the first 5 MB is shown." />
+            </StackPanel>
             <Button Grid.Column="3" Classes="icon compact" Command="{Binding CopyBodyCommand}" ToolTip.Tip="Copy body">
               <StackPanel Orientation="Horizontal" Spacing="5">
                 <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
@@ -71,10 +88,10 @@
               </StackPanel>
             </Button>
           </Grid>
-          <views:CodeEditor Text="{Binding DisplayBody, Mode=OneWay}" Format="{Binding SelectedFormat}"
-                            IsReadOnly="True" />
+          <views:CodeEditor Text="{Binding DisplayBody, Mode=OneWay}" Format="{Binding SelectedFormat}" IsReadOnly="True" />
         </DockPanel>
       </TabItem>
+
       <TabItem>
         <TabItem.Header>
           <StackPanel Orientation="Horizontal" Spacing="6">
@@ -84,15 +101,62 @@
         </TabItem.Header>
         <Border Classes="card" Margin="0,6,0,0" Padding="0">
           <ScrollViewer>
-            <ItemsControl ItemsSource="{Binding Headers}">
+            <StackPanel>
+              <ItemsControl ItemsSource="{Binding Headers}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="domain:ResponseHeader">
+                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,5">
+                      <Grid ColumnDefinitions="200,*">
+                        <SelectableTextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5" TextWrapping="Wrap" />
+                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontSize="12.5"
+                                             FontFamily="{StaticResource MonoFont}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Text="TRAILERS" Classes="section" Margin="10,10,0,4" IsVisible="{Binding HasTrailers}" />
+              <ItemsControl ItemsSource="{Binding Trailers}" IsVisible="{Binding HasTrailers}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="domain:ResponseHeader">
+                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,5">
+                      <Grid ColumnDefinitions="200,*">
+                        <SelectableTextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5" />
+                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontSize="12.5"
+                                             FontFamily="{StaticResource MonoFont}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </ScrollViewer>
+        </Border>
+      </TabItem>
+
+      <TabItem IsVisible="{Binding HasTests}">
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Tests" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding TestsSummary}" FontSize="11" VerticalAlignment="Center"
+                       Foreground="{Binding AllTestsPassed, Converter={x:Static conv:PassBrushConverter.Instance}}" />
+          </StackPanel>
+        </TabItem.Header>
+        <Border Classes="card" Margin="0,6,0,0" Padding="0">
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Tests}">
               <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="domain:ResponseHeader">
-                  <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,5">
-                    <Grid ColumnDefinitions="200,*">
-                      <SelectableTextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5"
-                                           TextWrapping="Wrap" />
-                      <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontSize="12.5"
-                                           FontFamily="{StaticResource MonoFont}" />
+                <DataTemplate x:DataType="domain:TestResult">
+                  <Border Classes="message">
+                    <Grid ColumnDefinitions="24,*">
+                      <TextBlock Text="{Binding Passed, Converter={x:Static conv:PassTextConverter.Instance}}" FontWeight="Bold"
+                                 Foreground="{Binding Passed, Converter={x:Static conv:PassBrushConverter.Instance}}" />
+                      <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Text="{Binding Name}" TextWrapping="Wrap" />
+                        <SelectableTextBlock Text="{Binding Message}" Classes="muted" FontSize="12" TextWrapping="Wrap"
+                                             FontFamily="{StaticResource MonoFont}"
+                                             IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      </StackPanel>
                     </Grid>
                   </Border>
                 </DataTemplate>
@@ -100,6 +164,85 @@
             </ItemsControl>
           </ScrollViewer>
         </Border>
+      </TabItem>
+
+      <TabItem IsVisible="{Binding HasMessages}">
+        <TabItem.Header>
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Messages" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding MessageCount}" Classes="muted" FontSize="11" VerticalAlignment="Center" />
+          </StackPanel>
+        </TabItem.Header>
+        <Border Classes="card" Margin="0,6,0,0" ClipToBounds="True">
+          <views:MessageLog Items="{Binding Messages}" />
+        </Border>
+      </TabItem>
+
+      <TabItem Header="Timeline" IsVisible="{Binding HasRawRequest}">
+        <ScrollViewer Margin="0,6,0,0">
+          <StackPanel Spacing="10">
+            <ItemsControl ItemsSource="{Binding Timings}" IsVisible="{Binding HasTimings}" MaxWidth="700" HorizontalAlignment="Left">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TimingBar">
+                  <Grid ColumnDefinitions="170,*,80" Margin="0,2">
+                    <TextBlock Text="{Binding Label}" FontSize="12" Classes="muted" />
+                    <ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Fraction}" Height="8" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{Binding Text}" FontSize="12" HorizontalAlignment="Right" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="REQUEST AS SENT" Classes="section" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="icon compact" Command="{Binding CopyRawRequestCommand}" ToolTip.Tip="Copy">
+                <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
+              </Button>
+            </Grid>
+            <Border Classes="card" Padding="10">
+              <SelectableTextBlock Text="{Binding RawRequest}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextWrapping="Wrap" />
+            </Border>
+            <TextBlock Text="{Binding EffectiveUrl, StringFormat='Final URL: {0}'}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Console" IsVisible="{Binding HasScriptLog}">
+        <Border Classes="card" Margin="0,6,0,0" Padding="10">
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding ScriptLog}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <SelectableTextBlock Text="{Binding}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextWrapping="Wrap" Margin="0,1" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Border>
+      </TabItem>
+
+      <TabItem Header="Variables" IsVisible="{Binding HasVariableUpdates}">
+        <Border Classes="card" Margin="0,6,0,0" Padding="10">
+          <StackPanel Spacing="6">
+            <TextBlock Classes="muted" FontSize="12" Text="Set by extraction rules and scripts during this send:" />
+            <SelectableTextBlock Text="{Binding VariableUpdatesText}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+      </TabItem>
+
+      <TabItem Header="JWT" IsVisible="{Binding HasJwt}">
+        <ScrollViewer Margin="0,6,0,0">
+          <StackPanel Spacing="8">
+            <TextBlock Text="A JSON Web Token was found in the body (decoded, not verified)." Classes="muted" FontSize="12" />
+            <TextBlock Text="HEADER" Classes="section" />
+            <Border Classes="card" Padding="10">
+              <SelectableTextBlock Text="{Binding Jwt.HeaderJson}" FontFamily="{StaticResource MonoFont}" FontSize="12" />
+            </Border>
+            <TextBlock Text="PAYLOAD" Classes="section" />
+            <Border Classes="card" Padding="10">
+              <SelectableTextBlock Text="{Binding Jwt.PayloadJson}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextWrapping="Wrap" />
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
       </TabItem>
     </TabControl>
   </Grid>

@@ -1,19 +1,53 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Dispatch.App.ViewModels"
+             xmlns:ed="using:Dispatch.App.ViewModels.Editors"
              xmlns:views="using:Dispatch.App.Views"
              xmlns:conv="using:Dispatch.App.Converters"
              xmlns:domain="using:Dispatch.Domain"
+             xmlns:fmt="using:Dispatch.Application.Formatting"
+             xmlns:sys="using:System"
+             xmlns:soap="using:Dispatch.Application.Soap"
              x:Class="Dispatch.App.Views.RequestTabView"
              x:DataType="vm:RequestTabViewModel">
 
+  <UserControl.Resources>
+    <!-- Shared item templates for enum combo boxes -->
+    <DataTemplate x:Key="EnumLabel" x:DataType="sys:Object">
+      <TextBlock Text="{Binding Converter={x:Static conv:EnumLabelConverter.Instance}}" />
+    </DataTemplate>
+  </UserControl.Resources>
+
   <Grid RowDefinitions="Auto,*" Margin="20,14,20,12">
 
-    <!-- Request line: METHOD | URL | Send -->
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+    <!-- Request line: PROTOCOL | METHOD | URL | Send | Code -->
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
       <Border Classes="card" CornerRadius="6" Padding="0">
-        <Grid ColumnDefinitions="Auto,1,*">
-          <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.Methods}" SelectedItem="{Binding Method}"
+        <Grid ColumnDefinitions="Auto,1,Auto,Auto,*">
+          <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.Kinds}" SelectedItem="{Binding Kind}"
+                    MinWidth="96" BorderThickness="0" Background="Transparent" VerticalAlignment="Stretch"
+                    ToolTip.Tip="Protocol">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="domain:RequestKind">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="{Binding Converter={x:Static conv:MethodTextConverter.Instance}}"
+                             Foreground="{Binding Converter={x:Static conv:BadgeBrushConverter.Instance}}"
+                             FontWeight="Bold" FontFamily="{StaticResource MonoFont}" FontSize="12" MinWidth="36" />
+                  <TextBlock Text="{Binding Converter={x:Static conv:EnumLabelConverter.Instance}}" Classes="muted" FontSize="12" />
+                </StackPanel>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+            <ComboBox.SelectionBoxItemTemplate>
+              <DataTemplate x:DataType="domain:RequestKind">
+                <TextBlock Text="{Binding Converter={x:Static conv:MethodTextConverter.Instance}}"
+                           Foreground="{Binding Converter={x:Static conv:BadgeBrushConverter.Instance}}"
+                           FontWeight="Bold" FontFamily="{StaticResource MonoFont}" />
+              </DataTemplate>
+            </ComboBox.SelectionBoxItemTemplate>
+          </ComboBox>
+          <Border Grid.Column="1" Background="{DynamicResource DividerBrush}" />
+          <ComboBox Grid.Column="2" ItemsSource="{x:Static vm:RequestTabViewModel.Methods}" SelectedItem="{Binding Method}"
+                    IsVisible="{Binding ShowMethod}"
                     MinWidth="110" BorderThickness="0" Background="Transparent" VerticalAlignment="Stretch">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="domain:HttpVerb">
@@ -23,36 +57,343 @@
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
-          <Border Grid.Column="1" Background="{DynamicResource DividerBrush}" />
-          <TextBox Grid.Column="2" Classes="mono" Text="{Binding Url}" BorderThickness="0" Background="Transparent"
-                   Watermark="Enter URL, e.g. {{baseUrl}}/users?page=1" VerticalContentAlignment="Center"
-                   MinHeight="38">
+          <Border Grid.Column="3" Width="1" Background="{DynamicResource DividerBrush}" IsVisible="{Binding ShowMethod}" />
+          <TextBox Grid.Column="4" Classes="mono" Text="{Binding Url}" BorderThickness="0" Background="Transparent"
+                   Watermark="{Binding UrlWatermark}" VerticalContentAlignment="Center" MinHeight="38">
             <TextBox.KeyBindings>
-              <KeyBinding Gesture="Enter" Command="{Binding SendCommand}" />
+              <KeyBinding Gesture="Enter" Command="{Binding SendOrStopCommand}" />
             </TextBox.KeyBindings>
           </TextBox>
         </Grid>
       </Border>
 
-      <Panel Grid.Column="1" Margin="10,0,0,0" MinWidth="110">
-        <Button Classes="accent" Command="{Binding SendCommand}" IsVisible="{Binding !IsSending}"
-                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Center"
-                VerticalContentAlignment="Center" ToolTip.Tip="Send (Ctrl+Enter)">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Data="{StaticResource IconSend}" Width="13" Height="13" />
-            <TextBlock Text="Send" FontWeight="SemiBold" />
-          </StackPanel>
-        </Button>
-        <Button Command="{Binding SendCancelCommand}" IsVisible="{Binding IsSending}" Content="Cancel"
-                HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Center"
-                VerticalContentAlignment="Center" />
-      </Panel>
+      <Button Grid.Column="1" Margin="10,0,0,0" MinWidth="120" Classes.accent="{Binding !IsSending}"
+              Command="{Binding SendOrStopCommand}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+              VerticalAlignment="Stretch" ToolTip.Tip="Send (Ctrl+Enter)">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <PathIcon Data="{StaticResource IconSend}" Width="13" Height="13" IsVisible="{Binding !IsSending}" />
+          <PathIcon Data="{StaticResource IconStop}" Width="11" Height="11" IsVisible="{Binding IsSending}" />
+          <TextBlock Text="{Binding SendLabel}" FontWeight="SemiBold" />
+        </StackPanel>
+      </Button>
+      <Button Grid.Column="2" Classes="icon" Margin="6,0,0,0" Command="{Binding ShowCodeCommand}"
+              ToolTip.Tip="Generate code (cURL, Python, C#, JavaScript, Go, grpcurl…)">
+        <PathIcon Data="{StaticResource IconCode}" Width="16" Height="16" />
+      </Button>
     </Grid>
 
     <!-- Request editors / response, split vertically -->
     <Grid Grid.Row="1" RowDefinitions="*,6,1.3*">
-      <TabControl Grid.Row="0" Padding="0">
-        <TabItem>
+      <TabControl x:Name="EditorTabs" Grid.Row="0" Padding="0">
+
+        <!-- ===== Protocol-specific main tabs (first so they are selected by default) ===== -->
+
+        <TabItem Header="Query" IsVisible="{Binding IsGraphQl}">
+          <Grid ColumnDefinitions="3*,6,2*,6,270" Margin="0,8,0,0" DataContext="{Binding GraphQl}" x:DataType="ed:GraphQlEditor">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Top" Text="QUERY" Classes="section" Margin="2,0,0,4" />
+              <views:CodeEditor Text="{Binding Query}" Format="Text" />
+            </DockPanel>
+            <GridSplitter Grid.Column="1" Background="Transparent" ResizeDirection="Columns" />
+            <DockPanel Grid.Column="2">
+              <TextBlock DockPanel.Dock="Top" Text="VARIABLES (JSON)" Classes="section" Margin="2,0,0,4" />
+              <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,8,0,0">
+                <TextBox Text="{Binding OperationName}" Watermark="Operation name (optional)" />
+                <TextBox Text="{Binding SubscriptionUrl}" Watermark="Subscription URL (default: ws(s):// of the endpoint)" />
+              </StackPanel>
+              <views:CodeEditor Text="{Binding Variables}" Format="Json" />
+            </DockPanel>
+            <GridSplitter Grid.Column="3" Background="Transparent" ResizeDirection="Columns" />
+            <Border Grid.Column="4" Classes="card" Padding="8">
+              <DockPanel>
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                  <TextBlock Text="SCHEMA" Classes="section" VerticalAlignment="Center" />
+                  <Button Grid.Column="1" Content="Fetch schema" Padding="8,3" FontSize="12" Command="{Binding IntrospectCommand}" />
+                </Grid>
+                <TextBox DockPanel.Dock="Top" Text="{Binding SchemaFilter}" Watermark="Filter fields" Margin="0,0,0,6" />
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding SchemaStatus}" Classes="muted" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0" />
+                <ListBox Classes="plain" ItemsSource="{Binding SchemaFields}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="ed:SchemaFieldItem">
+                      <Button Classes="tool" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="2"
+                              Command="{Binding $parent[ListBox].((ed:GraphQlEditor)DataContext).UseFieldCommand}"
+                              CommandParameter="{Binding}" ToolTip.Tip="{Binding Description}">
+                        <StackPanel Spacing="1">
+                          <TextBlock Text="{Binding Operation}" Classes="muted" FontSize="10" />
+                          <TextBlock Text="{Binding Display}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap" />
+                        </StackPanel>
+                      </Button>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </DockPanel>
+            </Border>
+          </Grid>
+        </TabItem>
+
+        <TabItem Header="Message" IsVisible="{Binding IsGrpc}">
+          <DockPanel Margin="0,8,0,0" DataContext="{Binding Grpc}" x:DataType="ed:GrpcEditor">
+            <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
+              <WrapPanel ItemSpacing="8" LineSpacing="6">
+                <ComboBox ItemsSource="{x:Static ed:GrpcEditor.Sources}" SelectedItem="{Binding SchemaSource}" MinWidth="170"
+                          ItemTemplate="{StaticResource EnumLabel}" ToolTip.Tip="Where the service definitions come from" />
+                <Button Command="{Binding LoadSchemaCommand}" ToolTip.Tip="Load services and methods">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource IconRefresh}" Width="12" Height="12" />
+                    <TextBlock Text="Load schema" />
+                  </StackPanel>
+                </Button>
+                <CheckBox Content="TLS" IsChecked="{Binding UseTls}" ToolTip.Tip="Use https (ignored when the address has a scheme)" />
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="Deadline (s)" Classes="label" />
+                  <NumericUpDown Value="{Binding DeadlineSeconds}" Minimum="0" Increment="1" FormatString="0.##" Width="130" />
+                </StackPanel>
+                <TextBlock Text="{Binding SchemaStatus}" Classes="muted" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" />
+              </WrapPanel>
+
+              <Border Classes="card" Padding="8" IsVisible="{Binding UsesProtoFiles}">
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+                  <StackPanel Spacing="4" Margin="0,0,8,0">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text=".PROTO FILES" Classes="section" VerticalAlignment="Center" />
+                      <Button Grid.Column="1" Content="Add…" Padding="8,2" FontSize="12" Command="{Binding AddProtoFilesCommand}" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding ProtoFiles}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="{Binding}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextTrimming="PathSegmentEllipsis"
+                                       VerticalAlignment="Center" ToolTip.Tip="{Binding}" />
+                            <Button Grid.Column="1" Classes="icon" Command="{Binding $parent[ItemsControl].((ed:GrpcEditor)DataContext).RemoveProtoFileCommand}"
+                                    CommandParameter="{Binding}">
+                              <PathIcon Data="{StaticResource IconClose}" Width="10" Height="10" />
+                            </Button>
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="4">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="IMPORT PATHS" Classes="section" VerticalAlignment="Center" />
+                      <Button Grid.Column="1" Content="Add…" Padding="8,2" FontSize="12" Command="{Binding AddImportPathCommand}" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding ImportPaths}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="{Binding}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextTrimming="PathSegmentEllipsis"
+                                       VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Classes="icon" Command="{Binding $parent[ItemsControl].((ed:GrpcEditor)DataContext).RemoveImportPathCommand}"
+                                    CommandParameter="{Binding}">
+                              <PathIcon Data="{StaticResource IconClose}" Width="10" Height="10" />
+                            </Button>
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Grid>
+              </Border>
+
+              <Grid ColumnDefinitions="Auto,*,Auto,*,Auto">
+                <TextBlock Text="Service" Classes="label" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Services}" SelectedItem="{Binding Service}" HorizontalAlignment="Stretch" />
+                <TextBlock Grid.Column="2" Text="Method" Classes="label" Margin="12,0,10,0" />
+                <ComboBox Grid.Column="3" ItemsSource="{Binding Methods}" SelectedItem="{Binding Method}" HorizontalAlignment="Stretch" />
+                <Button Grid.Column="4" Content="Generate message" Margin="8,0,0,0" Command="{Binding GenerateTemplateCommand}"
+                        ToolTip.Tip="Fill the message with every field and default values" />
+              </Grid>
+              <TextBlock Text="{Binding MethodInfo}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+            </StackPanel>
+            <views:CodeEditor Text="{Binding Message}" Format="Json" />
+          </DockPanel>
+        </TabItem>
+
+        <TabItem Header="Envelope" IsVisible="{Binding IsSoap}">
+          <DockPanel Margin="0,8,0,0">
+            <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8" DataContext="{Binding Soap}" x:DataType="ed:SoapEditor">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox Classes="mono" Text="{Binding WsdlUrl}" Watermark="WSDL URL or file, e.g. https://example.com/service?wsdl" />
+                <Button Grid.Column="1" Content="Load WSDL" Margin="8,0,0,0" Command="{Binding LoadWsdlCommand}" />
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto">
+                <ComboBox ItemsSource="{Binding Operations}" SelectedItem="{Binding SelectedOperation}" HorizontalAlignment="Stretch"
+                          PlaceholderText="Operation">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="soap:SoapOperation">
+                      <TextBlock Text="{Binding DisplayName}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Grid.Column="1" Content="Generate envelope" Margin="8,0,0,0" Command="{Binding GenerateEnvelopeCommand}" />
+              </Grid>
+              <TextBlock Text="{Binding Status}" Classes="muted" FontSize="12" TextWrapping="Wrap"
+                         IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <WrapPanel ItemSpacing="8" LineSpacing="6">
+                <ComboBox ItemsSource="{x:Static ed:SoapEditor.Versions}" SelectedItem="{Binding Version}" ItemTemplate="{StaticResource EnumLabel}" />
+                <TextBox Text="{Binding Action}" Watermark="SOAPAction" MinWidth="280" Classes="mono" />
+                <ComboBox ItemsSource="{x:Static ed:SoapEditor.SecurityModes}" SelectedItem="{Binding WsSecurity}" ItemTemplate="{StaticResource EnumLabel}" />
+                <TextBox Text="{Binding WsUsername}" Watermark="WS-Security user" MinWidth="150" IsVisible="{Binding UsesUsernameToken}" />
+                <TextBox Text="{Binding WsPassword}" Watermark="Password" PasswordChar="•" MinWidth="150" IsVisible="{Binding UsesUsernameToken}" />
+                <CheckBox Content="Timestamp" IsChecked="{Binding AddTimestamp}" />
+              </WrapPanel>
+            </StackPanel>
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+              <TextBlock Text="{Binding BodyError}" Foreground="#EF4444" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Content="Beautify" Padding="10,3" FontSize="12" Command="{Binding BeautifyEnvelopeCommand}" />
+            </Grid>
+            <views:CodeEditor Text="{Binding BodyText}" Format="Xml" />
+          </DockPanel>
+        </TabItem>
+
+        <TabItem Header="Messages" IsVisible="{Binding IsWebSocket}">
+          <Grid RowDefinitions="Auto,*,Auto,*" Margin="0,8,0,0" DataContext="{Binding Stream}" x:DataType="ed:StreamEditor">
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+              <TextBlock Text="Subprotocols" Classes="label" />
+              <TextBox Text="{Binding Subprotocols}" Watermark="e.g. graphql-ws, mqtt (comma-separated)" MinWidth="320" />
+            </StackPanel>
+            <DockPanel Grid.Row="1">
+              <TextBlock DockPanel.Dock="Top" Text="SENT ON CONNECT" Classes="section" Margin="2,0,0,4" />
+              <views:KeyValueEditor DataContext="{Binding InitialMessages}" />
+            </DockPanel>
+            <TextBlock Grid.Row="2" Text="SAVED MESSAGES (send them from the composer while connected)" Classes="section" Margin="2,10,0,4" />
+            <views:KeyValueEditor Grid.Row="3" DataContext="{Binding SavedMessages}" />
+          </Grid>
+        </TabItem>
+
+        <TabItem Header="Event" IsVisible="{Binding IsSocketIo}">
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,*" Margin="0,10,0,0"
+                DataContext="{Binding SocketIo}" x:DataType="ed:SocketIoEditor">
+            <TextBlock Text="Namespace" Classes="label" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
+              <TextBox Text="{Binding Namespace}" Width="160" />
+              <TextBlock Text="Path" Classes="label" />
+              <TextBox Text="{Binding Path}" Width="160" />
+              <TextBlock Text="Listen (s)" Classes="label" ToolTip.Tip="How long runs outside the UI listen for events" />
+              <NumericUpDown Value="{Binding ListenSeconds}" Minimum="0" Width="130" FormatString="0" />
+            </StackPanel>
+            <TextBlock Grid.Row="1" Text="Emit event" Classes="label" />
+            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Event}" Watermark="Event sent after connecting (empty: just listen)" Margin="0,0,0,6" />
+            <TextBlock Grid.Row="2" Text="Show events" Classes="label" />
+            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding ListenEvents}" Watermark="Comma-separated; empty shows every event" Margin="0,0,0,6" />
+            <TextBlock Grid.Row="3" Text="Auth payload" Classes="label" />
+            <TextBox Grid.Row="3" Grid.Column="1" Classes="mono" Text="{Binding AuthPayload}" Watermark='{}{"token": "{{token}}"}' Margin="0,0,0,6" />
+            <TextBlock Grid.Row="4" Text="Arguments" Classes="label" VerticalAlignment="Top" Margin="0,6,10,0" />
+            <views:CodeEditor Grid.Row="4" Grid.Column="1" Text="{Binding Arguments}" Format="Json" />
+          </Grid>
+        </TabItem>
+
+        <TabItem Header="Message" IsVisible="{Binding IsMqtt}">
+          <DockPanel Margin="0,10,0,0" DataContext="{Binding Mqtt}" x:DataType="ed:MqttEditor">
+            <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
+              <WrapPanel ItemSpacing="8" LineSpacing="6">
+                <ComboBox ItemsSource="{x:Static ed:MqttEditor.Modes}" SelectedItem="{Binding Mode}" ItemTemplate="{StaticResource EnumLabel}" MinWidth="190" />
+                <TextBox Text="{Binding Topic}" Watermark="Topic (wildcards + and # when subscribing)" MinWidth="320" Classes="mono" />
+                <TextBlock Text="QoS" Classes="label" />
+                <ComboBox ItemsSource="{x:Static ed:MqttEditor.QosLevels}" SelectedItem="{Binding Qos}" />
+                <CheckBox Content="Retain" IsChecked="{Binding Retain}" />
+              </WrapPanel>
+              <WrapPanel ItemSpacing="8" LineSpacing="6">
+                <TextBox Text="{Binding ClientId}" Watermark="Client id (random)" MinWidth="180" />
+                <TextBox Text="{Binding Username}" Watermark="Username" MinWidth="140" />
+                <TextBox Text="{Binding Password}" Watermark="Password" PasswordChar="•" MinWidth="140" />
+                <TextBlock Text="Version" Classes="label" />
+                <ComboBox ItemsSource="{x:Static ed:MqttEditor.Versions}" SelectedItem="{Binding ProtocolVersion}" ToolTip.Tip="3 = 3.1, 4 = 3.1.1, 5 = 5.0" />
+                <CheckBox Content="TLS" IsChecked="{Binding UseTls}" />
+                <CheckBox Content="Clean session" IsChecked="{Binding CleanSession}" />
+                <TextBlock Text="Listen (s)" Classes="label" />
+                <NumericUpDown Value="{Binding ListenSeconds}" Minimum="0" Width="130" FormatString="0" />
+                <TextBlock Text="Max msgs" Classes="label" />
+                <NumericUpDown Value="{Binding MaxMessages}" Minimum="0" Width="130" FormatString="0" />
+              </WrapPanel>
+            </StackPanel>
+            <views:CodeEditor Text="{Binding Payload}" Format="Json" />
+          </DockPanel>
+        </TabItem>
+
+        <TabItem Header="Record" IsVisible="{Binding IsKafka}">
+          <Grid ColumnDefinitions="2*,8,*" Margin="0,10,0,0" DataContext="{Binding Kafka}" x:DataType="ed:KafkaEditor">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
+                <WrapPanel ItemSpacing="8" LineSpacing="6">
+                  <ComboBox ItemsSource="{x:Static ed:KafkaEditor.Modes}" SelectedItem="{Binding Mode}" ItemTemplate="{StaticResource EnumLabel}" MinWidth="190" />
+                  <TextBox Text="{Binding Topic}" Watermark="Topic" MinWidth="220" Classes="mono" />
+                  <TextBox Text="{Binding Key}" Watermark="Key (optional)" MinWidth="160" Classes="mono" />
+                </WrapPanel>
+                <WrapPanel ItemSpacing="8" LineSpacing="6">
+                  <TextBox Text="{Binding GroupId}" Watermark="Consumer group" MinWidth="160" ToolTip.Tip="Consumer group id" />
+                  <ComboBox ItemsSource="{x:Static ed:KafkaEditor.OffsetResets}" SelectedItem="{Binding AutoOffsetReset}" ToolTip.Tip="Where a new group starts reading" />
+                  <ComboBox ItemsSource="{x:Static ed:KafkaEditor.SecurityProtocols}" SelectedItem="{Binding SecurityProtocol}" ToolTip.Tip="Security protocol" />
+                  <ComboBox ItemsSource="{x:Static ed:KafkaEditor.SaslMechanisms}" SelectedItem="{Binding SaslMechanism}" ToolTip.Tip="SASL mechanism" />
+                  <TextBox Text="{Binding SaslUsername}" Watermark="SASL user" MinWidth="120" />
+                  <TextBox Text="{Binding SaslPassword}" Watermark="SASL password" PasswordChar="•" MinWidth="120" />
+                  <TextBlock Text="Listen (s)" Classes="label" />
+                  <NumericUpDown Value="{Binding ListenSeconds}" Minimum="0" Width="130" FormatString="0" />
+                  <TextBlock Text="Max msgs" Classes="label" />
+                  <NumericUpDown Value="{Binding MaxMessages}" Minimum="0" Width="130" FormatString="0" />
+                </WrapPanel>
+              </StackPanel>
+              <views:CodeEditor Text="{Binding Payload}" Format="Json" />
+            </DockPanel>
+            <DockPanel Grid.Column="2">
+              <TextBlock DockPanel.Dock="Top" Text="RECORD HEADERS" Classes="section" Margin="2,0,0,4" />
+              <views:KeyValueEditor DataContext="{Binding Headers}" />
+            </DockPanel>
+          </Grid>
+        </TabItem>
+
+        <TabItem Header="Message" IsVisible="{Binding IsAmqp}">
+          <Grid ColumnDefinitions="2*,8,*" Margin="0,10,0,0" DataContext="{Binding Amqp}" x:DataType="ed:AmqpEditor">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
+                <WrapPanel ItemSpacing="8" LineSpacing="6">
+                  <ComboBox ItemsSource="{x:Static ed:AmqpEditor.Modes}" SelectedItem="{Binding Mode}" ItemTemplate="{StaticResource EnumLabel}" MinWidth="190" />
+                  <TextBox Text="{Binding Exchange}" Watermark="Exchange (empty = default)" MinWidth="200" Classes="mono" />
+                  <TextBox Text="{Binding RoutingKey}" Watermark="Routing key / queue" MinWidth="200" Classes="mono" />
+                </WrapPanel>
+                <WrapPanel ItemSpacing="8" LineSpacing="6">
+                  <TextBox Text="{Binding Queue}" Watermark="Consume from queue (empty: temporary queue bound to the exchange)" MinWidth="360" />
+                  <TextBox Text="{Binding ContentType}" Watermark="Content type" MinWidth="150" />
+                  <CheckBox Content="Persistent" IsChecked="{Binding Persistent}" />
+                  <TextBlock Text="Listen (s)" Classes="label" />
+                  <NumericUpDown Value="{Binding ListenSeconds}" Minimum="0" Width="130" FormatString="0" />
+                  <TextBlock Text="Max msgs" Classes="label" />
+                  <NumericUpDown Value="{Binding MaxMessages}" Minimum="0" Width="130" FormatString="0" />
+                </WrapPanel>
+              </StackPanel>
+              <views:CodeEditor Text="{Binding Payload}" Format="Json" />
+            </DockPanel>
+            <DockPanel Grid.Column="2">
+              <TextBlock DockPanel.Dock="Top" Text="MESSAGE HEADERS" Classes="section" Margin="2,0,0,4" />
+              <views:KeyValueEditor DataContext="{Binding Headers}" />
+            </DockPanel>
+          </Grid>
+        </TabItem>
+
+        <TabItem Header="Payload" IsVisible="{Binding IsSocket}">
+          <DockPanel Margin="0,10,0,0" DataContext="{Binding Socket}" x:DataType="ed:SocketEditor">
+            <WrapPanel DockPanel.Dock="Top" ItemSpacing="8" LineSpacing="6" Margin="0,0,0,8">
+              <TextBlock Text="Encoding" Classes="label" />
+              <ComboBox ItemsSource="{x:Static ed:SocketEditor.Encodings}" SelectedItem="{Binding Encoding}" ItemTemplate="{StaticResource EnumLabel}" />
+              <ComboBox ItemsSource="{x:Static ed:SocketEditor.LineEndings}" SelectedItem="{Binding LineEnding}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <TextBlock Text="{Binding Converter={x:Static conv:LineEndingConverter.Instance}}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Text="Quiet timeout (s)" Classes="label" />
+              <NumericUpDown Value="{Binding ReadTimeoutSeconds}" Minimum="0.1" Increment="0.5" Width="130" FormatString="0.#" />
+              <CheckBox Content="TLS (TCP)" IsChecked="{Binding UseTls}" />
+            </WrapPanel>
+            <views:CodeEditor Text="{Binding Payload}" Format="Text" />
+          </DockPanel>
+        </TabItem>
+
+        <!-- ===== Common tabs ===== -->
+
+        <TabItem IsVisible="{Binding ShowParams}">
           <TabItem.Header>
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="Params" VerticalAlignment="Center" />
@@ -63,10 +404,10 @@
           <views:KeyValueEditor DataContext="{Binding Params}" Margin="0,8,0,0" />
         </TabItem>
 
-        <TabItem>
+        <TabItem IsVisible="{Binding ShowHeaders}">
           <TabItem.Header>
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="Headers" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding HeadersLabel}" VerticalAlignment="Center" />
               <TextBlock Text="{Binding Headers.ActiveCount}" Classes="muted" FontSize="11" VerticalAlignment="Center"
                          IsVisible="{Binding Headers.HasActive}" />
             </StackPanel>
@@ -74,81 +415,374 @@
           <views:KeyValueEditor DataContext="{Binding Headers}" Margin="0,8,0,0" />
         </TabItem>
 
-        <TabItem Header="Body">
+        <TabItem Header="Body" IsVisible="{Binding ShowHttpBody}">
           <DockPanel Margin="0,8,0,0">
             <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
-              <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.BodyModes}" SelectedItem="{Binding BodyMode}" MinWidth="200">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="domain:BodyMode">
-                    <TextBlock Text="{Binding Converter={x:Static conv:EnumLabelConverter.Instance}}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
+              <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.BodyModes}" SelectedItem="{Binding BodyMode}" MinWidth="200"
+                        ItemTemplate="{StaticResource EnumLabel}" />
               <TextBlock Grid.Column="1" Text="{Binding BodyError}" Foreground="#EF4444" Margin="12,0"
                          VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-              <Button Grid.Column="2" Content="Beautify" Command="{Binding BeautifyCommand}"
-                      IsVisible="{Binding CanBeautify}" />
+              <Button Grid.Column="2" Content="Beautify" Command="{Binding BeautifyCommand}" IsVisible="{Binding CanBeautify}" />
             </Grid>
 
             <Panel>
               <TextBlock IsVisible="{Binding IsBodyNone}" Classes="muted" HorizontalAlignment="Center"
                          VerticalAlignment="Center" Text="This request does not have a body." />
-              <views:CodeEditor IsVisible="{Binding IsBodyText}" Text="{Binding BodyText}"
-                                Format="{Binding BodyFormat}" />
+              <views:CodeEditor IsVisible="{Binding IsBodyText}" Text="{Binding BodyText}" Format="{Binding BodyFormat}" />
               <Panel IsVisible="{Binding IsBodyForm}">
                 <views:KeyValueEditor DataContext="{Binding FormFields}" />
               </Panel>
+              <StackPanel IsVisible="{Binding IsBodyBinary}" Spacing="8" VerticalAlignment="Top" Margin="0,6,0,0">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBox Classes="mono" Text="{Binding BinaryFilePath}" Watermark="Path of the file to send as the body" />
+                  <Button Grid.Column="1" Content="Choose file…" Margin="8,0,0,0" Command="{Binding ChooseBinaryFileCommand}" />
+                </Grid>
+                <TextBlock Classes="muted" FontSize="12" Text="The Content-Type is taken from the file extension unless you set it in Headers." />
+              </StackPanel>
             </Panel>
           </DockPanel>
         </TabItem>
 
-        <TabItem Header="Auth">
-          <Grid ColumnDefinitions="240,*" Margin="0,12,0,0">
-            <StackPanel Spacing="8" Margin="0,0,24,0">
-              <TextBlock Text="Type" Classes="section" />
-              <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.AuthModes}" SelectedItem="{Binding AuthMode}"
-                        HorizontalAlignment="Stretch">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate x:DataType="domain:AuthMode">
-                    <TextBlock Text="{Binding Converter={x:Static conv:EnumLabelConverter.Instance}}" />
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-              <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0"
-                         Text="The authorization header is generated when you send the request. Values can use {{variables}}." />
+        <TabItem Header="Auth" IsVisible="{Binding ShowAuth}">
+          <ScrollViewer Margin="0,12,0,0" DataContext="{Binding Auth}" x:DataType="ed:AuthEditor">
+            <Grid ColumnDefinitions="240,*">
+              <StackPanel Spacing="8" Margin="0,0,24,0">
+                <TextBlock Text="Type" Classes="section" />
+                <ComboBox ItemsSource="{x:Static ed:AuthEditor.Modes}" SelectedItem="{Binding Mode}" HorizontalAlignment="Stretch"
+                          ItemTemplate="{StaticResource EnumLabel}" />
+                <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0"
+                           Text="Credentials are applied when you send. Values can use {{variables}}; keep secrets in environment variables marked secret." />
+              </StackPanel>
+
+              <Panel Grid.Column="1" MaxWidth="620" HorizontalAlignment="Left">
+                <TextBlock IsVisible="{Binding IsNone}" Classes="muted" Text="This request does not use any authorization." />
+
+                <StackPanel IsVisible="{Binding IsBearer}" Spacing="6">
+                  <TextBlock Text="Token" Classes="section" />
+                  <TextBox Classes="mono" Text="{Binding Token}" Watermark="Token or {{token}}" MinWidth="360" />
+                  <Border Classes="card" Padding="10" Margin="0,6,0,0" IsVisible="{Binding HasJwt}">
+                    <StackPanel Spacing="6">
+                      <TextBlock Text="JWT" Classes="section" />
+                      <TextBlock Text="{Binding JwtSummary}" TextWrapping="Wrap" FontSize="12" />
+                      <SelectableTextBlock Text="{Binding Jwt.PayloadJson}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsBasic}" Spacing="6">
+                  <TextBlock Text="Username" Classes="section" />
+                  <TextBox Text="{Binding Username}" MinWidth="360" />
+                  <TextBlock Text="Password" Classes="section" Margin="0,6,0,0" />
+                  <TextBox Text="{Binding Password}" PasswordChar="•" MinWidth="360" />
+                  <TextBlock Text="Domain" Classes="section" Margin="0,6,0,0" IsVisible="{Binding IsNtlm}" />
+                  <TextBox Text="{Binding Domain}" MinWidth="360" IsVisible="{Binding IsNtlm}" />
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsApiKey}" Spacing="6">
+                  <TextBlock Text="Key" Classes="section" />
+                  <TextBox Text="{Binding ApiKeyName}" MinWidth="360" />
+                  <TextBlock Text="Value" Classes="section" Margin="0,6,0,0" />
+                  <TextBox Classes="mono" Text="{Binding ApiKeyValue}" MinWidth="360" />
+                  <TextBlock Text="Add to" Classes="section" Margin="0,6,0,0" />
+                  <ComboBox ItemsSource="{x:Static ed:AuthEditor.KeyLocations}" SelectedItem="{Binding ApiKeyLocation}" MinWidth="200"
+                            ItemTemplate="{StaticResource EnumLabel}" />
+                </StackPanel>
+
+                <Grid IsVisible="{Binding IsOAuth2}" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" MinWidth="520">
+                  <TextBlock Text="Grant type" Classes="label" />
+                  <ComboBox Grid.Column="1" ItemsSource="{x:Static ed:AuthEditor.GrantTypes}" SelectedItem="{Binding GrantType}"
+                            ItemTemplate="{StaticResource EnumLabel}" Margin="0,0,0,6" />
+                  <TextBlock Grid.Row="1" Text="Token URL" Classes="label" />
+                  <TextBox Grid.Row="1" Grid.Column="1" Classes="mono" Text="{Binding TokenUrl}" Margin="0,0,0,6" />
+                  <TextBlock Grid.Row="2" Text="Authorize URL" Classes="label" IsVisible="{Binding IsAuthorizationCode}" />
+                  <TextBox Grid.Row="2" Grid.Column="1" Classes="mono" Text="{Binding AuthUrl}" Margin="0,0,0,6" IsVisible="{Binding IsAuthorizationCode}" />
+                  <TextBlock Grid.Row="3" Text="Device URL" Classes="label" IsVisible="{Binding IsDeviceCode}" />
+                  <TextBox Grid.Row="3" Grid.Column="1" Classes="mono" Text="{Binding DeviceUrl}" Margin="0,0,0,6" IsVisible="{Binding IsDeviceCode}" />
+                  <TextBlock Grid.Row="4" Text="Client ID" Classes="label" />
+                  <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding ClientId}" Margin="0,0,0,6" />
+                  <TextBlock Grid.Row="5" Text="Client secret" Classes="label" />
+                  <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding ClientSecret}" PasswordChar="•" Margin="0,0,0,6" />
+                  <TextBlock Grid.Row="6" Text="Scope" Classes="label" />
+                  <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding Scope}" Margin="0,0,0,6" />
+                  <TextBlock Grid.Row="7" Text="Audience" Classes="label" />
+                  <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding Audience}" Margin="0,0,0,6" />
+                  <TextBlock Grid.Row="8" Text="Username" Classes="label" IsVisible="{Binding IsPasswordGrant}" />
+                  <TextBox Grid.Row="8" Grid.Column="1" Text="{Binding Username}" Margin="0,0,0,6" IsVisible="{Binding IsPasswordGrant}" />
+                  <TextBlock Grid.Row="9" Text="Password" Classes="label" IsVisible="{Binding IsPasswordGrant}" />
+                  <TextBox Grid.Row="9" Grid.Column="1" Text="{Binding Password}" PasswordChar="•" Margin="0,0,0,6" IsVisible="{Binding IsPasswordGrant}" />
+                  <TextBlock Grid.Row="10" Text="Redirect URI" Classes="label" IsVisible="{Binding IsAuthorizationCode}" />
+                  <StackPanel Grid.Row="10" Grid.Column="1" Spacing="4" Margin="0,0,0,6" IsVisible="{Binding IsAuthorizationCode}">
+                    <TextBox Classes="mono" Text="{Binding RedirectUri}" />
+                    <CheckBox Content="Use PKCE" IsChecked="{Binding UsePkce}" />
+                  </StackPanel>
+                  <StackPanel Grid.Row="11" Grid.Column="1" Spacing="6">
+                    <CheckBox Content="Send client credentials in the body" IsChecked="{Binding CredentialsInBody}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="{Binding CachedTokenSummary}" Classes="muted" FontSize="12" VerticalAlignment="Center" />
+                      <Button Content="Clear token" Padding="8,2" FontSize="12" Command="{Binding ClearTokenCommand}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Grid>
+
+                <Grid IsVisible="{Binding IsAws}" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" MinWidth="520">
+                  <TextBlock Text="Access key" Classes="label" />
+                  <TextBox Grid.Column="1" Text="{Binding AwsAccessKey}" Margin="0,0,0,6" />
+                  <TextBlock Grid.Row="1" Text="Secret key" Classes="label" />
+                  <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding AwsSecretKey}" PasswordChar="•" Margin="0,0,0,6" />
+                  <TextBlock Grid.Row="2" Text="Session token" Classes="label" />
+                  <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding AwsSessionToken}" Margin="0,0,0,6" />
+                  <TextBlock Grid.Row="3" Text="Region" Classes="label" />
+                  <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding AwsRegion}" Margin="0,0,0,6" />
+                  <TextBlock Grid.Row="4" Text="Service" Classes="label" />
+                  <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding AwsService}" Watermark="execute-api, s3, lambda…" />
+                </Grid>
+              </Panel>
+            </Grid>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem>
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Tests" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Assertions.Count}" Classes="muted" FontSize="11" VerticalAlignment="Center"
+                         IsVisible="{Binding Assertions.HasRows}" />
             </StackPanel>
-
-            <Panel Grid.Column="1" MaxWidth="560" HorizontalAlignment="Left">
-              <TextBlock IsVisible="{Binding IsAuthNone}" Classes="muted"
-                         Text="This request does not use any authorization." />
-
-              <StackPanel IsVisible="{Binding IsAuthBearer}" Spacing="6">
-                <TextBlock Text="Token" Classes="section" />
-                <TextBox Classes="mono" Text="{Binding BearerToken}" Watermark="Token or {{token}}" MinWidth="360" />
+          </TabItem.Header>
+          <Grid RowDefinitions="Auto,*,6,*" Margin="0,8,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="ASSERTIONS · checked after every send, and by the runner and CLI" Classes="section" VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                <Button Content="+ Status" Padding="8,2" FontSize="12" Command="{Binding AddAssertionFromResponseCommand}" CommandParameter="status"
+                        ToolTip.Tip="Expect the status of the last response" />
+                <Button Content="+ Time" Padding="8,2" FontSize="12" Command="{Binding AddAssertionFromResponseCommand}" CommandParameter="time" />
+                <Button Content="+ Contract" Padding="8,2" FontSize="12" Command="{Binding AddAssertionFromResponseCommand}" CommandParameter="schema"
+                        ToolTip.Tip="Validate against the collection's OpenAPI document" />
+                <Button Content="Add" Classes="accent" Padding="10,2" FontSize="12" Command="{Binding Assertions.AddCommand}" />
               </StackPanel>
+            </Grid>
+            <Border Grid.Row="1" Classes="card" Margin="0,6,0,0" ClipToBounds="True">
+              <Panel>
+                <TextBlock Classes="muted" Margin="12" TextWrapping="Wrap" IsVisible="{Binding !Assertions.HasRows}"
+                           Text="No assertions yet. Add one to check the status, a header, a JSON path, an XPath, the response time, a JSON schema or the OpenAPI contract." />
+                <ScrollViewer>
+                  <ItemsControl ItemsSource="{Binding Assertions.Rows}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="ed:AssertionRow">
+                        <Border Classes="message">
+                          <Grid ColumnDefinitions="28,Auto,*,Auto,*,24,32">
+                            <CheckBox IsChecked="{Binding Enabled}" MinWidth="0" Padding="0" />
+                            <ComboBox Grid.Column="1" ItemsSource="{x:Static ed:AssertionsEditor.Sources}" SelectedItem="{Binding Source}"
+                                      Classes="compact" MinWidth="150" ItemTemplate="{StaticResource EnumLabel}" />
+                            <TextBox Grid.Column="2" Classes="mono" Text="{Binding Path}" Watermark="{Binding PathWatermark}"
+                                     IsEnabled="{Binding NeedsPath}" Margin="6,0" MinHeight="28" />
+                            <ComboBox Grid.Column="3" ItemsSource="{x:Static ed:AssertionsEditor.Operators}" SelectedItem="{Binding Operator}"
+                                      Classes="compact" MinWidth="130" ItemTemplate="{StaticResource EnumLabel}" IsVisible="{Binding !IsSchema}" />
+                            <TextBox Grid.Column="4" Classes="mono" Text="{Binding Expected}" Watermark="Expected value (can use {{vars}})"
+                                     IsEnabled="{Binding NeedsExpected}" Margin="6,0" MinHeight="28" />
+                            <TextBlock Grid.Column="5" Text="{Binding Passed, Converter={x:Static conv:PassTextConverter.Instance}}"
+                                       Foreground="{Binding Passed, Converter={x:Static conv:PassBrushConverter.Instance}}"
+                                       FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            <Button Grid.Column="6" Classes="icon" Command="{Binding $parent[TabItem].((vm:RequestTabViewModel)DataContext).Assertions.RemoveCommand}"
+                                    CommandParameter="{Binding}">
+                              <PathIcon Data="{StaticResource IconTrash}" />
+                            </Button>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </Panel>
+            </Border>
+            <GridSplitter Grid.Row="2" Background="Transparent" ResizeDirection="Rows" />
+            <DockPanel Grid.Row="3">
+              <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,4,0,4">
+                <TextBlock Text="TEST SCRIPT · JavaScript with Postman's pm API (pm.test, pm.expect, pm.response, pm.environment)" Classes="section" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="Snippets ▾" Padding="8,2" FontSize="12">
+                  <Button.Flyout>
+                    <MenuFlyout>
+                      <MenuItem Header="Status code is 200" Command="{Binding InsertSnippetCommand}" CommandParameter="status" />
+                      <MenuItem Header="JSON body has a property" Command="{Binding InsertSnippetCommand}" CommandParameter="json" />
+                      <MenuItem Header="Response time below 500 ms" Command="{Binding InsertSnippetCommand}" CommandParameter="time" />
+                      <MenuItem Header="Header is present" Command="{Binding InsertSnippetCommand}" CommandParameter="header" />
+                      <MenuItem Header="Set an environment variable" Command="{Binding InsertSnippetCommand}" CommandParameter="setvar" />
+                      <MenuItem Header="Get an environment variable" Command="{Binding InsertSnippetCommand}" CommandParameter="getvar" />
+                      <MenuItem Header="Log the response" Command="{Binding InsertSnippetCommand}" CommandParameter="log" />
+                    </MenuFlyout>
+                  </Button.Flyout>
+                </Button>
+              </Grid>
+              <views:CodeEditor Text="{Binding TestScript}" Format="JavaScript" />
+            </DockPanel>
+          </Grid>
+        </TabItem>
 
-              <StackPanel IsVisible="{Binding IsAuthBasic}" Spacing="6">
-                <TextBlock Text="Username" Classes="section" />
-                <TextBox Text="{Binding BasicUsername}" MinWidth="360" />
-                <TextBlock Text="Password" Classes="section" Margin="0,6,0,0" />
-                <TextBox Text="{Binding BasicPassword}" PasswordChar="•" MinWidth="360" />
-              </StackPanel>
-
-              <StackPanel IsVisible="{Binding IsAuthApiKey}" Spacing="6">
-                <TextBlock Text="Key" Classes="section" />
-                <TextBox Text="{Binding ApiKeyName}" MinWidth="360" />
-                <TextBlock Text="Value" Classes="section" Margin="0,6,0,0" />
-                <TextBox Classes="mono" Text="{Binding ApiKeyValue}" MinWidth="360" />
-                <TextBlock Text="Add to" Classes="section" Margin="0,6,0,0" />
-                <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.ApiKeyLocations}"
-                          SelectedItem="{Binding ApiKeyLocation}" MinWidth="200">
-                  <ComboBox.ItemTemplate>
-                    <DataTemplate x:DataType="domain:ApiKeyLocation">
-                      <TextBlock Text="{Binding Converter={x:Static conv:EnumLabelConverter.Instance}}" />
+        <TabItem>
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Extract" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Extractions.Count}" Classes="muted" FontSize="11" VerticalAlignment="Center"
+                         IsVisible="{Binding Extractions.HasRows}" />
+            </StackPanel>
+          </TabItem.Header>
+          <DockPanel Margin="0,8,0,0">
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+              <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
+                         Text="Copy values from the response into variables, e.g. a login token used by later requests as {{token}}." />
+              <Button Grid.Column="1" Content="Add" Classes="accent" Padding="10,2" FontSize="12" Command="{Binding Extractions.AddCommand}" />
+            </Grid>
+            <Border Classes="card" ClipToBounds="True">
+              <ScrollViewer>
+                <ItemsControl ItemsSource="{Binding Extractions.Rows}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="ed:ExtractionRow">
+                      <Border Classes="message">
+                        <Grid ColumnDefinitions="28,*,Auto,2*,Auto,32">
+                          <CheckBox IsChecked="{Binding Enabled}" MinWidth="0" Padding="0" />
+                          <TextBox Grid.Column="1" Classes="mono" Text="{Binding Variable}" Watermark="Variable name" Margin="0,0,6,0" MinHeight="28" />
+                          <ComboBox Grid.Column="2" ItemsSource="{x:Static ed:ExtractionsEditor.Sources}" SelectedItem="{Binding Source}"
+                                    Classes="compact" MinWidth="130" ItemTemplate="{StaticResource EnumLabel}" />
+                          <TextBox Grid.Column="3" Classes="mono" Text="{Binding Path}" Watermark="$.data.token / header name / XPath / regex" Margin="6,0" MinHeight="28" />
+                          <ComboBox Grid.Column="4" ItemsSource="{x:Static ed:ExtractionsEditor.Scopes}" SelectedItem="{Binding Scope}"
+                                    Classes="compact" MinWidth="120" ItemTemplate="{StaticResource EnumLabel}" />
+                          <Button Grid.Column="5" Classes="icon" Command="{Binding $parent[TabItem].((vm:RequestTabViewModel)DataContext).Extractions.RemoveCommand}"
+                                  CommandParameter="{Binding}">
+                            <PathIcon Data="{StaticResource IconTrash}" />
+                          </Button>
+                        </Grid>
+                      </Border>
                     </DataTemplate>
-                  </ComboBox.ItemTemplate>
-                </ComboBox>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Border>
+          </DockPanel>
+        </TabItem>
+
+        <TabItem Header="Pre-request">
+          <DockPanel Margin="0,8,0,0">
+            <TextBlock DockPanel.Dock="Top" Classes="muted" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"
+                       Text="Runs before sending. Change variables (pm.variables.set), headers (pm.request.headers.upsert) or the body (pm.request.body.raw)." />
+            <views:CodeEditor Text="{Binding PreRequestScript}" Format="JavaScript" />
+          </DockPanel>
+        </TabItem>
+
+        <TabItem Header="Settings">
+          <ScrollViewer Margin="0,10,0,0">
+            <StackPanel Spacing="10" MaxWidth="760" HorizontalAlignment="Left">
+              <Grid ColumnDefinitions="200,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" DataContext="{Binding Settings}" x:DataType="ed:SettingsEditor">
+                <TextBlock Text="Timeout (ms)" Classes="label" />
+                <NumericUpDown Grid.Column="1" Value="{Binding TimeoutMs}" Minimum="0" Increment="1000" FormatString="0" Watermark="Default (100 s)"
+                               HorizontalAlignment="Left" Width="200" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="1" Text="Redirects" Classes="label" />
+                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="10" Margin="0,0,0,6">
+                  <CheckBox Content="Follow redirects" IsChecked="{Binding FollowRedirects}" />
+                  <TextBlock Text="Max" Classes="label" />
+                  <NumericUpDown Value="{Binding MaxRedirects}" Minimum="1" Maximum="50" Width="130" FormatString="0" />
+                </StackPanel>
+                <TextBlock Grid.Row="2" Text="TLS" Classes="label" />
+                <CheckBox Grid.Row="2" Grid.Column="1" Content="Verify certificates" IsChecked="{Binding VerifySsl}" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="3" Text="HTTP version" Classes="label" />
+                <ComboBox Grid.Row="3" Grid.Column="1" ItemsSource="{x:Static ed:SettingsEditor.HttpVersions}" SelectedItem="{Binding HttpVersion}"
+                          ItemTemplate="{StaticResource EnumLabel}" Margin="0,0,0,6" MinWidth="280" />
+                <TextBlock Grid.Row="4" Text="Proxy" Classes="label" />
+                <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal" Spacing="10" Margin="0,0,0,6">
+                  <TextBox Text="{Binding Proxy}" Watermark="http://proxy:8080 (empty: system proxy)" Width="300" />
+                  <CheckBox Content="Use system proxy" IsChecked="{Binding UseSystemProxy}" />
+                </StackPanel>
+                <TextBlock Grid.Row="5" Text="Client certificate" Classes="label" VerticalAlignment="Top" Margin="0,6,10,0" />
+                <StackPanel Grid.Row="5" Grid.Column="1" Spacing="4" Margin="0,0,0,6">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Classes="mono" Text="{Binding ClientCertificatePath}" Watermark="PFX/P12 or PEM certificate for mutual TLS" />
+                    <Button Grid.Column="1" Content="Browse…" Margin="6,0,0,0"
+                            Command="{Binding $parent[TabItem].((vm:RequestTabViewModel)DataContext).ChooseClientCertificateCommand}" />
+                  </Grid>
+                  <TextBox Classes="mono" Text="{Binding ClientCertificateKeyPath}" Watermark="Private key (PEM only, if separate)" />
+                  <TextBox Text="{Binding ClientCertificatePassword}" PasswordChar="•" Watermark="Certificate / key password" />
+                </StackPanel>
+                <TextBlock Grid.Row="6" Text="Cookies" Classes="label" />
+                <CheckBox Grid.Row="6" Grid.Column="1" Content="Use the cookie jar (send stored cookies, save Set-Cookie)" IsChecked="{Binding UseCookieJar}" Margin="0,0,0,6" />
+              </Grid>
+
+              <Grid ColumnDefinitions="200,*" DataContext="{Binding Stream}" x:DataType="ed:StreamEditor"
+                    IsVisible="{Binding $parent[TabItem].((vm:RequestTabViewModel)DataContext).IsStreamingKind}">
+                <TextBlock Text="Streams (CLI / runner)" Classes="label" ToolTip.Tip="WebSocket, SSE, gRPC streams and GraphQL subscriptions" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                  <TextBlock Text="Listen (s)" Classes="label" />
+                  <NumericUpDown Value="{Binding ListenSeconds}" Minimum="0" Width="130" FormatString="0" />
+                  <TextBlock Text="Stop after messages" Classes="label" />
+                  <NumericUpDown Value="{Binding MaxMessages}" Minimum="0" Width="130" FormatString="0" />
+                </StackPanel>
+              </Grid>
+
+              <StackPanel Spacing="4">
+                <TextBlock Text="DESCRIPTION" Classes="section" />
+                <TextBox Text="{Binding Description}" AcceptsReturn="True" MinHeight="70" TextWrapping="Wrap"
+                         Watermark="What this request does (exported with the collection)" />
               </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem>
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Examples" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Examples.Count}" Classes="muted" FontSize="11" VerticalAlignment="Center" IsVisible="{Binding Examples.HasRows}" />
+            </StackPanel>
+          </TabItem.Header>
+          <Grid ColumnDefinitions="220,8,*" Margin="0,8,0,0" DataContext="{Binding Examples}" x:DataType="ed:ExamplesEditor">
+            <DockPanel>
+              <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                <TextBlock Text="SAVED RESPONSES · served by the mock server" Classes="section" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="icon" Command="{Binding AddCommand}" ToolTip.Tip="Add example">
+                  <PathIcon Data="{StaticResource IconPlus}" />
+                </Button>
+              </Grid>
+              <ListBox Classes="plain" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="ed:ExampleRow">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <TextBlock Text="{Binding StatusCode, StringFormat='{}{0:0}'}" FontWeight="Bold" FontSize="11" Margin="0,0,8,0" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                      <Button Grid.Column="2" Classes="icon" Command="{Binding $parent[ListBox].((ed:ExamplesEditor)DataContext).RemoveCommand}"
+                              CommandParameter="{Binding}">
+                        <PathIcon Data="{StaticResource IconTrash}" Width="12" Height="12" />
+                      </Button>
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </DockPanel>
+            <Panel Grid.Column="2">
+              <TextBlock Classes="muted" TextWrapping="Wrap" Margin="12" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNull}}"
+                         Text="Save a response with &quot;Save as example&quot; in the response pane, or add one by hand. Examples document the API and power the mock server." />
+              <ContentControl Content="{Binding Selected}">
+                <ContentControl.ContentTemplate>
+                  <DataTemplate x:DataType="ed:ExampleRow">
+                    <Grid RowDefinitions="Auto,*,Auto">
+                      <WrapPanel ItemSpacing="8" LineSpacing="6" Margin="0,0,0,6">
+                        <TextBox Text="{Binding Name}" Watermark="Name" MinWidth="200" />
+                        <TextBlock Text="Status" Classes="label" />
+                        <NumericUpDown Value="{Binding StatusCode}" Minimum="0" Maximum="599" Width="130" FormatString="0" />
+                        <TextBox Text="{Binding ContentType}" Watermark="Content-Type" MinWidth="200" />
+                      </WrapPanel>
+                      <views:CodeEditor Grid.Row="1" Text="{Binding Body}" Format="Json" />
+                      <Expander Grid.Row="2" Header="Headers and match rules" Margin="0,6,0,0">
+                        <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto,Auto" MaxHeight="260">
+                          <views:KeyValueEditor DataContext="{Binding Headers}" Height="120" />
+                          <views:KeyValueEditor Grid.Column="2" DataContext="{Binding MatchQuery}" Height="120"
+                                                ToolTip.Tip="Serve this example only when these query parameters match" />
+                          <views:KeyValueEditor Grid.Row="1" Grid.Column="2" DataContext="{Binding MatchHeaders}" Height="100" Margin="0,6,0,0" />
+                          <TextBox Grid.Row="2" Grid.ColumnSpan="3" Text="{Binding MatchBodyContains}" Margin="0,6,0,0"
+                                   Watermark="Serve only when the request body contains…" />
+                        </Grid>
+                      </Expander>
+                    </Grid>
+                  </DataTemplate>
+                </ContentControl.ContentTemplate>
+              </ContentControl>
             </Panel>
           </Grid>
         </TabItem>
@@ -158,9 +792,58 @@
       <Border Grid.Row="1" Height="1" Background="{DynamicResource DividerBrush}" VerticalAlignment="Center"
               IsHitTestVisible="False" />
 
-      <!-- Response -->
+      <!-- Response / live session -->
       <Panel Grid.Row="2" Margin="0,6,0,0">
-        <StackPanel IsVisible="{Binding IsSending}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+        <!-- Live session: streaming protocols show messages as they arrive, with a composer. -->
+        <DockPanel IsVisible="{Binding ShowLiveSession}">
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Ellipse Width="8" Height="8" Fill="#22A06B" VerticalAlignment="Center" />
+              <TextBlock Text="Connected" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding LiveMessages.Count, StringFormat='{}{0} messages'}" Classes="muted" FontSize="12" VerticalAlignment="Center" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+              <Button Content="End stream" Padding="8,2" FontSize="12" Command="{Binding EndStreamCommand}" IsVisible="{Binding IsGrpc}"
+                      ToolTip.Tip="Half-close the request stream so the server can reply" />
+              <Button Content="Clear" Padding="8,2" FontSize="12" Command="{Binding ClearLiveMessagesCommand}" />
+            </StackPanel>
+          </Grid>
+          <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto,Auto" Margin="0,6,0,0" IsVisible="{Binding CanCompose}">
+            <TextBox Classes="mono" Text="{Binding OutgoingText}" AcceptsReturn="True" MaxHeight="120"
+                     Watermark="Message to send (Ctrl+Enter)" TextWrapping="Wrap">
+              <TextBox.KeyBindings>
+                <KeyBinding Gesture="Ctrl+Enter" Command="{Binding SendMessageCommand}" />
+              </TextBox.KeyBindings>
+            </TextBox>
+            <Button Grid.Column="1" Content="Saved ▾" Margin="6,0,0,0" IsVisible="{Binding Stream.SavedMessages.HasActive}">
+              <Button.Flyout>
+                <Flyout>
+                  <ItemsControl ItemsSource="{Binding Stream.SavedMessages.Rows}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:KeyValueRowViewModel">
+                        <Button Classes="tool" Content="{Binding Key}" IsVisible="{Binding !IsPlaceholder}" HorizontalAlignment="Stretch"
+                                Command="{Binding #EditorTabs.((vm:RequestTabViewModel)DataContext).SendSavedMessageCommand}"
+                                CommandParameter="{Binding}" ToolTip.Tip="{Binding Value}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Flyout>
+              </Button.Flyout>
+            </Button>
+            <Button Grid.Column="2" Classes="accent" Content="Send" Margin="6,0,0,0" Command="{Binding SendMessageCommand}" />
+          </Grid>
+          <Border Classes="card" ClipToBounds="True">
+            <views:MessageLog Items="{Binding LiveMessages}" />
+          </Border>
+        </DockPanel>
+
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10">
+          <StackPanel.IsVisible>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="IsSending" />
+              <Binding Path="!IsStreamingKind" />
+            </MultiBinding>
+          </StackPanel.IsVisible>
           <ProgressBar IsIndeterminate="True" Width="220" />
           <TextBlock Text="Sending request…" Classes="muted" HorizontalAlignment="Center" />
         </StackPanel>
@@ -174,19 +857,25 @@
           </StackPanel.IsVisible>
           <TextBlock Text="Response" FontWeight="SemiBold" HorizontalAlignment="Center" />
           <TextBlock Classes="muted" HorizontalAlignment="Center"
-                     Text="Enter a URL and click Send (Ctrl+Enter) to get a response." />
+                     Text="Pick a protocol, enter an address and click Send (Ctrl+Enter)." />
         </StackPanel>
 
         <!-- Visibility is bound on a wrapper: an element's own bindings use the DataContext it sets. -->
-        <Panel>
-          <Panel.IsVisible>
+        <DockPanel>
+          <DockPanel.IsVisible>
             <MultiBinding Converter="{x:Static BoolConverters.And}">
               <Binding Path="!IsSending" />
               <Binding Path="Response" Converter="{x:Static ObjectConverters.IsNotNull}" />
             </MultiBinding>
-          </Panel.IsVisible>
+          </DockPanel.IsVisible>
+          <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" Margin="0,6,0,0">
+            <Button Content="Compare with previous" Padding="8,2" FontSize="12" Command="{Binding CompareWithPreviousCommand}"
+                    IsVisible="{Binding HasPreviousResponse}" />
+            <Button Content="Save as example" Padding="8,2" FontSize="12" Command="{Binding SaveResponseAsExampleCommand}"
+                    ToolTip.Tip="Keep this response as documentation and for the mock server" />
+          </StackPanel>
           <views:ResponseView DataContext="{Binding Response}" />
-        </Panel>
+        </DockPanel>
       </Panel>
     </Grid>
   </Grid>

@@ -1,10 +1,15 @@
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dispatch.App.Services;
+using Dispatch.Application.Auth;
 using Dispatch.Application.Formatting;
+using Dispatch.Application.Testing;
 using Dispatch.Domain;
 
 namespace Dispatch.App.ViewModels;
+
+public sealed record TimingBar(string Label, string Text, double Fraction);
 
 public sealed partial class ResponseViewModel : ObservableObject
 {
@@ -21,12 +26,39 @@ public sealed partial class ResponseViewModel : ObservableObject
     [ObservableProperty] private BodyFormat _selectedFormat;
     [ObservableProperty] private string? _copyFeedback;
 
+    /// <summary>JSONPath / XPath typed in the body toolbar to narrow what's shown.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayBody), nameof(IsFiltered))]
+    private string _filter = string.Empty;
+
+    [ObservableProperty] private string? _filterError;
+
+    private string? _filteredBody;
+
     private ResponseViewModel(ApiResponse response, BodyFormat format, string prettyBody, IClipboardService clipboard)
     {
         _clipboard = clipboard;
         Model = response;
         _selectedFormat = format;
         _prettyBody = prettyBody;
+        Messages = response.Messages.Select(m => new MessageItemViewModel(m)).ToList();
+        Timings = BuildTimings(response);
+        Jwt = DecodeJwtInBody(response.Body);
+    }
+
+    /// <summary>Decodes a JWT returned in the body (e.g. a login response's access_token), for the JWT tab.</summary>
+    private static JwtInfo? DecodeJwtInBody(string body)
+    {
+        if (FindJwt(body) is not { } token)
+            return null;
+        try
+        {
+            return Application.Auth.Jwt.Decode(token);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
     }
 
     public static IReadOnlyList<BodyFormat> Formats { get; } = Enum.GetValues<BodyFormat>();
@@ -53,9 +85,40 @@ public sealed partial class ResponseViewModel : ObservableObject
             PrettyBody = pretty;
     }
 
+    partial void OnFilterChanged(string value)
+    {
+        FilterError = null;
+        _filteredBody = null;
+        var path = value.Trim();
+        if (path.Length == 0)
+            return;
+        try
+        {
+            var isXPath = path.StartsWith('/') || SelectedFormat == BodyFormat.Xml;
+            var matches = ResponseValues.Read(Model, isXPath ? ValueSource.XPath : ValueSource.JsonPath, path);
+            _filteredBody = matches.Count switch
+            {
+                0 => "(no match)",
+                1 => BodyFormatter.Pretty(matches[0], BodyFormat.Json),
+                _ => BodyFormatter.Pretty("[" + string.Join(",", matches.Select(m => IsJson(m) ? m : JsonSerializer.Serialize(m))) + "]", BodyFormat.Json)
+            };
+        }
+        catch (FormatException ex)
+        {
+            FilterError = ex.Message;
+        }
+    }
+
+    private static bool IsJson(string text)
+    {
+        var t = text.TrimStart();
+        return t.StartsWith('{') || t.StartsWith('[') || t is "true" or "false" or "null" || double.TryParse(t, System.Globalization.CultureInfo.InvariantCulture, out _);
+    }
+
     public ApiResponse Model { get; }
     public string RawBody => Model.Body;
-    public string DisplayBody => ShowPretty ? PrettyBody : RawBody;
+    public string DisplayBody => IsFiltered && _filteredBody is not null ? _filteredBody : ShowPretty ? PrettyBody : RawBody;
+    public bool IsFiltered => Filter.Trim().Length > 0;
 
     public bool ShowRaw => !ShowPretty;
 
@@ -63,7 +126,20 @@ public sealed partial class ResponseViewModel : ObservableObject
     public bool HasResponse => Model.HasResponse;
     public string? Error => Model.Error;
     public int StatusCode => Model.StatusCode;
-    public string StatusText => $"{Model.StatusCode} {Model.ReasonPhrase}";
+
+    /// <summary>A code the status brush understands: HTTP codes as-is, other protocols as success / failure.</summary>
+    public int StatusColorCode => Model.Kind is RequestKind.Http or RequestKind.Soap or RequestKind.GraphQl or RequestKind.Sse
+        ? Model.Succeeded == false ? 500 : Model.StatusCode
+        : Model.IsSuccess ? 200 : 500;
+
+    public string StatusText => Model.Kind switch
+    {
+        RequestKind.Grpc => Model.ReasonPhrase,
+        RequestKind.WebSocket or RequestKind.SocketIo or RequestKind.Mqtt or RequestKind.Kafka or RequestKind.Amqp
+            or RequestKind.Tcp or RequestKind.Udp => Model.ReasonPhrase,
+        _ => $"{Model.StatusCode} {Model.ReasonPhrase}".Trim()
+    };
+
     public string TimeText => Format.Duration(Model.Elapsed);
     public string SizeText => Format.Bytes(Model.SizeBytes);
     public string? ContentType => Model.ContentType;
@@ -71,12 +147,72 @@ public sealed partial class ResponseViewModel : ObservableObject
     public string? EffectiveUrl => Model.EffectiveUrl;
     public IReadOnlyList<ResponseHeader> Headers => Model.Headers;
     public int HeaderCount => Model.Headers.Count;
+    public IReadOnlyList<ResponseHeader> Trailers => Model.Trailers;
+    public bool HasTrailers => Model.Trailers.Count > 0;
+
+    public IReadOnlyList<MessageItemViewModel> Messages { get; }
+    public bool HasMessages => Messages.Count > 0;
+    public int MessageCount => Messages.Count(m => m.Direction == MessageDirection.Received);
+
+    public IReadOnlyList<TestResult> Tests => Model.TestResults;
+    public bool HasTests => Model.TestResults.Count > 0;
+    public int PassedTests => Model.TestResults.Count(t => t.Passed);
+    public string TestsSummary => $"{PassedTests}/{Model.TestResults.Count}";
+    public bool AllTestsPassed => Model.AllTestsPassed;
+
+    public IReadOnlyList<string> ScriptLog => Model.ScriptLog;
+    public bool HasScriptLog => Model.ScriptLog.Count > 0;
+
+    public string? RawRequest => Model.RawRequest;
+    public bool HasRawRequest => !string.IsNullOrEmpty(Model.RawRequest);
+    public IReadOnlyList<TimingBar> Timings { get; }
+    public bool HasTimings => Timings.Count > 0;
+
+    public IReadOnlyDictionary<string, string> VariableUpdates => Model.VariableUpdates;
+    public bool HasVariableUpdates => Model.VariableUpdates.Count > 0;
+    public string VariableUpdatesText => string.Join(Environment.NewLine, Model.VariableUpdates.Select(v => $"{v.Key} = {Truncate(v.Value)}"));
+
+    public JwtInfo? Jwt { get; }
+    public bool HasJwt => Jwt is not null;
+
+    private static string Truncate(string s) => s.Length > 120 ? s[..117] + "…" : s;
+
+    private static IReadOnlyList<TimingBar> BuildTimings(ApiResponse r)
+    {
+        if (r.Timings is not { } t)
+            return [];
+        var total = Math.Max(1, r.Elapsed.TotalMilliseconds);
+        var bars = new List<TimingBar>();
+        void Add(string label, TimeSpan? value)
+        {
+            if (value is { } v)
+                bars.Add(new TimingBar(label, Format.Duration(v), Math.Clamp(v.TotalMilliseconds / total, 0.005, 1)));
+        }
+        Add("DNS lookup", t.Dns);
+        Add("TCP connect", t.Connect);
+        Add("TLS + waiting (TTFB)", t.FirstByte);
+        Add("Content download", t.Download);
+        bars.Add(new TimingBar("Total", Format.Duration(r.Elapsed), 1));
+        return bars;
+    }
+
+    /// <summary>Finds a JWT-looking string value in a JSON body (e.g. access_token).</summary>
+    private static string? FindJwt(string body)
+    {
+        if (body.Length is 0 or > 200_000 || !body.Contains("eyJ", StringComparison.Ordinal))
+            return null;
+        var match = System.Text.RegularExpressions.Regex.Match(body, @"eyJ[\w-]+\.eyJ[\w-]+\.[\w-]*");
+        return match.Success ? match.Value : null;
+    }
 
     [RelayCommand]
     private void UsePretty() => ShowPretty = true;
 
     [RelayCommand]
     private void UseRaw() => ShowPretty = false;
+
+    [RelayCommand]
+    private void ClearFilter() => Filter = string.Empty;
 
     [RelayCommand]
     private async Task CopyBodyAsync()
@@ -86,6 +222,9 @@ public sealed partial class ResponseViewModel : ObservableObject
         await Task.Delay(1500);
         CopyFeedback = null;
     }
+
+    [RelayCommand]
+    private Task CopyRawRequestAsync() => _clipboard.SetTextAsync(RawRequest ?? "");
 }
 
 internal static class Format

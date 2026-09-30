@@ -24,6 +24,7 @@ public sealed class App : Avalonia.Application
             var viewModel = _services.GetRequiredService<MainWindowViewModel>();
             var window = new MainWindow { DataContext = viewModel };
             _services.GetRequiredService<ClipboardService>().Attach(window);
+            _services.GetRequiredService<DialogService>().Attach(window);
 
             // Last line of defence: surface unexpected UI-thread errors instead of crashing.
             Dispatcher.UIThread.UnhandledException += (_, e) =>
@@ -42,14 +43,15 @@ public sealed class App : Avalonia.Application
 
     private static ServiceProvider ConfigureServices()
     {
-        var dataDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Dispatch");
-
         var services = new ServiceCollection();
-        services.AddDispatchCore(Path.Combine(dataDir, "dispatch.db"));
+        services.AddDispatchCore(DispatchPaths.DefaultDatabase);
 
         services.AddSingleton<ClipboardService>();
         services.AddSingleton<IClipboardService>(sp => sp.GetRequiredService<ClipboardService>());
+        services.AddSingleton<DialogService>();
+        services.AddSingleton<IDialogService>(sp => sp.GetRequiredService<DialogService>());
+        services.AddSingleton<RequestTabServices>();
+        services.AddSingleton<MainServices>();
 
         services.AddSingleton<CollectionsViewModel>();
         services.AddSingleton<HistoryViewModel>();

@@ -16,15 +16,27 @@ public sealed partial class KeyValueListViewModel : ObservableObject
     private bool _suppressChanged;
     private bool _syncingBulk;
 
-    public KeyValueListViewModel(string keyWatermark = "Key", string valueWatermark = "Value", bool supportsBulkEdit = false)
+    public KeyValueListViewModel(string keyWatermark = "Key", string valueWatermark = "Value", bool supportsBulkEdit = false,
+        bool supportsSecret = false, bool supportsFile = false)
     {
         KeyWatermark = keyWatermark;
         ValueWatermark = valueWatermark;
         SupportsBulkEdit = supportsBulkEdit;
+        SupportsSecret = supportsSecret;
+        SupportsFile = supportsFile;
         EnsurePlaceholderRow();
     }
 
     public bool SupportsBulkEdit { get; }
+
+    /// <summary>Rows can be marked secret (masked, encrypted at rest, not exported). Environment variables.</summary>
+    public bool SupportsSecret { get; }
+
+    /// <summary>Rows can be files instead of text (multipart form fields).</summary>
+    public bool SupportsFile { get; }
+
+    /// <summary>Pick a file for a row; set by the view (needs a window for the dialog).</summary>
+    public Func<Task<string?>>? PickFile { get; set; }
 
     [ObservableProperty] private bool _isBulkEdit;
     [ObservableProperty] private string _bulkText = string.Empty;
@@ -47,7 +59,7 @@ public sealed partial class KeyValueListViewModel : ObservableObject
         {
             Rows.Clear();
             foreach (var item in items)
-                Rows.Add(new KeyValueRowViewModel(this, item.Key, item.Value, item.Enabled));
+                Rows.Add(new KeyValueRowViewModel(this, item.Key, item.Value, item.Enabled) { IsSecret = item.IsSecret, IsFile = item.IsFile });
             EnsurePlaceholderRow();
         }
         finally
@@ -125,7 +137,7 @@ public sealed partial class KeyValueListViewModel : ObservableObject
 
     public List<KeyValueItem> ToItems() => Rows
         .Where(r => !r.IsEmpty)
-        .Select(r => new KeyValueItem(r.Key, r.Value, r.Enabled))
+        .Select(r => new KeyValueItem(r.Key, r.Value, r.Enabled) { IsSecret = r.IsSecret, IsFile = r.IsFile })
         .ToList();
 
     internal void OnRowChanged(KeyValueRowViewModel row)
@@ -171,6 +183,17 @@ public sealed partial class KeyValueRowViewModel : ObservableObject
     [ObservableProperty] private string _value;
     [ObservableProperty] private bool _isPlaceholder;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MaskChar))]
+    private bool _isSecret;
+
+    [ObservableProperty] private bool _isFile;
+
+    /// <summary>Secret values are masked until the row is un-marked.</summary>
+    public char MaskChar => IsSecret ? '•' : '\0';
+    public bool SupportsSecret => _owner.SupportsSecret;
+    public bool SupportsFile => _owner.SupportsFile;
+
     public KeyValueRowViewModel(KeyValueListViewModel owner, string key, string value, bool enabled)
     {
         _owner = owner;
@@ -186,7 +209,24 @@ public sealed partial class KeyValueRowViewModel : ObservableObject
     partial void OnEnabledChanged(bool value) => _owner.OnRowChanged(this);
     partial void OnKeyChanged(string value) => _owner.OnRowChanged(this);
     partial void OnValueChanged(string value) => _owner.OnRowChanged(this);
+    partial void OnIsSecretChanged(bool value) => _owner.OnRowChanged(this);
+    partial void OnIsFileChanged(bool value) => _owner.OnRowChanged(this);
 
     [RelayCommand]
     private void Remove() => _owner.Remove(this);
+
+    [RelayCommand]
+    private async Task ChooseFileAsync()
+    {
+        if (_owner.PickFile is null)
+            return;
+        var path = await _owner.PickFile();
+        if (path is null)
+            return;
+        IsFile = true;
+        Value = path;
+        if (Key.Length == 0)
+            Key = "file";
+    }
 }
+

@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Dispatch.App.ViewModels"
+             xmlns:conv="using:Dispatch.App.Converters"
+             x:Class="Dispatch.App.Views.MessageLog">
+  <Panel>
+    <TextBlock x:Name="EmptyText" Classes="muted" Margin="12" Text="No messages yet." />
+    <ScrollViewer x:Name="Scroller">
+      <ItemsControl x:Name="List">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:MessageItemViewModel">
+            <Border Classes="message">
+              <Grid ColumnDefinitions="Auto,Auto,*">
+                <TextBlock Text="{Binding Arrow}" FontWeight="Bold" Width="16"
+                           Foreground="{Binding Direction, Converter={x:Static conv:DirectionBrushConverter.Instance}}" />
+                <TextBlock Grid.Column="1" Text="{Binding Time}" Classes="muted" FontSize="11" Margin="0,1,10,0"
+                           FontFamily="{StaticResource MonoFont}" />
+                <StackPanel Grid.Column="2" Spacing="2">
+                  <TextBlock Text="{Binding Label}" Classes="muted" FontSize="11" IsVisible="{Binding HasLabel}" />
+                  <SelectableTextBlock Text="{Binding Content}" TextWrapping="Wrap" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                       Classes.muted="{Binding IsInfo}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </Panel>
+</UserControl>

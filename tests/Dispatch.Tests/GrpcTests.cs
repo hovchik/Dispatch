@@ -258,7 +258,7 @@ public sealed class GrpcTests : IAsyncLifetime
         var json = JsonNode.Parse(new ProtoJson(schema).DecodeToJson("dispatch.interop.Everything", parsed.ToByteArray()))!;
         Assert.Equal("9007199254740993", json["big"]!.GetValue<string>());
         Assert.Equal("GREEN", json["color"]!.GetValue<string>());
-        Assert.Equal(true, json["extra"]!["k"]![3]!["deep"]!.GetValue<bool>());
+        Assert.True(json["extra"]!["k"]![3]!["deep"]!.GetValue<bool>());
     }
 }
 
