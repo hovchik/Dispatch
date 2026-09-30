@@ -8,14 +8,14 @@ namespace Dispatch.Cli;
 
 public static class MockCommand
 {
-    private static readonly HashSet<string> Flags = ["public", "no-cors"];
+    private static readonly HashSet<string> Flags = ["public", "no-cors", "dynamic", "stateful"];
 
     public static async Task<int> ExecuteAsync(string[] rawArgs, CancellationToken cancellationToken)
     {
         var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["p"] = "port" });
         if (args.Positionals.Count != 1)
             throw new UsageException("Usage: dispatch mock <collection> [--port 3000] [--grpc-port 50051] [--latency 100] [--jitter 50] " +
-                                     "[--error-rate 0.1] [--error-status 503] [--drop-rate 0.05] [--public] [--no-cors]");
+                                     "[--error-rate 0.1] [--error-status 503] [--drop-rate 0.05] [--public] [--no-cors] [--dynamic] [--stateful] [--seed n]");
 
         await using var services = Program.BuildServices(args.Option("db"));
         var workspace = new Workspace(services);
@@ -36,10 +36,14 @@ public static class MockCommand
             ErrorRate = Rate(args, "error-rate"),
             ErrorStatus = args.Int("error-status", 500),
             DropRate = Rate(args, "drop-rate"),
-            Cors = !args.Flag("no-cors")
+            Cors = !args.Flag("no-cors"),
+            DynamicData = args.Flag("dynamic"),
+            Stateful = args.Flag("stateful"),
+            Seed = args.Option("seed") is null ? null : args.Int("seed", 0)
         }, cancellationToken);
 
-        Console.WriteLine($"Mocking {collection.Name} at {server.BaseUrl}" + (server.GrpcUrl is null ? "" : $" (gRPC at {server.GrpcUrl})"));
+        Console.WriteLine($"Mocking {collection.Name} at {server.BaseUrl}" + (server.GrpcUrl is null ? "" : $" (gRPC at {server.GrpcUrl})") +
+                          (args.Flag("dynamic") ? " · dynamic data" : "") + (args.Flag("stateful") ? " · stateful" : ""));
         foreach (var route in server.Routes)
             Console.WriteLine($"  {route.Method,-7} {route.Template}  ({route.Request.Examples.Count} example(s))");
         foreach (var route in server.GrpcRoutes)

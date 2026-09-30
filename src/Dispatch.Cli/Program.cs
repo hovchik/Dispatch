@@ -23,6 +23,7 @@ public static class Program
           dispatch export <collection> [options]  Export a saved collection
           dispatch list                           List saved collections and environments
           dispatch mock <collection> [options]    Serve a collection's examples as a mock server
+                                                  (--dynamic: fresh fake data from schemas, --stateful: CRUD memory)
           dispatch load <collection> [options]    Load test a collection
           dispatch docs <collection> [options]    Generate API documentation (--format html|md, --out <file>)
           dispatch version

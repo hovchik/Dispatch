@@ -29,6 +29,16 @@
         </Grid>
         <CheckBox Content="Allow CORS" IsChecked="{Binding Cors}" />
         <CheckBox Content="Listen on all interfaces (not just localhost)" IsChecked="{Binding Public}" />
+        <TextBlock Classes="section" Text="SMART MOCKING" Margin="0,6,0,0" />
+        <CheckBox IsChecked="{Binding DynamicData}"
+                  ToolTip.Tip="Each request gets new realistic values generated from the OpenAPI schema (or the example's shape): names, emails, dates, prices, ids…">
+          <TextBlock Text="Dynamic data (fresh fake values per request)" TextWrapping="Wrap" />
+        </CheckBox>
+        <CheckBox IsChecked="{Binding Stateful}"
+                  ToolTip.Tip="POST adds items, GET lists and reads them, PUT/PATCH update, DELETE removes. Lists start from the GET example.">
+          <TextBlock Text="Stateful CRUD (remember created / updated / deleted items)" TextWrapping="Wrap" />
+        </CheckBox>
+        <Button Content="Reset stored items" Command="{Binding ResetStateCommand}" IsEnabled="{Binding IsRunning}" Padding="8,3" FontSize="12" />
         <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
           <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StartCommand}">
             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -44,7 +54,7 @@
           </Button>
         </Grid>
         <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
-                   Text="Examples are matched by method and path ({id} segments match anything), then by the example's status/headers. Bodies may use {{pathParam}}, {{queryParam}} and {{$guid}}-style variables." />
+                   Text="Examples are matched by method and path ({id} segments match anything), then by the example's status/headers. Bodies may use {{pathParam}}, {{queryParam}}, {{body.field}}, {{header.name}} and {{$randomFullName}}-style variables." />
       </StackPanel>
     </ScrollViewer>
 

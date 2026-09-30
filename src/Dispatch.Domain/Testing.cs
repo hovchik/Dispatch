@@ -90,6 +90,9 @@ public sealed class ResponseExample
     public List<KeyValueItem> MatchHeaders { get; set; } = [];
     public string MatchBodyContains { get; set; } = string.Empty;
 
+    /// <summary>JSON Schema of the body (from OpenAPI); the mock server can generate fresh data from it.</summary>
+    public string Schema { get; set; } = string.Empty;
+
     public ResponseExample Clone() => DeepCopy.Of(this);
 }
 

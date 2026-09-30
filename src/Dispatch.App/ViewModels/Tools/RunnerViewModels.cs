@@ -247,6 +247,8 @@ public sealed partial class MockServerViewModel : ObservableObject, ITool
     [ObservableProperty] private decimal _dropRatePercent;
     [ObservableProperty] private bool _cors = true;
     [ObservableProperty] private bool _public;
+    [ObservableProperty] private bool _dynamicData;
+    [ObservableProperty] private bool _stateful;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(StopCommand))]
@@ -273,7 +275,9 @@ public sealed partial class MockServerViewModel : ObservableObject, ITool
                 ErrorStatus = (int)ErrorStatus,
                 DropRate = (double)DropRatePercent / 100,
                 Cors = Cors,
-                Public = Public
+                Public = Public,
+                DynamicData = DynamicData,
+                Stateful = Stateful
             });
             IsRunning = true;
             BaseUrl = _server.BaseUrl?.ToString().TrimEnd('/');
@@ -307,6 +311,13 @@ public sealed partial class MockServerViewModel : ObservableObject, ITool
 
     [RelayCommand]
     private void ClearLog() => Log.Clear();
+
+    [RelayCommand]
+    private void ResetState()
+    {
+        _server.ResetState();
+        Status = $"Running at {BaseUrl} · stored items cleared";
+    }
 
     public void OnClosed() => _ = _server.StopAsync();
 }

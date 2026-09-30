@@ -35,6 +35,15 @@ public sealed class MockServerOptions
     /// <summary>Fraction (0-1) of requests whose connection is dropped without a response.</summary>
     public double DropRate { get; init; }
     public bool Cors { get; init; } = true;
+
+    /// <summary>Generate fresh, realistic data on every request from the example's schema (or its shape).</summary>
+    public bool DynamicData { get; init; }
+
+    /// <summary>Remember created, updated and deleted items (POST / PUT / PATCH / DELETE) in memory.</summary>
+    public bool Stateful { get; init; }
+
+    /// <summary>Seed for generated data, for repeatable mocks.</summary>
+    public int? Seed { get; init; }
 }
 
 public sealed record MockLogEntry(DateTimeOffset Time, string Method, string Path, int Status, string? Matched, double Milliseconds, string? Note = null);
@@ -49,6 +58,8 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
     private MockRouteTable _routes = MockRouteTable.Build([]);
     private Dictionary<string, (ApiRequest Request, MethodDesc Method, ProtoJson Codec)> _grpc = new(StringComparer.Ordinal);
     private MockServerOptions _options = new();
+    private MockState? _state;
+    private SchemaFaker _schemaFaker = new();
 
     public event Action<MockLogEntry>? RequestHandled;
 
@@ -66,6 +77,12 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
         _options = options;
         var list = requests.ToList();
         _routes = MockRouteTable.Build(list);
+        if (options.Seed is { } seed)
+        {
+            var random = new Random(seed);
+            _schemaFaker = new SchemaFaker(new Faker(random), random);
+        }
+        _state = options.Stateful ? new MockState(_routes, (_, example) => RenderBody(example, new Dictionary<string, string>())) : null;
         _grpc = await BuildGrpcRoutesAsync(list, ct).ConfigureAwait(false);
 
         var builder = WebApplication.CreateSlimBuilder();
@@ -99,6 +116,72 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
     }
 
     public ValueTask DisposeAsync() => new(StopAsync());
+
+    /// <summary>Forgets items created by stateful mocks.</summary>
+    public void ResetState() => _state?.Reset();
+
+    /// <summary>
+    /// The example body to send: generated from its schema (or its own shape) in dynamic mode, then with
+    /// <c>{{placeholders}}</c> resolved. Hand-written templates (bodies containing <c>{{</c>) are never replaced.
+    /// </summary>
+    private string RenderBody(ResponseExample example, IReadOnlyDictionary<string, string> variables)
+    {
+        var body = example.Body;
+        if (_options.DynamicData && !body.Contains("{{", StringComparison.Ordinal))
+        {
+            try
+            {
+                JsonNode? generated = null;
+                if (example.Schema.Trim().Length > 0)
+                    generated = _schemaFaker.Generate(JsonNode.Parse(example.Schema));
+                else if (body.TrimStart() is ['{', ..] or ['[', ..])
+                    generated = _schemaFaker.GenerateLike(JsonNode.Parse(body));
+                if (generated is not null)
+                    body = generated.ToJsonString();
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Not JSON after all: serve it as written.
+            }
+        }
+        return VariableResolver.Resolve(body, variables);
+    }
+
+    /// <summary>Path and query parameters, plus <c>{{body.field}}</c>, <c>{{header.name}}</c> and <c>{{method}}</c> of the request.</summary>
+    private static Dictionary<string, string> RequestVariables(MockMatch match, HttpRequest request, string body)
+    {
+        var variables = new Dictionary<string, string>(match.Variables, StringComparer.Ordinal)
+        {
+            ["method"] = request.Method,
+            ["path"] = request.Path.Value ?? "/"
+        };
+        foreach (var header in request.Headers)
+            variables["header." + header.Key.ToLowerInvariant()] = header.Value.ToString();
+        try
+        {
+            if (body.TrimStart() is ['{', ..] && JsonNode.Parse(body) is JsonObject json)
+                Flatten(json, "body.", variables, 0);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+        }
+        return variables;
+
+        static void Flatten(JsonObject obj, string prefix, Dictionary<string, string> into, int depth)
+        {
+            foreach (var (key, value) in obj)
+            {
+                if (value is JsonObject child && depth < 3)
+                    Flatten(child, prefix + key + ".", into, depth + 1);
+                into[prefix + key] = value switch
+                {
+                    null => "null",
+                    JsonValue v when v.TryGetValue<string>(out var s) => s,
+                    _ => value.ToJsonString()
+                };
+            }
+        }
+    }
 
     private async Task<Dictionary<string, (ApiRequest, MethodDesc, ProtoJson)>> BuildGrpcRoutesAsync(List<ApiRequest> requests, CancellationToken ct)
     {
@@ -191,6 +274,19 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
             return;
         }
 
+        if (_state?.Handle(request.Method, match, body) is { } reply)
+        {
+            response.StatusCode = reply.Status;
+            response.Headers["X-Mock-Match"] = $"{match.Request.Name} / {reply.Note}";
+            if (reply.Body.Length > 0 && !HttpMethods.IsHead(request.Method))
+            {
+                response.ContentType = "application/json";
+                await response.WriteAsync(reply.Body).ConfigureAwait(false);
+            }
+            Log(request.Method, path, reply.Status, match.Request.Name, stopwatch, reply.Note);
+            return;
+        }
+
         if (match.Example is null)
         {
             response.StatusCode = 501;
@@ -201,16 +297,17 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
         }
 
         var example = match.Example;
+        var variables = RequestVariables(match, request, body);
         response.StatusCode = example.StatusCode;
         foreach (var header in example.Headers.Where(h => h.IsActive && !h.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)
                                                           && !h.Key.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)))
-            response.Headers[header.Key] = VariableResolver.Resolve(header.Value, match.Variables);
+            response.Headers[header.Key] = VariableResolver.Resolve(header.Value, variables);
         if (!string.IsNullOrEmpty(example.ContentType))
             response.ContentType = example.ContentType;
         response.Headers["X-Mock-Match"] = $"{match.Request.Name} / {example.Name}";
 
-        if (!HttpMethods.IsHead(request.Method) && example.Body.Length > 0)
-            await response.WriteAsync(VariableResolver.Resolve(example.Body, match.Variables)).ConfigureAwait(false);
+        if (!HttpMethods.IsHead(request.Method) && (example.Body.Length > 0 || (_options.DynamicData && example.Schema.Length > 0)))
+            await response.WriteAsync(RenderBody(example, variables)).ConfigureAwait(false);
         Log(request.Method, path, example.StatusCode, $"{match.Request.Name} / {example.Name}", stopwatch);
     }
 
@@ -240,7 +337,7 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
             return;
         }
 
-        var node = JsonNode.Parse(VariableResolver.Resolve(example.Body, new Dictionary<string, string>()));
+        var node = JsonNode.Parse(RenderBody(example, new Dictionary<string, string>()));
         var messages = route.Method.ServerStreaming && node is JsonArray array ? array.ToList() : [node];
         await response.StartAsync(context.RequestAborted).ConfigureAwait(false);
         var header = new byte[5];
