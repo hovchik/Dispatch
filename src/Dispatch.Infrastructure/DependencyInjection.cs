@@ -2,6 +2,7 @@ using Dispatch.Application.Abstractions;
 using Dispatch.Application.Requests;
 using Dispatch.Infrastructure.Auth;
 using Dispatch.Infrastructure.Http;
+using Dispatch.Infrastructure.Interop;
 using Dispatch.Infrastructure.Persistence;
 using Dispatch.Infrastructure.Protocols;
 using Dispatch.Infrastructure.Scripting;
@@ -42,6 +43,8 @@ public static class DependencyInjection
         services.AddSingleton<IOAuth2Interaction>(sp => sp.GetRequiredService<SystemBrowserInteraction>());
         services.AddSingleton<IOAuth2TokenProvider, OAuth2TokenProvider>();
         services.AddSingleton<IScriptRunner, JintScriptRunner>();
+        services.AddSingleton<IContractValidator, OpenApiContractValidator>();
+        services.AddSingleton<Importer>();
 
         services.AddSingleton<IRequestExecutor, HttpRequestExecutor>();
         services.AddSingleton<IRequestMessageBuilder, RequestMessageBuilder>();
@@ -64,6 +67,7 @@ public static class DependencyInjection
         services.AddSingleton<IProtocolExecutor, SocketExecutor>();
 
         services.AddSingleton<IRequestSender, RequestSender>();
+        services.AddSingleton<Dispatch.Application.Running.CollectionRunner>();
         return services;
     }
 }
