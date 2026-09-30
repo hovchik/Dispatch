@@ -97,10 +97,11 @@
               </ListBox.ItemsPanel>
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:RequestTabViewModel">
-                  <Grid ColumnDefinitions="Auto,*,Auto" Width="190" Height="34" Background="Transparent"
-                        ToolTip.Tip="{Binding Url}">
+                  <Grid x:Name="TabRoot" ColumnDefinitions="Auto,*,Auto,Auto" Width="210" Height="34"
+                        Background="Transparent" ToolTip.Tip="{Binding Url}">
                     <Grid.ContextMenu>
                       <ContextMenu>
+                        <MenuItem Header="Save" InputGesture="Ctrl+S" Command="{Binding SaveCommand}" />
                         <MenuItem Header="Rename" Command="{Binding BeginRenameCommand}" />
                         <MenuItem Header="Close" Command="{Binding CloseCommand}" />
                       </ContextMenu>
@@ -108,8 +109,10 @@
                     <TextBlock Classes="method" Margin="10,0,6,0"
                                Text="{Binding Method, Converter={x:Static conv:MethodTextConverter.Instance}}"
                                Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+                    <!-- Requests not yet saved to a collection show their title in italics. -->
                     <TextBlock Grid.Column="1" Text="{Binding DisplayName}" VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsRenaming}"
+                               Classes.unsaved="{Binding !IsSaved}"
                                DoubleTapped="OnTabTitleDoubleTapped" />
                     <TextBox Grid.Column="1" Classes="tabrename" Text="{Binding RenameText}"
                              IsVisible="{Binding IsRenaming}" VerticalAlignment="Center"
@@ -119,7 +122,35 @@
                         <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}" />
                       </TextBox.KeyBindings>
                     </TextBox>
-                    <Panel Grid.Column="2" Width="26">
+                    <Button Grid.Column="2" Classes="icon tabsave"
+                            Command="{Binding SaveCommand}" ToolTip.Tip="Save (Ctrl+S)">
+                      <PathIcon Data="{StaticResource IconSave}" Width="11" Height="11" />
+                    </Button>
+                    <Popup Grid.Column="2" IsOpen="{Binding IsSavePopupOpen, Mode=TwoWay}"
+                           PlacementTarget="{Binding #TabRoot}" Placement="BottomEdgeAlignedLeft"
+                           IsLightDismissEnabled="True">
+                      <Border Classes="card" Padding="16" Width="320" BoxShadow="0 8 24 0 #40000000">
+                        <StackPanel Spacing="10">
+                          <TextBlock Text="Save request" FontWeight="SemiBold" FontSize="14" />
+                          <TextBlock Text="Name" Classes="section" />
+                          <TextBox Text="{Binding Name}" Watermark="Request name" />
+                          <TextBlock Text="Collection" Classes="section" />
+                          <ComboBox ItemsSource="{Binding SaveTargets}" SelectedItem="{Binding SaveTarget}"
+                                    HorizontalAlignment="Stretch" PlaceholderText="A new collection will be created">
+                            <ComboBox.ItemTemplate>
+                              <DataTemplate x:DataType="vm:CollectionNodeViewModel">
+                                <TextBlock Text="{Binding Name}" />
+                              </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                          </ComboBox>
+                          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,6,0,0">
+                            <Button Content="Cancel" Command="{Binding CancelSaveCommand}" />
+                            <Button Content="Save" Classes="accent" Command="{Binding ConfirmSaveCommand}" IsDefault="True" />
+                          </StackPanel>
+                        </StackPanel>
+                      </Border>
+                    </Popup>
+                    <Panel Grid.Column="3" Width="26">
                       <!-- Dirty tabs show a dot; hovering the tab swaps it for the close button. -->
                       <Ellipse Classes="dirtydot" Width="7" Height="7" Fill="#FF6C37" IsVisible="{Binding IsDirty}"
                                IsHitTestVisible="False" />

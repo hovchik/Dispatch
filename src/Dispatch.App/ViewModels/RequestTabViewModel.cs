@@ -58,7 +58,11 @@ public sealed partial class RequestTabViewModel : ObservableObject
         Load(request);
 
         Params.Changed += OnParamsChanged;
-        Headers.Changed += (_, _) => MarkDirty();
+        Headers.Changed += (_, _) =>
+        {
+            OnPropertyChanged(nameof(BodyFormat));
+            MarkDirty();
+        };
         FormFields.Changed += (_, _) => MarkDirty();
     }
 
@@ -77,7 +81,8 @@ public sealed partial class RequestTabViewModel : ObservableObject
     [ObservableProperty] private string _url = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsBodyNone), nameof(IsBodyText), nameof(IsBodyForm), nameof(CanBeautify))]
+    [NotifyPropertyChangedFor(nameof(IsBodyNone), nameof(IsBodyText), nameof(IsBodyForm), nameof(CanBeautify),
+        nameof(BodyFormat))]
     private BodyMode _bodyMode;
 
     [ObservableProperty] private string _bodyText = string.Empty;
@@ -111,6 +116,10 @@ public sealed partial class RequestTabViewModel : ObservableObject
     public bool IsBodyNone => BodyMode == BodyMode.None;
     public bool IsBodyText => BodyMode is BodyMode.Json or BodyMode.Text or BodyMode.Xml;
     public bool IsBodyForm => BodyMode == BodyMode.FormUrlEncoded;
+    /// <summary>How the body editor highlights the body: from the Content-Type header, else the body mode.</summary>
+    public BodyFormat BodyFormat =>
+        BodyFormatter.Detect(Headers.GetValue(DefaultHeaders.ContentType) ?? DefaultHeaders.ContentTypeFor(BodyMode));
+
     public bool CanBeautify => BodyMode is BodyMode.Json or BodyMode.Xml;
     public bool IsAuthNone => AuthMode == AuthMode.None;
     public bool IsAuthBearer => AuthMode == AuthMode.Bearer;

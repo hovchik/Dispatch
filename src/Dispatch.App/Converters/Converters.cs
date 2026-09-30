@@ -67,17 +67,26 @@ public sealed class StatusBrushConverter : IValueConverter
 {
     public static readonly StatusBrushConverter Instance = new();
 
-    private static readonly IBrush Success = MethodBrushConverter.Brush("#22A06B");
-    private static readonly IBrush Redirect = MethodBrushConverter.Brush("#3B82F6");
-    private static readonly IBrush ClientError = MethodBrushConverter.Brush("#E3A008");
-    private static readonly IBrush ServerError = MethodBrushConverter.Brush("#EF4444");
+    /// <summary>A faint tint of the status color, for the background of the status pill.</summary>
+    public static readonly StatusBrushConverter Tint = new(tint: true);
+
+    private readonly IBrush _success, _redirect, _clientError, _serverError;
+
+    private StatusBrushConverter(bool tint = false)
+    {
+        var prefix = tint ? "#2E" : "#FF";
+        _success = MethodBrushConverter.Brush(prefix + "22A06B");
+        _redirect = MethodBrushConverter.Brush(prefix + "3B82F6");
+        _clientError = MethodBrushConverter.Brush(prefix + "E3A008");
+        _serverError = MethodBrushConverter.Brush(prefix + "EF4444");
+    }
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch
     {
-        int and >= 200 and < 300 => Success,
-        int and >= 300 and < 400 => Redirect,
-        int and >= 400 and < 500 => ClientError,
-        _ => ServerError
+        int and >= 200 and < 300 => _success,
+        int and >= 300 and < 400 => _redirect,
+        int and >= 400 and < 500 => _clientError,
+        _ => _serverError
     };
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
