@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Styling;
 using AvaloniaEdit;
+using AvaloniaEdit.CodeCompletion;
 using AvaloniaEdit.TextMate;
 using Dispatch.Application.Formatting;
 using TextMateSharp.Grammars;
@@ -50,6 +51,7 @@ public sealed class CodeEditor : UserControl
         _editor.Classes.Add("code");
         _editor.TextArea.TextView.Margin = new Thickness(8, 0, 0, 0);
         _editor.TextChanged += OnEditorTextChanged;
+        _editor.TextArea.TextEntered += OnTextEntered;
 
         _textMate = _editor.InstallTextMate(Registry);
         ActualThemeVariantChanged += (_, _) => UpdateTheme();
@@ -113,6 +115,41 @@ public sealed class CodeEditor : UserControl
         _syncing = true;
         SetCurrentValue(TextProperty, _editor.Document.Text);
         _syncing = false;
+    }
+
+    private CompletionWindow? _completion;
+
+    /// <summary>Typing <c>{{$</c> offers the dynamic variables (<c>$randomEmail</c>, <c>$randomInt(min,max)</c>, ...).</summary>
+    private void OnTextEntered(object? sender, Avalonia.Input.TextInputEventArgs e)
+    {
+        if (IsReadOnly || e.Text != "$" || _completion is not null)
+            return;
+        var offset = _editor.CaretOffset;
+        if (offset < 3 || _editor.Document.GetText(offset - 3, 2) != "{{")
+            return;
+
+        _completion = new CompletionWindow(_editor.TextArea) { StartOffset = offset - 1 };
+        foreach (var name in Application.Variables.Faker.Names)
+            _completion.CompletionList.CompletionData.Add(new DynamicVariableCompletion(name));
+        _completion.Closed += (_, _) => _completion = null;
+        _completion.Show();
+    }
+
+    private sealed class DynamicVariableCompletion(string name) : ICompletionData
+    {
+        public Avalonia.Media.IImage? Image => null;
+        public string Text => name;
+        public object Content => name;
+        public object Description => Application.Variables.Faker.Shared.Generate(
+            name.Replace("min,max", "1,100").Replace("(length)", "(8)").Replace("(n)", "(3)")) ?? name;
+        public double Priority => 0;
+
+        public void Complete(AvaloniaEdit.Editing.TextArea textArea, AvaloniaEdit.Document.ISegment completionSegment, EventArgs insertionRequestEventArgs)
+        {
+            var closing = textArea.Document.TextLength >= completionSegment.EndOffset + 2
+                          && textArea.Document.GetText(completionSegment.EndOffset, 2) == "}}";
+            textArea.Document.Replace(completionSegment, closing ? name : name + "}}");
+        }
     }
 
     private void UpdateTheme() =>
