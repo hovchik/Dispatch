@@ -62,6 +62,7 @@ public sealed class HttpRequestExecutor(IHttpClientSource clients) : IRequestExe
                 SizeBytes = totalSize,
                 ContentType = contentType?.MediaType,
                 Body = Decode(bytes, contentType),
+                BodyBytes = IsBinary(contentType?.MediaType) && bytes.Length > 0 ? bytes : null,
                 IsBodyTruncated = truncated,
                 Headers = response.Headers
                     .Concat(response.Content.Headers)

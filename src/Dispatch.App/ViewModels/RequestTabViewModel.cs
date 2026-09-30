@@ -504,7 +504,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
 
             if (Response is not null)
                 PreviousResponse = Response;
-            Response = await ResponseViewModel.CreateAsync(response, _services.Clipboard);
+            Response = await ResponseViewModel.CreateAsync(response, _services.Clipboard, _services.Dialogs);
             Assertions.ApplySnapshots(response.SnapshotUpdates);
             Assertions.ShowResults(response.TestResults);
             if (response.RefreshedAuth is { } refreshed)

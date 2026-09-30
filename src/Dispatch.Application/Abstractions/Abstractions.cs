@@ -50,6 +50,9 @@ public interface IScriptRunner
 
 public sealed record ScriptResult(IReadOnlyList<TestResult> Tests, IReadOnlyList<string> Log, string? Error = null)
 {
+    /// <summary>HTML rendered by <c>pm.visualizer.set(template, data)</c>.</summary>
+    public string? Visualization { get; init; }
+
     public static readonly ScriptResult Empty = new([], []);
 }
 

@@ -83,6 +83,7 @@ public sealed class HttpProtocolExecutor(
             ContentType = response.ContentType,
             Body = response.Body,
             IsBodyTruncated = response.IsBodyTruncated,
+            BodyBytes = response.BodyBytes,
             Headers = response.Headers,
             Trailers = response.Trailers,
             Messages = response.Messages,

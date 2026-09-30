@@ -46,6 +46,12 @@ public sealed class ApiResponse
     public string? ContentType { get; init; }
     public string Body { get; init; } = string.Empty;
     public bool IsBodyTruncated { get; init; }
+
+    /// <summary>The raw bytes of a binary body (images, PDFs, archives, ...), for previews and saving to a file.</summary>
+    public byte[]? BodyBytes { get; init; }
+
+    /// <summary>HTML produced by <c>pm.visualizer.set(template, data)</c> in the test script.</summary>
+    public string? Visualization { get; set; }
     public IReadOnlyList<ResponseHeader> Headers { get; init; } = [];
 
     /// <summary>gRPC trailers and similar end-of-call metadata.</summary>

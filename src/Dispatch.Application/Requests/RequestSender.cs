@@ -195,6 +195,7 @@ public sealed class RequestSender : IRequestSender
                 .ConfigureAwait(false);
             tests.AddRange(post.Tests);
             log.AddRange(post.Log);
+            response.Visualization = post.Visualization;
             if (post.Error is not null)
                 tests.Add(new TestResult("Test script", false, post.Error));
         }
