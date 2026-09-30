@@ -21,7 +21,9 @@ public enum CollectionAction
     ExportFolder,
     ExportPostman,
     ExportHttp,
-    Settings
+    Settings,
+    DocsHtml,
+    DocsMarkdown
 }
 
 public sealed partial class CollectionsViewModel(ICollectionRepository repository) : ObservableObject

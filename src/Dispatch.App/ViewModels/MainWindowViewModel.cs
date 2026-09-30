@@ -269,6 +269,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
             case CollectionAction.Settings:
                 Dialogs.ShowTool(new CollectionSettingsViewModel(collection, _services.Tabs.Collections, Dialogs, Collections.LoadAsync));
                 break;
+            case CollectionAction.DocsHtml or CollectionAction.DocsMarkdown:
+                await SafeAsync(async () =>
+                {
+                    var html = action == CollectionAction.DocsHtml;
+                    var slug = DispatchFormat.Slug(collection.Name);
+                    var path = await Dialogs.SaveFileAsync("Save API documentation", slug + (html ? "-docs.html" : "-docs.md"),
+                        html ? new FileFilter("HTML page", "*.html") : new FileFilter("Markdown", "*.md"));
+                    if (path is null)
+                        return;
+                    await File.WriteAllTextAsync(path, html ? Application.Docs.DocsGenerator.Html(collection) : Application.Docs.DocsGenerator.MarkdownText(collection));
+                    if (html)
+                        ShellOpener.Open(path);
+                    ShowInfo($"Documentation for {collection.Requests.Count} endpoint(s) saved to {path}");
+                });
+                break;
             case CollectionAction.ExportFolder:
                 await SafeAsync(async () =>
                 {
@@ -311,6 +326,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
         yield return new PaletteItem("Mock server…", "Serve saved examples", OpenMockServer);
         yield return new PaletteItem("Load test…", "Virtual users, latency percentiles", OpenLoadTest);
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
+        foreach (var collection in Collections.Items)
+            yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
+                () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));
         yield return new PaletteItem("Toggle theme", "Light / dark", ToggleTheme);
         if (SelectedTab is { } tab)
         {

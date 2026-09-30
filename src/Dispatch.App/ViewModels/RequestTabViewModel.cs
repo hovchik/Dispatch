@@ -705,6 +705,20 @@ public sealed partial class RequestTabViewModel : ObservableObject
     [RelayCommand]
     private void Close() => _host.CloseTab(this);
 
+    /// <summary>Opens this request's documentation (as it would appear in the collection docs) in the browser.</summary>
+    [RelayCommand]
+    private void PreviewDocs()
+    {
+        var request = ToModel();
+        var collection = _host.FindCollection(CollectionId);
+        var page = new RequestCollection
+        {
+            Name = collection?.Name ?? "Draft",
+            Requests = [request]
+        };
+        ShellOpener.OpenTemp(request.Name, ".html", System.Text.Encoding.UTF8.GetBytes(Application.Docs.DocsGenerator.Html(page)));
+    }
+
     [RelayCommand]
     private void BeginRename()
     {
