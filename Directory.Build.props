@@ -8,4 +8,7 @@
     <Version>0.1.0</Version>
     <Product>Dispatch</Product>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Dispatch.Tests" />
+  </ItemGroup>
 </Project>

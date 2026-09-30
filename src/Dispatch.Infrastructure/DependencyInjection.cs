@@ -2,6 +2,7 @@ using Dispatch.Application.Abstractions;
 using Dispatch.Application.Requests;
 using Dispatch.Infrastructure.Http;
 using Dispatch.Infrastructure.Persistence;
+using Dispatch.Infrastructure.Protocols;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -38,6 +39,13 @@ public static class DependencyInjection
         services.AddSingleton<IRequestMessageBuilder, RequestMessageBuilder>();
         services.AddSingleton<HttpProtocolExecutor>();
         services.AddSingleton<IProtocolExecutor>(sp => sp.GetRequiredService<HttpProtocolExecutor>());
+
+        services.AddSingleton<WebSocketConnector>();
+        services.AddSingleton<GraphQlExecutor>();
+        services.AddSingleton<IProtocolExecutor>(sp => sp.GetRequiredService<GraphQlExecutor>());
+        services.AddSingleton<IProtocolExecutor, WebSocketExecutor>();
+        services.AddSingleton<IProtocolExecutor, SseExecutor>();
+        services.AddSingleton<IProtocolExecutor, SocketIoExecutor>();
 
         services.AddSingleton<IRequestSender, RequestSender>();
         return services;

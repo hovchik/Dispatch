@@ -336,7 +336,7 @@ public class HttpProtocolExecutorTests
     }
 
     [Fact]
-    public void Multipart_body_includes_files_and_fields()
+    public async Task Multipart_body_includes_files_and_fields()
     {
         var file = Path.GetTempFileName();
         File.WriteAllText(file, "hello");
@@ -353,7 +353,7 @@ public class HttpProtocolExecutorTests
                 }
             }, new Dictionary<string, string>());
 
-            var body = message.Content!.ReadAsStringAsync().Result;
+            var body = await message.Content!.ReadAsStringAsync();
             Assert.Contains("multipart/form-data", message.Content.Headers.ContentType!.ToString());
             Assert.Contains("hello", body);
             Assert.Contains("name=name", body);
