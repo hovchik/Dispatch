@@ -132,6 +132,21 @@
       <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
     </Style>
 
+    <Style Selector="ListBox.tabs TextBlock.unsaved">
+      <Setter Property="FontStyle" Value="Italic" />
+    </Style>
+    <!-- The tab's save button only shows on hover or for the selected tab. -->
+    <Style Selector="ListBox.tabs Button.tabsave">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Width" Value="22" />
+      <Setter Property="Height" Value="22" />
+    </Style>
+    <Style Selector="ListBox.tabs ListBoxItem:pointerover Button.tabsave">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="ListBox.tabs ListBoxItem:selected Button.tabsave">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
     <Style Selector="ListBox.tabs Button.tabclose.dirty">
       <Setter Property="Opacity" Value="0" />
     </Style>
