@@ -38,6 +38,7 @@ public sealed class CodeEditor : UserControl
         _editor = new TextEditor
         {
             ShowLineNumbers = true,
+            WordWrap = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
             Padding = new Thickness(6, 4),
@@ -47,6 +48,7 @@ public sealed class CodeEditor : UserControl
         _editor.Options.ConvertTabsToSpaces = true;
         _editor.Options.IndentationSize = 2;
         _editor.Classes.Add("code");
+        _editor.TextArea.TextView.Margin = new Thickness(8, 0, 0, 0);
         _editor.TextChanged += OnEditorTextChanged;
 
         _textMate = _editor.InstallTextMate(Registry);

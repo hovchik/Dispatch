@@ -11,7 +11,7 @@ public sealed partial class ResponseViewModel : ObservableObject
     private readonly IClipboardService _clipboard;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(DisplayBody))]
+    [NotifyPropertyChangedFor(nameof(DisplayBody), nameof(ShowRaw))]
     private bool _showPretty = true;
 
     [ObservableProperty]
@@ -57,6 +57,8 @@ public sealed partial class ResponseViewModel : ObservableObject
     public string RawBody => Model.Body;
     public string DisplayBody => ShowPretty ? PrettyBody : RawBody;
 
+    public bool ShowRaw => !ShowPretty;
+
     public bool HasError => !Model.HasResponse;
     public bool HasResponse => Model.HasResponse;
     public string? Error => Model.Error;
@@ -69,6 +71,12 @@ public sealed partial class ResponseViewModel : ObservableObject
     public string? EffectiveUrl => Model.EffectiveUrl;
     public IReadOnlyList<ResponseHeader> Headers => Model.Headers;
     public int HeaderCount => Model.Headers.Count;
+
+    [RelayCommand]
+    private void UsePretty() => ShowPretty = true;
+
+    [RelayCommand]
+    private void UseRaw() => ShowPretty = false;
 
     [RelayCommand]
     private async Task CopyBodyAsync()

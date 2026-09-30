@@ -20,31 +20,39 @@
       </StackPanel>
     </Border>
 
-    <!-- Status line -->
-    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="18" Margin="4,4,4,0" HorizontalAlignment="Right"
-                IsVisible="{Binding HasResponse}" ZIndex="1">
-      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-        <TextBlock Text="Status" Classes="muted" />
-        <TextBlock Text="{Binding StatusText}" FontWeight="SemiBold"
+    <!-- Status line: sits on the right of the Body/Headers tab strip. -->
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="4,0" HorizontalAlignment="Right"
+                Height="30" IsVisible="{Binding HasResponse}" ZIndex="1">
+      <Border CornerRadius="10" Padding="8,2" VerticalAlignment="Center"
+              Background="{Binding StatusCode, Converter={x:Static conv:StatusBrushConverter.Tint}}">
+        <TextBlock Text="{Binding StatusText}" FontWeight="SemiBold" FontSize="12"
                    Foreground="{Binding StatusCode, Converter={x:Static conv:StatusBrushConverter.Instance}}" />
+      </Border>
+      <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" ToolTip.Tip="Response time">
+        <TextBlock Text="Time" Classes="muted" FontSize="12" />
+        <TextBlock Text="{Binding TimeText}" FontWeight="SemiBold" FontSize="12" />
       </StackPanel>
-      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-        <TextBlock Text="Time" Classes="muted" />
-        <TextBlock Text="{Binding TimeText}" FontWeight="SemiBold" />
-      </StackPanel>
-      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-        <TextBlock Text="Size" Classes="muted" />
-        <TextBlock Text="{Binding SizeText}" FontWeight="SemiBold" />
+      <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" ToolTip.Tip="Response size">
+        <TextBlock Text="Size" Classes="muted" FontSize="12" />
+        <TextBlock Text="{Binding SizeText}" FontWeight="SemiBold" FontSize="12" />
       </StackPanel>
     </StackPanel>
 
-    <TabControl Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding HasResponse}" Padding="0">
+    <TabControl Grid.Row="0" Grid.RowSpan="2" Classes="compact" IsVisible="{Binding HasResponse}" Padding="0">
       <TabItem Header="Body">
-        <DockPanel Margin="0,8,0,0">
-          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-            <ToggleButton IsChecked="{Binding ShowPretty}" Content="Pretty" Padding="10,4" />
-            <ComboBox ItemsSource="{x:Static vm:ResponseViewModel.Formats}" SelectedItem="{Binding SelectedFormat}"
-                      IsEnabled="{Binding ShowPretty}" MinWidth="110" Padding="10,4"
+        <DockPanel Margin="0,6,0,0">
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,0,0,6">
+            <!-- Pretty / Raw switch -->
+            <Border Classes="segmented">
+              <StackPanel Orientation="Horizontal">
+                <Button Classes="seg" Classes.selected="{Binding ShowPretty}" Content="Pretty"
+                        Command="{Binding UsePrettyCommand}" />
+                <Button Classes="seg" Classes.selected="{Binding ShowRaw}" Content="Raw"
+                        Command="{Binding UseRawCommand}" />
+              </StackPanel>
+            </Border>
+            <ComboBox Grid.Column="1" Classes="compact" Margin="8,0,0,0" MinWidth="96"
+                      ItemsSource="{x:Static vm:ResponseViewModel.Formats}" SelectedItem="{Binding SelectedFormat}"
                       ToolTip.Tip="{Binding ContentType, StringFormat='Content-Type: {0}', TargetNullValue='No Content-Type header'}">
               <ComboBox.ItemTemplate>
                 <DataTemplate x:DataType="fmt:BodyFormat">
@@ -52,15 +60,17 @@
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
-            <Button Classes="icon" Command="{Binding CopyBodyCommand}" ToolTip.Tip="Copy body">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Data="{StaticResource IconCopy}" />
-                <TextBlock Text="{Binding CopyFeedback, FallbackValue=Copy, TargetNullValue=Copy}" />
+            <TextBlock Grid.Column="2" IsVisible="{Binding IsTruncated}" Classes="muted" FontSize="12"
+                       VerticalAlignment="Center" Margin="10,0" TextTrimming="CharacterEllipsis"
+                       Text="Large response: only the first 5 MB is shown." />
+            <Button Grid.Column="3" Classes="icon compact" Command="{Binding CopyBodyCommand}" ToolTip.Tip="Copy body">
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
+                <TextBlock Text="{Binding CopyFeedback, FallbackValue=Copy, TargetNullValue=Copy}" FontSize="12"
+                           VerticalAlignment="Center" />
               </StackPanel>
             </Button>
-            <TextBlock IsVisible="{Binding IsTruncated}" Classes="muted" VerticalAlignment="Center"
-                       Text="Large response: only the first 5 MB is shown." />
-          </StackPanel>
+          </Grid>
           <views:CodeEditor Text="{Binding DisplayBody, Mode=OneWay}" Format="{Binding SelectedFormat}"
                             IsReadOnly="True" />
         </DockPanel>
@@ -72,15 +82,16 @@
             <TextBlock Text="{Binding HeaderCount}" Classes="muted" FontSize="11" VerticalAlignment="Center" />
           </StackPanel>
         </TabItem.Header>
-        <Border Classes="card" Margin="0,8,0,0">
+        <Border Classes="card" Margin="0,6,0,0" Padding="0">
           <ScrollViewer>
             <ItemsControl ItemsSource="{Binding Headers}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="domain:ResponseHeader">
-                  <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,7">
-                    <Grid ColumnDefinitions="220,*">
-                      <SelectableTextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                      <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap"
+                  <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,5">
+                    <Grid ColumnDefinitions="200,*">
+                      <SelectableTextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5"
+                                           TextWrapping="Wrap" />
+                      <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontSize="12.5"
                                            FontFamily="{StaticResource MonoFont}" />
                     </Grid>
                   </Border>
