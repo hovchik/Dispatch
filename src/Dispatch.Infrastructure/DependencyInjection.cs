@@ -47,6 +47,8 @@ public static class DependencyInjection
         services.AddSingleton<IProtocolExecutor, WebSocketExecutor>();
         services.AddSingleton<IProtocolExecutor, SseExecutor>();
         services.AddSingleton<IProtocolExecutor, SocketIoExecutor>();
+        services.AddSingleton<WsdlLoader>();
+        services.AddSingleton<IProtocolExecutor, SoapExecutor>();
         services.AddSingleton<GrpcSchemaProvider>();
         services.AddSingleton<IProtocolExecutor, GrpcExecutor>();
 
