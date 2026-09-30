@@ -39,6 +39,18 @@ public sealed class CollectionRepository(IDbContextFactory<DispatchDbContext> fa
             .ExecuteUpdateAsync(s => s.SetProperty(c => c.Name, name), ct);
     }
 
+    public async Task UpdateAsync(RequestCollection collection, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var existing = await db.Collections.FirstOrDefaultAsync(c => c.Id == collection.Id, ct)
+                       ?? throw new InvalidOperationException("Collection not found.");
+        existing.Name = collection.Name;
+        existing.Description = collection.Description;
+        existing.Variables = collection.Variables.Select(v => v.Clone()).ToList();
+        existing.SpecLocation = collection.SpecLocation;
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task DeleteAsync(Guid collectionId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);

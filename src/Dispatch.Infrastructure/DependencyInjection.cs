@@ -1,4 +1,3 @@
-using System.Net;
 using Dispatch.Application.Abstractions;
 using Dispatch.Application.Requests;
 using Dispatch.Infrastructure.Http;
@@ -10,7 +9,7 @@ namespace Dispatch.Infrastructure;
 
 public static class DependencyInjection
 {
-    /// <summary>Registers application services, HTTP pipeline and SQLite persistence.</summary>
+    /// <summary>Registers application services, protocol executors and SQLite persistence.</summary>
     public static IServiceCollection AddDispatchCore(this IServiceCollection services, string databasePath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(databasePath))!);
@@ -22,22 +21,24 @@ public static class DependencyInjection
         services.AddSingleton<IHistoryRepository, HistoryRepository>();
         services.AddSingleton<ISettingsRepository, SettingsRepository>();
 
-        services.AddHttpClient(HttpRequestExecutor.ClientName, client =>
-            {
-                client.Timeout = TimeSpan.FromSeconds(100);
-            })
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-            {
-                AutomaticDecompression = DecompressionMethods.All,
-                AllowAutoRedirect = true,
-                MaxAutomaticRedirections = 10,
-                // An API client must send exactly the headers the user configured, not a shared cookie jar.
-                UseCookies = false,
-                ConnectTimeout = TimeSpan.FromSeconds(30)
-            });
+        services.AddDispatchEngine();
+        return services;
+    }
+
+    /// <summary>Everything needed to send requests (no persistence): used by the app and the CLI.</summary>
+    public static IServiceCollection AddDispatchEngine(this IServiceCollection services)
+    {
+        services.AddSingleton<HttpClientPool>();
+        services.AddSingleton<IHttpClientSource>(sp => sp.GetRequiredService<HttpClientPool>());
+        services.AddSingleton<CookieJar>();
+        services.AddSingleton<ICookieJar>(sp => sp.GetRequiredService<CookieJar>());
+        services.AddSingleton<SessionVariables>();
 
         services.AddSingleton<IRequestExecutor, HttpRequestExecutor>();
         services.AddSingleton<IRequestMessageBuilder, RequestMessageBuilder>();
+        services.AddSingleton<HttpProtocolExecutor>();
+        services.AddSingleton<IProtocolExecutor>(sp => sp.GetRequiredService<HttpProtocolExecutor>());
+
         services.AddSingleton<IRequestSender, RequestSender>();
         return services;
     }

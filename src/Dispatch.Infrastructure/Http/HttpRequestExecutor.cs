@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Security.Authentication;
@@ -8,12 +9,12 @@ using Dispatch.Domain;
 
 namespace Dispatch.Infrastructure.Http;
 
-public sealed class HttpRequestExecutor(IHttpClientFactory clientFactory) : IRequestExecutor
+public sealed class HttpRequestExecutor(IHttpClientSource clients) : IRequestExecutor
 {
-    public const string ClientName = "dispatch";
-
     /// <summary>Bodies larger than this are measured fully but only this much is kept for display.</summary>
     public const int MaxDisplayBytes = 5 * 1024 * 1024;
+
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(100);
 
     static HttpRequestExecutor()
     {
@@ -21,23 +22,40 @@ public sealed class HttpRequestExecutor(IHttpClientFactory clientFactory) : IReq
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
 
-    public async Task<ApiResponse> ExecuteAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    public Task<ApiResponse> ExecuteAsync(HttpRequestMessage request, RequestSettings settings, CancellationToken cancellationToken) =>
+        ExecuteAsync(request, settings, null, cancellationToken);
+
+    public async Task<ApiResponse> ExecuteAsync(HttpRequestMessage request, RequestSettings settings,
+        NetworkCredential? credentials, CancellationToken cancellationToken)
     {
-        var client = clientFactory.CreateClient(ClientName);
+        var client = clients.GetClient(settings, credentials);
+        var timeout = settings.TimeoutMs > 0
+            ? TimeSpan.FromMilliseconds(settings.TimeoutMs)
+            : client.Timeout != Timeout.InfiniteTimeSpan ? client.Timeout : DefaultTimeout;
+
+        var timings = new ConnectionTimings();
+        request.Options.Set(ConnectionTimings.Key, timings);
+        ApplyVersion(request, settings.HttpVersion);
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
         var stopwatch = Stopwatch.StartNew();
+        var startTimestamp = Stopwatch.GetTimestamp();
 
         try
         {
             using var response = await client
-                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token)
                 .ConfigureAwait(false);
+            var headersAt = Stopwatch.GetTimestamp();
 
-            var (bytes, totalSize, truncated) = await ReadBodyAsync(response.Content, cancellationToken).ConfigureAwait(false);
+            var (bytes, totalSize, truncated) = await ReadBodyAsync(response.Content, timeoutCts.Token).ConfigureAwait(false);
             stopwatch.Stop();
 
             var contentType = response.Content.Headers.ContentType;
             return new ApiResponse
             {
+                Kind = RequestKind.Http,
                 StatusCode = (int)response.StatusCode,
                 ReasonPhrase = response.ReasonPhrase ?? response.StatusCode.ToString(),
                 Elapsed = stopwatch.Elapsed,
@@ -49,6 +67,8 @@ public sealed class HttpRequestExecutor(IHttpClientFactory clientFactory) : IReq
                     .Concat(response.Content.Headers)
                     .Select(h => new ResponseHeader(h.Key, string.Join(", ", h.Value)))
                     .ToList(),
+                Trailers = response.TrailingHeaders.Select(h => new ResponseHeader(h.Key, string.Join(", ", h.Value))).ToList(),
+                Timings = BuildTimings(timings, startTimestamp, headersAt, stopwatch.Elapsed),
                 EffectiveUrl = response.RequestMessage?.RequestUri?.ToString()
             };
         }
@@ -58,14 +78,57 @@ public sealed class HttpRequestExecutor(IHttpClientFactory clientFactory) : IReq
         }
         catch (OperationCanceledException)
         {
-            // HttpClient signals its own timeout as a TaskCanceledException without our token being cancelled.
-            return ApiResponse.Failed($"Request timed out after {client.Timeout.TotalSeconds:0} s.",
+            return ApiResponse.Failed($"Request timed out after {timeout.TotalSeconds:0.##} s.",
                 stopwatch.Elapsed, request.RequestUri?.ToString());
         }
         catch (HttpRequestException ex)
         {
             return ApiResponse.Failed(Describe(ex), stopwatch.Elapsed, request.RequestUri?.ToString());
         }
+        catch (Exception ex) when (ex is IOException or AuthenticationException or FileNotFoundException
+                                       or System.Security.Cryptography.CryptographicException)
+        {
+            return ApiResponse.Failed(ex.Message, stopwatch.Elapsed, request.RequestUri?.ToString());
+        }
+    }
+
+    private static void ApplyVersion(HttpRequestMessage request, HttpVersionPreference preference)
+    {
+        switch (preference)
+        {
+            case HttpVersionPreference.Http11:
+                request.Version = HttpVersion.Version11;
+                request.VersionPolicy = HttpVersionPolicy.RequestVersionExact;
+                break;
+            case HttpVersionPreference.Http2:
+                request.Version = HttpVersion.Version20;
+                request.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
+                break;
+            case HttpVersionPreference.Http3:
+                request.Version = HttpVersion.Version30;
+                request.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
+                break;
+            default:
+                request.Version = HttpVersion.Version11;
+                request.VersionPolicy = HttpVersionPolicy.RequestVersionOrHigher;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// DNS and TCP connect are measured by the connect callback (only when a new connection was opened). "First byte"
+    /// is the wait from connection (or start, on a pooled connection) to response headers, which includes any TLS
+    /// handshake and server processing time.
+    /// </summary>
+    private static ResponseTimings BuildTimings(ConnectionTimings timings, long start, long headersAt, TimeSpan total)
+    {
+        var waitFrom = timings.ConnectedAt != 0 ? timings.ConnectedAt : start;
+        var toHeaders = Stopwatch.GetElapsedTime(start, headersAt);
+        return new ResponseTimings(
+            Dns: timings.Dns,
+            Connect: timings.Connect,
+            FirstByte: Stopwatch.GetElapsedTime(waitFrom, headersAt),
+            Download: total > toHeaders ? total - toHeaders : TimeSpan.Zero);
     }
 
     private static async Task<(byte[] Bytes, long TotalSize, bool Truncated)> ReadBodyAsync(
@@ -86,7 +149,7 @@ public sealed class HttpRequestExecutor(IHttpClientFactory clientFactory) : IReq
         return (buffer.ToArray(), total, total > buffer.Length);
     }
 
-    private static string Decode(byte[] bytes, MediaTypeHeaderValue? contentType)
+    internal static string Decode(byte[] bytes, MediaTypeHeaderValue? contentType)
     {
         if (bytes.Length == 0)
             return string.Empty;
@@ -111,6 +174,8 @@ public sealed class HttpRequestExecutor(IHttpClientFactory clientFactory) : IReq
             || mediaType.Contains("json", StringComparison.OrdinalIgnoreCase)
             || mediaType.Contains("xml", StringComparison.OrdinalIgnoreCase)
             || mediaType.Contains("javascript", StringComparison.OrdinalIgnoreCase)
+            || mediaType.Contains("graphql", StringComparison.OrdinalIgnoreCase)
+            || mediaType.Contains("yaml", StringComparison.OrdinalIgnoreCase)
             || mediaType.Contains("x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase))
             return false;
 
@@ -121,7 +186,7 @@ public sealed class HttpRequestExecutor(IHttpClientFactory clientFactory) : IReq
                || mediaType.StartsWith("application/", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string Describe(HttpRequestException ex) => ex.InnerException switch
+    internal static string Describe(HttpRequestException ex) => ex.InnerException switch
     {
         SocketException se => $"Could not connect: {se.Message}",
         AuthenticationException ae => $"SSL/TLS error: {ae.Message}",

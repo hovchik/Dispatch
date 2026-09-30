@@ -18,11 +18,13 @@ public class HttpRequestExecutorTests
             send(request, ct);
     }
 
-    private sealed class StubFactory(HttpMessageHandler handler, TimeSpan? timeout = null) : IHttpClientFactory
+    private sealed class StubFactory(HttpMessageHandler handler, TimeSpan? timeout = null) : IHttpClientSource
     {
-        public HttpClient CreateClient(string name) =>
+        public HttpClient GetClient(RequestSettings settings, NetworkCredential? credentials = null) =>
             new(handler, disposeHandler: false) { Timeout = timeout ?? TimeSpan.FromSeconds(100) };
     }
+
+    private static readonly RequestSettings Settings = new();
 
     private static HttpRequestExecutor Executor(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send,
         TimeSpan? timeout = null) => new(new StubFactory(new StubHandler(send), timeout));
@@ -41,14 +43,14 @@ public class HttpRequestExecutorTests
             return Task.FromResult(response);
         });
 
-        var result = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Post, "https://t.test/x"), CancellationToken.None);
+        var result = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Post, "https://t.test/x"), Settings, CancellationToken.None);
 
         Assert.True(result.HasResponse);
         Assert.Equal(201, result.StatusCode);
         Assert.Equal("""{"id":7}""", result.Body);
         Assert.Equal(8, result.SizeBytes);
         Assert.Equal("application/json", result.ContentType);
-        Assert.Contains(result.Headers, h => h.Name == "X-Request-Id" && h.Value == "r-1");
+        Assert.Contains(result.Headers, h => string.Equals(h.Name, "X-Request-Id", StringComparison.OrdinalIgnoreCase) && h.Value == "r-1");
         Assert.Equal("https://t.test/x", result.EffectiveUrl);
     }
 
@@ -57,7 +59,7 @@ public class HttpRequestExecutorTests
     {
         var executor = Executor((_, _) => throw new HttpRequestException("No such host is known."));
 
-        var result = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Get, "https://nope.test"), CancellationToken.None);
+        var result = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Get, "https://nope.test"), Settings, CancellationToken.None);
 
         Assert.False(result.HasResponse);
         Assert.Contains("No such host", result.Error);
@@ -74,7 +76,7 @@ public class HttpRequestExecutorTests
             return new HttpResponseMessage();
         });
 
-        var result = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Get, "https://t.test"), cts.Token);
+        var result = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Get, "https://t.test"), Settings, cts.Token);
 
         Assert.Equal("Request cancelled.", result.Error);
     }
@@ -88,7 +90,7 @@ public class HttpRequestExecutorTests
             return new HttpResponseMessage();
         }, timeout: TimeSpan.FromMilliseconds(50));
 
-        var result = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Get, "https://t.test"), CancellationToken.None);
+        var result = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Get, "https://t.test"), Settings, CancellationToken.None);
 
         Assert.StartsWith("Request timed out", result.Error);
     }
@@ -101,7 +103,7 @@ public class HttpRequestExecutorTests
             Content = new ByteArrayContent([0x89, 0x50, 0x4E, 0x47]) { Headers = { { "Content-Type", "image/png" } } }
         }));
 
-        var result = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Get, "https://t.test"), CancellationToken.None);
+        var result = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Get, "https://t.test"), Settings, CancellationToken.None);
 
         Assert.StartsWith("[Binary content: image/png", result.Body);
     }
@@ -210,10 +212,10 @@ public sealed class PersistenceTests : IAsyncLifetime
     {
         var history = new HistoryRepository(_factory);
         var executor = new FixedExecutor(new ApiResponse { StatusCode = 200, ReasonPhrase = "OK" });
-        var sender = new RequestSender(new RequestMessageBuilder(), executor, history);
+        var sender = new RequestSender([new HttpProtocolExecutor(new RequestMessageBuilder(), executor)], history);
 
-        var ok = await sender.SendAsync(new ApiRequest { Url = "https://t.test" }, null, CancellationToken.None);
-        var bad = await sender.SendAsync(new ApiRequest { Url = "{{missing}}/x" }, null, CancellationToken.None);
+        var ok = await sender.SendAsync(new ApiRequest { Url = "https://t.test" }, (ApiEnvironment?)null, CancellationToken.None);
+        var bad = await sender.SendAsync(new ApiRequest { Url = "{{missing}}/x" }, (ApiEnvironment?)null, CancellationToken.None);
 
         Assert.Equal(200, ok.StatusCode);
         Assert.Contains("Unresolved variable", bad.Error);
@@ -222,6 +224,7 @@ public sealed class PersistenceTests : IAsyncLifetime
 
     private sealed class FixedExecutor(ApiResponse response) : IRequestExecutor
     {
-        public Task<ApiResponse> ExecuteAsync(HttpRequestMessage request, CancellationToken ct) => Task.FromResult(response);
+        public Task<ApiResponse> ExecuteAsync(HttpRequestMessage request, RequestSettings settings, CancellationToken ct) =>
+            Task.FromResult(response);
     }
 }
