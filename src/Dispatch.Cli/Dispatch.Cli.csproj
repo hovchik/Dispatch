@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>dispatch</AssemblyName>
+    <RootNamespace>Dispatch.Cli</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>dispatch</ToolCommandName>
+    <PackageId>Dispatch.Cli</PackageId>
+    <Description>Run Dispatch API collections from the command line and CI (HTTP, GraphQL, gRPC, SOAP, WebSocket, MQTT, Kafka, ...).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Dispatch.Infrastructure\Dispatch.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

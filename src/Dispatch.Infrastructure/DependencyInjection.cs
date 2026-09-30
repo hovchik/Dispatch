@@ -6,6 +6,7 @@ using Dispatch.Infrastructure.Interop;
 using Dispatch.Infrastructure.Persistence;
 using Dispatch.Infrastructure.Protocols;
 using Dispatch.Infrastructure.Scripting;
+using Dispatch.Infrastructure.Security;
 using Dispatch.Infrastructure.Protocols.Grpc;
 using Dispatch.Infrastructure.Protocols.Messaging;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,7 @@ public static class DependencyInjection
 
         services.AddDbContextFactory<DispatchDbContext>(o => o.UseSqlite($"Data Source={databasePath}"));
         services.AddSingleton<DatabaseInitializer>();
+        services.AddSingleton<ISecretProtector>(_ => new SecretProtector(Path.GetDirectoryName(Path.GetFullPath(databasePath))!));
         services.AddSingleton<ICollectionRepository, CollectionRepository>();
         services.AddSingleton<IEnvironmentRepository, EnvironmentRepository>();
         services.AddSingleton<IHistoryRepository, HistoryRepository>();
@@ -68,6 +70,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IRequestSender, RequestSender>();
         services.AddSingleton<Dispatch.Application.Running.CollectionRunner>();
+        services.AddSingleton<Dispatch.Application.Load.LoadTester>();
         return services;
     }
 }

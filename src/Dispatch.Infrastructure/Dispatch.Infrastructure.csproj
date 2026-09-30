@@ -3,6 +3,10 @@
     <ProjectReference Include="..\Dispatch.Application\Dispatch.Application.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Kestrel for the mock server. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="MQTTnet" />
@@ -10,5 +14,6 @@
     <PackageReference Include="RabbitMQ.Client" />
     <PackageReference Include="Jint" />
     <PackageReference Include="YamlDotNet" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
   </ItemGroup>
 </Project>

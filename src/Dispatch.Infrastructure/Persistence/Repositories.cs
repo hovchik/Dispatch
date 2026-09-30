@@ -7,7 +7,38 @@ namespace Dispatch.Infrastructure.Persistence;
 // Repositories create a short-lived DbContext per operation: the recommended pattern for
 // desktop apps, where a long-lived context would accumulate tracked entities and stale state.
 
-public sealed class CollectionRepository(IDbContextFactory<DispatchDbContext> factory) : ICollectionRepository
+/// <summary>Encrypts / decrypts the values of variables marked secret, when a protector is configured.</summary>
+internal static class SecretVariables
+{
+    public static List<KeyValueItem> Protect(IEnumerable<KeyValueItem> variables, ISecretProtector? protector) =>
+        variables.Select(v =>
+        {
+            var copy = v.Clone();
+            if (protector is not null && v.IsSecret)
+                copy.Value = protector.Protect(v.Value);
+            return copy;
+        }).ToList();
+
+    public static void Unprotect(List<KeyValueItem> variables, ISecretProtector? protector)
+    {
+        if (protector is null)
+            return;
+        foreach (var v in variables.Where(v => v.IsSecret))
+        {
+            try
+            {
+                v.Value = protector.Unprotect(v.Value);
+            }
+            catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException or FormatException)
+            {
+                // Encrypted with a key we no longer have (e.g. copied from another machine): the user must re-enter it.
+                v.Value = "";
+            }
+        }
+    }
+}
+
+public sealed class CollectionRepository(IDbContextFactory<DispatchDbContext> factory, ISecretProtector? secrets = null) : ICollectionRepository
 {
     public async Task<IReadOnlyList<RequestCollection>> GetAllAsync(CancellationToken ct = default)
     {
@@ -19,7 +50,10 @@ public sealed class CollectionRepository(IDbContextFactory<DispatchDbContext> fa
             .ToListAsync(ct);
 
         foreach (var c in collections)
+        {
             c.Requests = c.Requests.OrderBy(r => r.SortOrder).ThenBy(r => r.Name).ToList();
+            SecretVariables.Unprotect(c.Variables, secrets);
+        }
         return collections;
     }
 
@@ -27,8 +61,17 @@ public sealed class CollectionRepository(IDbContextFactory<DispatchDbContext> fa
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         collection.SortOrder = (await db.Collections.MaxAsync(c => (int?)c.SortOrder, ct) ?? -1) + 1;
-        db.Collections.Add(collection);
-        await db.SaveChangesAsync(ct);
+        var plainVariables = collection.Variables;
+        collection.Variables = SecretVariables.Protect(plainVariables, secrets);
+        try
+        {
+            db.Collections.Add(collection);
+            await db.SaveChangesAsync(ct);
+        }
+        finally
+        {
+            collection.Variables = plainVariables;
+        }
     }
 
     public async Task RenameAsync(Guid collectionId, string name, CancellationToken ct = default)
@@ -46,7 +89,7 @@ public sealed class CollectionRepository(IDbContextFactory<DispatchDbContext> fa
                        ?? throw new InvalidOperationException("Collection not found.");
         existing.Name = collection.Name;
         existing.Description = collection.Description;
-        existing.Variables = collection.Variables.Select(v => v.Clone()).ToList();
+        existing.Variables = SecretVariables.Protect(collection.Variables, secrets);
         existing.SpecLocation = collection.SpecLocation;
         await db.SaveChangesAsync(ct);
     }
@@ -90,21 +133,31 @@ public sealed class CollectionRepository(IDbContextFactory<DispatchDbContext> fa
     }
 }
 
-public sealed class EnvironmentRepository(IDbContextFactory<DispatchDbContext> factory) : IEnvironmentRepository
+public sealed class EnvironmentRepository(IDbContextFactory<DispatchDbContext> factory, ISecretProtector? secrets = null) : IEnvironmentRepository
 {
     public async Task<IReadOnlyList<ApiEnvironment>> GetAllAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        return await db.Environments.AsNoTracking().OrderBy(e => e.Name).ToListAsync(ct);
+        var environments = await db.Environments.AsNoTracking().OrderBy(e => e.Name).ToListAsync(ct);
+        foreach (var environment in environments)
+            SecretVariables.Unprotect(environment.Variables, secrets);
+        return environments;
     }
 
     public async Task SaveAsync(ApiEnvironment environment, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        // Store an encrypted copy; the caller keeps working with plain values.
+        var stored = new ApiEnvironment
+        {
+            Id = environment.Id,
+            Name = environment.Name,
+            Variables = SecretVariables.Protect(environment.Variables, secrets)
+        };
         if (await db.Environments.AnyAsync(e => e.Id == environment.Id, ct))
-            db.Environments.Update(environment);
+            db.Environments.Update(stored);
         else
-            db.Environments.Add(environment);
+            db.Environments.Add(stored);
         await db.SaveChangesAsync(ct);
     }
 
