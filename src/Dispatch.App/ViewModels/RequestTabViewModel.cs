@@ -505,6 +505,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
             if (Response is not null)
                 PreviousResponse = Response;
             Response = await ResponseViewModel.CreateAsync(response, _services.Clipboard);
+            Assertions.ApplySnapshots(response.SnapshotUpdates);
             Assertions.ShowResults(response.TestResults);
             if (response.RefreshedAuth is { } refreshed)
                 Auth.CacheToken(refreshed);
@@ -689,6 +690,14 @@ public sealed partial class RequestTabViewModel : ObservableObject
                 break;
             case "schema":
                 Assertions.AddModel(new Assertion { Source = ValueSource.Contract, Operator = AssertionOperator.IsValid });
+                break;
+            case "snapshot":
+                Assertions.AddModel(new Assertion
+                {
+                    Source = ValueSource.Snapshot,
+                    Operator = AssertionOperator.IsValid,
+                    Expected = Response is { HasResponse: true } last ? Application.Testing.Snapshots.Capture(last.Model) : ""
+                });
                 break;
         }
     }

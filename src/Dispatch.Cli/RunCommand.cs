@@ -1,4 +1,5 @@
 using Dispatch.Application.Running;
+using Dispatch.Application.Testing;
 using Dispatch.Domain;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -6,7 +7,7 @@ namespace Dispatch.Cli;
 
 public static class RunCommand
 {
-    private static readonly HashSet<string> Flags = ["bail", "insecure", "save-env", "no-color", "silent"];
+    private static readonly HashSet<string> Flags = ["bail", "insecure", "save-env", "no-color", "silent", "update-snapshots"];
 
     private static readonly Dictionary<string, string> Aliases = new()
     {
@@ -75,7 +76,8 @@ public static class RunCommand
             Iterations = args.Int("iterations", 1),
             Data = data,
             DelayMs = args.Int("delay", 0),
-            StopOnFailure = args.Flag("bail")
+            StopOnFailure = args.Flag("bail"),
+            Snapshots = args.Flag("update-snapshots") ? SnapshotMode.Update : SnapshotMode.Verify
         }, progress, cancellationToken);
 
         if (reporters.Contains("cli") && !silent)
@@ -109,6 +111,17 @@ public static class RunCommand
             await workspace.SaveEnvironmentAsync(environment);
             if (!silent)
                 Console.WriteLine($"Saved {report.EnvironmentUpdates.Count} variable(s) to environment {environment.Name}.");
+        }
+
+        if (report.SnapshotUpdates.Count > 0)
+        {
+            foreach (var request in collection.Requests)
+                if (report.SnapshotUpdates.TryGetValue(request.Id, out var snapshots))
+                    foreach (var (index, snapshot) in snapshots)
+                        request.Assertions[index].Expected = snapshot;
+            var where = await workspace.SaveCollectionAsync(collection, args.Positionals[0], bundled, report.SnapshotUpdates.Keys);
+            if (!silent)
+                Console.WriteLine($"Updated snapshots of {report.SnapshotUpdates.Count} request(s) in {where}.");
         }
 
         return report.Passed && !report.Stopped ? Program.ExitOk : Program.ExitTestsFailed;

@@ -38,6 +38,16 @@ public sealed class AssertionEvaluator(IContractValidator? contractValidator = n
                         ? new TestResult(name, true)
                         : new TestResult(name, false, string.Join(Environment.NewLine, errors.Take(20)));
                 }
+                case ValueSource.Snapshot:
+                {
+                    if (assertion.Expected.Length == 0)
+                        return new TestResult(name, false, "No snapshot recorded yet. Send from the app, or run with --update-snapshots.");
+                    var differences = Snapshots.Compare(assertion.Expected, response, resolve(assertion.Path));
+                    return differences.Count == 0
+                        ? new TestResult(name, true)
+                        : new TestResult(name, false, $"{differences.Count} difference(s) from the snapshot:" + Environment.NewLine +
+                                                      string.Join(Environment.NewLine, differences.Take(20)));
+                }
                 case ValueSource.Contract:
                 {
                     if (contractValidator is null)
@@ -218,9 +228,10 @@ public sealed class AssertionEvaluator(IContractValidator? contractValidator = n
             ValueSource.MessageCount => "Received messages",
             ValueSource.JsonSchema => "Body matches JSON schema",
             ValueSource.Contract => "Response matches OpenAPI contract",
+            ValueSource.Snapshot => a.Path.Trim().Length > 0 ? $"Body matches snapshot (ignoring {a.Path.Trim()})" : "Body matches snapshot",
             _ => $"{a.Source} {a.Path}"
         };
-        if (a.Source is ValueSource.JsonSchema or ValueSource.Contract)
+        if (a.Source is ValueSource.JsonSchema or ValueSource.Contract or ValueSource.Snapshot)
             return subject;
 
         var op = a.Operator switch

@@ -32,7 +32,12 @@ public static class RequestResolver
         var source = JsonSerializer.SerializeToNode(request, Options)!.AsObject();
         var resolved = new JsonObject(source.Select(kv => KeyValuePair.Create(kv.Key,
             Untouched.Contains(kv.Key) ? kv.Value?.DeepClone() : Walk(kv.Value, variables))));
-        return resolved.Deserialize<ApiRequest>(Options)!;
+        var result = resolved.Deserialize<ApiRequest>(Options)!;
+        // Stored snapshots are data, not templates: a body containing "{{" must not be altered.
+        for (var i = 0; i < result.Assertions.Count && i < request.Assertions.Count; i++)
+            if (request.Assertions[i].Source == ValueSource.Snapshot)
+                result.Assertions[i].Expected = request.Assertions[i].Expected;
+        return result;
     }
 
     /// <summary>Returns a resolved, detached copy of <paramref name="node"/>.</summary>

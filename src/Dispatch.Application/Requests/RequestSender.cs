@@ -23,6 +23,9 @@ public sealed class SendOptions
     public bool Interactive { get; init; }
     public bool RecordHistory { get; init; } = true;
     public bool RunScripts { get; init; } = true;
+
+    /// <summary>Whether snapshot assertions record missing snapshots, overwrite them, or only compare.</summary>
+    public SnapshotMode Snapshots { get; init; } = SnapshotMode.RecordMissing;
 }
 
 public interface IRequestSender
@@ -179,6 +182,9 @@ public sealed class RequestSender : IRequestSender
             variables.Set(name, value, scope);
         tests.AddRange(extractFailures);
 
+        if (response.HasResponse)
+            response.SnapshotUpdates = RecordSnapshots(resolved, response, options.Snapshots);
+
         tests.AddRange(await _assertions.EvaluateAsync(resolved, response, variables.Resolve, options.CollectionSpec,
             cancellationToken).ConfigureAwait(false));
 
@@ -197,6 +203,28 @@ public sealed class RequestSender : IRequestSender
             await RecordHistoryAsync(request, response).ConfigureAwait(false);
 
         return Finish(response, variables, tests, log, options);
+    }
+
+    /// <summary>Stores the current body on snapshot assertions that need (re)recording; returns what changed.</summary>
+    private static Dictionary<int, string> RecordSnapshots(ApiRequest resolved, ApiResponse response, SnapshotMode mode)
+    {
+        var updates = new Dictionary<int, string>();
+        if (mode == SnapshotMode.Verify)
+            return updates;
+        for (var i = 0; i < resolved.Assertions.Count; i++)
+        {
+            var assertion = resolved.Assertions[i];
+            if (!assertion.Enabled || assertion.Source != ValueSource.Snapshot)
+                continue;
+            if (mode == SnapshotMode.RecordMissing && assertion.Expected.Length > 0)
+                continue;
+            var snapshot = Snapshots.Capture(response);
+            if (snapshot == assertion.Expected)
+                continue;
+            assertion.Expected = snapshot;
+            updates[i] = snapshot;
+        }
+        return updates;
     }
 
     private ApiResponse Finish(ApiResponse response, VariableContext variables, List<TestResult> tests, List<string> log,

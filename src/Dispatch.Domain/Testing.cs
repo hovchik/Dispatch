@@ -13,7 +13,10 @@ public enum ValueSource
     Size,
     MessageCount,
     JsonSchema,
-    Contract
+    Contract,
+
+    /// <summary>The body must match a stored snapshot (<see cref="Assertion.Expected"/>); Path lists ignore paths.</summary>
+    Snapshot
 }
 
 public enum AssertionOperator

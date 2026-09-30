@@ -76,6 +76,9 @@ public sealed class ApiResponse
     /// <summary>The subset of <see cref="VariableUpdates"/> written to the environment (to be persisted by the caller).</summary>
     public IReadOnlyDictionary<string, string> EnvironmentUpdates { get; set; } = new Dictionary<string, string>();
 
+    /// <summary>Snapshots recorded during this send, by assertion index (the caller stores them on the request).</summary>
+    public IReadOnlyDictionary<int, string> SnapshotUpdates { get; set; } = new Dictionary<int, string>();
+
     /// <summary>Set when an OAuth 2.0 token was fetched or refreshed, so the caller can cache it on the request.</summary>
     public AuthSettings? RefreshedAuth { get; set; }
 

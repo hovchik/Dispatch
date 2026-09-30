@@ -558,6 +558,8 @@
                 <Button Content="+ Time" Padding="8,2" FontSize="12" Command="{Binding AddAssertionFromResponseCommand}" CommandParameter="time" />
                 <Button Content="+ Contract" Padding="8,2" FontSize="12" Command="{Binding AddAssertionFromResponseCommand}" CommandParameter="schema"
                         ToolTip.Tip="Validate against the collection's OpenAPI document" />
+                <Button Content="+ Snapshot" Padding="8,2" FontSize="12" Command="{Binding AddAssertionFromResponseCommand}" CommandParameter="snapshot"
+                        ToolTip.Tip="Later responses must match this one (JSON compared structurally; ignore paths for changing values)" />
                 <Button Content="Add" Classes="accent" Padding="10,2" FontSize="12" Command="{Binding Assertions.AddCommand}" />
               </StackPanel>
             </Grid>
@@ -577,9 +579,15 @@
                             <TextBox Grid.Column="2" Classes="mono" Text="{Binding Path}" Watermark="{Binding PathWatermark}"
                                      IsEnabled="{Binding NeedsPath}" Margin="6,0" MinHeight="28" />
                             <ComboBox Grid.Column="3" ItemsSource="{x:Static ed:AssertionsEditor.Operators}" SelectedItem="{Binding Operator}"
-                                      Classes="compact" MinWidth="130" ItemTemplate="{StaticResource EnumLabel}" IsVisible="{Binding !IsSchema}" />
+                                      Classes="compact" MinWidth="130" ItemTemplate="{StaticResource EnumLabel}" IsVisible="{Binding ShowOperator}" />
                             <TextBox Grid.Column="4" Classes="mono" Text="{Binding Expected}" Watermark="Expected value (can use {{vars}})"
-                                     IsEnabled="{Binding NeedsExpected}" Margin="6,0" MinHeight="28" />
+                                     IsEnabled="{Binding NeedsExpected}" Margin="6,0" MinHeight="28" IsVisible="{Binding ShowExpectedBox}" />
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" Margin="6,0" IsVisible="{Binding IsSnapshot}">
+                              <TextBlock Text="{Binding SnapshotSummary}" Classes="muted" FontSize="12" VerticalAlignment="Center"
+                                         ToolTip.Tip="{Binding Expected}" TextTrimming="CharacterEllipsis" />
+                              <Button Content="Reset" Padding="6,1" FontSize="11" Command="{Binding ResetSnapshotCommand}"
+                                      ToolTip.Tip="Forget the stored snapshot; the next response is recorded" />
+                            </StackPanel>
                             <TextBlock Grid.Column="5" Text="{Binding Passed, Converter={x:Static conv:PassTextConverter.Instance}}"
                                        Foreground="{Binding Passed, Converter={x:Static conv:PassBrushConverter.Instance}}"
                                        FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />

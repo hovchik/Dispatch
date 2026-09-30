@@ -83,7 +83,8 @@ public sealed partial class AssertionRow : ObservableObject
     [ObservableProperty] private bool _enabled = true;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(NeedsPath), nameof(NeedsExpected), nameof(PathWatermark), nameof(IsSchema))]
+    [NotifyPropertyChangedFor(nameof(NeedsPath), nameof(NeedsExpected), nameof(PathWatermark), nameof(IsSchema), nameof(IsSnapshot),
+        nameof(ShowOperator), nameof(ShowExpectedBox))]
     private ValueSource _source;
 
     [ObservableProperty] private string _path = "";
@@ -92,17 +93,31 @@ public sealed partial class AssertionRow : ObservableObject
     [NotifyPropertyChangedFor(nameof(NeedsExpected))]
     private AssertionOperator _operator;
 
-    [ObservableProperty] private string _expected = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SnapshotSummary))]
+    private string _expected = "";
 
     /// <summary>Latest outcome after a send (null before the first run).</summary>
     [ObservableProperty] private bool? _passed;
 
     public bool NeedsPath => Source is ValueSource.Header or ValueSource.JsonPath or ValueSource.XPath or ValueSource.Regex
-        or ValueSource.JsonSchema or ValueSource.Contract;
+        or ValueSource.JsonSchema or ValueSource.Contract or ValueSource.Snapshot;
+
+    public bool IsSnapshot => Source == ValueSource.Snapshot;
+    public bool ShowOperator => !IsSchema && !IsSnapshot;
+    public bool ShowExpectedBox => !IsSnapshot;
+
+    public string SnapshotSummary => Expected.Length == 0
+        ? "Not recorded yet: the next response becomes the snapshot"
+        : $"Snapshot: {Expected.Split('\n').Length} line(s), {Expected.Length:N0} chars";
+
+    /// <summary>Clears the stored snapshot so the next response is recorded again.</summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void ResetSnapshot() => Expected = "";
 
     public bool IsSchema => Source is ValueSource.JsonSchema or ValueSource.Contract;
 
-    public bool NeedsExpected => !IsSchema && Operator is not (AssertionOperator.Exists or AssertionOperator.NotExists
+    public bool NeedsExpected => !IsSchema && !IsSnapshot && Operator is not (AssertionOperator.Exists or AssertionOperator.NotExists
         or AssertionOperator.IsEmpty or AssertionOperator.IsNotEmpty or AssertionOperator.IsValid);
 
     public string PathWatermark => Source switch
@@ -113,6 +128,7 @@ public sealed partial class AssertionRow : ObservableObject
         ValueSource.Regex => "regex, first group is used",
         ValueSource.JsonSchema => "Inline JSON schema or path to a .json file",
         ValueSource.Contract => "OpenAPI file/URL (default: the collection's spec)",
+        ValueSource.Snapshot => "Ignore paths: $.createdAt, $..id",
         _ => ""
     };
 }
@@ -133,6 +149,14 @@ public sealed class AssertionsEditor : RowListEditor<AssertionRow, Assertion>
     };
 
     protected override Assertion NewModel() => new() { Source = ValueSource.Status, Operator = AssertionOperator.Equals, Expected = "200" };
+
+    /// <summary>Stores snapshots recorded during a send on the matching rows (by position).</summary>
+    public void ApplySnapshots(IReadOnlyDictionary<int, string> snapshots)
+    {
+        foreach (var (index, snapshot) in snapshots)
+            if (index < Rows.Count && Rows[index].IsSnapshot)
+                Rows[index].Expected = snapshot;
+    }
 
     /// <summary>Marks rows with the latest results (matched by description).</summary>
     public void ShowResults(IReadOnlyList<TestResult> results)

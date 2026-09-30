@@ -107,6 +107,43 @@ public sealed class Workspace(IServiceProvider services)
         }
     }
 
+    /// <summary>
+    /// Writes changed requests back to where the collection came from: the app database, a Dispatch file or a Dispatch
+    /// folder. Other formats (Postman, OpenAPI, ...) are left untouched and a Dispatch file is written next to them.
+    /// </summary>
+    public async Task<string> SaveCollectionAsync(RequestCollection collection, string source, IReadOnlyList<ApiEnvironment> bundled,
+        IEnumerable<Guid> changedRequests)
+    {
+        if (Directory.Exists(source))
+        {
+            DispatchFormat.ExportFolder(collection, source, bundled);
+            return Path.GetFullPath(source);
+        }
+        if (File.Exists(source))
+        {
+            var isDispatch = false;
+            try
+            {
+                isDispatch = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(source)) is { } root && DispatchFormat.IsDispatchJson(root);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+            }
+            var target = isDispatch ? source : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(source))!, DispatchFormat.Slug(collection.Name) + ".dispatch.json");
+            await File.WriteAllTextAsync(target, DispatchFormat.ExportCollection(collection, bundled));
+            return Path.GetFullPath(target);
+        }
+        if (source.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            throw new UsageException("Cannot write snapshots back to a URL; download the collection first.");
+
+        await EnsureDatabaseAsync();
+        var repository = services.GetRequiredService<ICollectionRepository>();
+        var changed = changedRequests.ToHashSet();
+        foreach (var request in collection.Requests.Where(r => changed.Contains(r.Id)))
+            await repository.SaveRequestAsync(request);
+        return $"saved collection '{collection.Name}'";
+    }
+
     public async Task SaveEnvironmentAsync(ApiEnvironment environment)
     {
         await EnsureDatabaseAsync();

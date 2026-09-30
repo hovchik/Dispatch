@@ -43,6 +43,7 @@ public static class Program
           -r, --reporter <list>        cli, junit, html, json (default cli)
           -o, --out <dir>              Where report files go (default ./dispatch-reports)
               --save-env               Write variables set during the run back to a saved environment
+              --update-snapshots       Record the current responses as the new snapshots (and save them)
               --no-color               Plain console output
               --db <path>              Dispatch database (default: the desktop app's)
 
