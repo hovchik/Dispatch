@@ -93,10 +93,8 @@
             <Panel>
               <TextBlock IsVisible="{Binding IsBodyNone}" Classes="muted" HorizontalAlignment="Center"
                          VerticalAlignment="Center" Text="This request does not have a body." />
-              <TextBox IsVisible="{Binding IsBodyText}" Classes="mono" Text="{Binding BodyText}"
-                       AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
-                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                       ScrollViewer.VerticalScrollBarVisibility="Auto" />
+              <views:CodeEditor IsVisible="{Binding IsBodyText}" Text="{Binding BodyText}"
+                                Format="{Binding BodyFormat}" />
               <Panel IsVisible="{Binding IsBodyForm}">
                 <views:KeyValueEditor DataContext="{Binding FormFields}" />
               </Panel>

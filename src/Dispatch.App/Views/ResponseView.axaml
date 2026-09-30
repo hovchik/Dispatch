@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Dispatch.App.ViewModels"
              xmlns:conv="using:Dispatch.App.Converters"
+             xmlns:views="using:Dispatch.App.Views"
              xmlns:domain="using:Dispatch.Domain"
              xmlns:fmt="using:Dispatch.Application.Formatting"
              x:Class="Dispatch.App.Views.ResponseView"
@@ -60,10 +61,8 @@
             <TextBlock IsVisible="{Binding IsTruncated}" Classes="muted" VerticalAlignment="Center"
                        Text="Large response: only the first 5 MB is shown." />
           </StackPanel>
-          <TextBox Classes="mono" Text="{Binding DisplayBody, Mode=OneWay}" IsReadOnly="True"
-                   AcceptsReturn="True" TextWrapping="NoWrap"
-                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                   ScrollViewer.VerticalScrollBarVisibility="Auto" />
+          <views:CodeEditor Text="{Binding DisplayBody, Mode=OneWay}" Format="{Binding SelectedFormat}"
+                            IsReadOnly="True" />
         </DockPanel>
       </TabItem>
       <TabItem>
