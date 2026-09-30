@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package dispatch.interop;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/empty.proto";
+
+option csharp_namespace = "Dispatch.Tests.Interop";
+
+// Exercises the protobuf features the dynamic codec must handle.
+service Showcase {
+  rpc Echo (Everything) returns (Everything);
+  rpc Count (CountRequest) returns (stream Tick);
+  rpc Sum (stream Number) returns (Total);
+  rpc Chat (stream Line) returns (stream Line);
+  rpc Fail (google.protobuf.Empty) returns (google.protobuf.Empty);
+  rpc Slow (google.protobuf.Empty) returns (google.protobuf.Empty);
+}
+
+enum Color {
+  COLOR_UNSPECIFIED = 0;
+  RED = 1;
+  GREEN = 2;
+}
+
+message Everything {
+  string name = 1;
+  int32 small = 2;
+  int64 big = 3;
+  uint64 ubig = 4;
+  sint32 zig = 5;
+  double ratio = 6;
+  float approx = 7;
+  bool flag = 8;
+  bytes blob = 9;
+  Color color = 10;
+  repeated int32 numbers = 11;
+  repeated string tags = 12;
+  map<string, int32> counts = 13;
+  map<int32, Nested> by_id = 14;
+  Nested nested = 15;
+  repeated Nested items = 16;
+  oneof choice {
+    string text = 17;
+    int32 code = 18;
+  }
+  google.protobuf.Timestamp when = 19;
+  google.protobuf.Duration took = 20;
+  google.protobuf.Struct extra = 21;
+  google.protobuf.StringValue maybe = 22;
+  optional int32 opt = 23;
+  fixed64 f64 = 24;
+  sfixed32 sf32 = 25;
+
+  message Nested {
+    string label = 1;
+    repeated Color colors = 2;
+  }
+}
+
+message CountRequest { int32 to = 1; }
+message Tick { int32 n = 1; }
+message Number { int64 value = 1; }
+message Total { int64 sum = 1; int32 count = 2; }
+message Line { string text = 1; }

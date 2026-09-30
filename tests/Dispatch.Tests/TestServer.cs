@@ -21,13 +21,15 @@ public sealed class TestServer : IAsyncDisposable
     public string Host => new Uri(BaseUrl).Authority;
 
     /// <param name="http2Only">Cleartext HTTP/2 (h2c), as gRPC needs.</param>
-    public static async Task<TestServer> StartAsync(Action<WebApplication> configure, bool http2Only = false)
+    public static async Task<TestServer> StartAsync(Action<WebApplication> configure, bool http2Only = false,
+        Action<IServiceCollection>? services = null)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(k => k.Listen(System.Net.IPAddress.Loopback, 0,
             o => o.Protocols = http2Only ? HttpProtocols.Http2 : HttpProtocols.Http1AndHttp2));
         builder.Services.AddRouting();
+        services?.Invoke(builder.Services);
         var app = builder.Build();
         app.UseWebSockets();
         configure(app);

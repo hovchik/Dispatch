@@ -3,6 +3,7 @@ using Dispatch.Application.Requests;
 using Dispatch.Infrastructure.Http;
 using Dispatch.Infrastructure.Persistence;
 using Dispatch.Infrastructure.Protocols;
+using Dispatch.Infrastructure.Protocols.Grpc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -46,6 +47,8 @@ public static class DependencyInjection
         services.AddSingleton<IProtocolExecutor, WebSocketExecutor>();
         services.AddSingleton<IProtocolExecutor, SseExecutor>();
         services.AddSingleton<IProtocolExecutor, SocketIoExecutor>();
+        services.AddSingleton<GrpcSchemaProvider>();
+        services.AddSingleton<IProtocolExecutor, GrpcExecutor>();
 
         services.AddSingleton<IRequestSender, RequestSender>();
         return services;

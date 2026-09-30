@@ -10,6 +10,13 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <!-- A real gRPC server (generated code + official reflection) to prove wire compatibility of the dynamic client. -->
+    <PackageReference Include="Grpc.AspNetCore" />
+    <PackageReference Include="Grpc.AspNetCore.Server.Reflection" />
+  </ItemGroup>
+  <ItemGroup>
+    <Protobuf Include="Protos\interop.proto" GrpcServices="Server" />
+    <None Include="Protos\interop.proto" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <!-- In-process Kestrel servers for protocol integration tests. -->
