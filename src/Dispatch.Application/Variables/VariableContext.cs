@@ -17,6 +17,9 @@ public sealed class VariableContext
     /// <summary>Environment variables changed during this send; the caller persists them.</summary>
     public Dictionary<string, string> EnvironmentUpdates { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Zero-based iteration of a collection run (0 outside a run).</summary>
+    public int Iteration { get; set; }
+
     /// <summary>Global variables changed during this send; the caller persists them.</summary>
     public Dictionary<string, string> GlobalUpdates { get; } = new(StringComparer.Ordinal);
 

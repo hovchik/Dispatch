@@ -4,6 +4,7 @@ using Dispatch.Infrastructure.Auth;
 using Dispatch.Infrastructure.Http;
 using Dispatch.Infrastructure.Persistence;
 using Dispatch.Infrastructure.Protocols;
+using Dispatch.Infrastructure.Scripting;
 using Dispatch.Infrastructure.Protocols.Grpc;
 using Dispatch.Infrastructure.Protocols.Messaging;
 using Microsoft.EntityFrameworkCore;
@@ -40,6 +41,7 @@ public static class DependencyInjection
         services.AddSingleton<SystemBrowserInteraction>();
         services.AddSingleton<IOAuth2Interaction>(sp => sp.GetRequiredService<SystemBrowserInteraction>());
         services.AddSingleton<IOAuth2TokenProvider, OAuth2TokenProvider>();
+        services.AddSingleton<IScriptRunner, JintScriptRunner>();
 
         services.AddSingleton<IRequestExecutor, HttpRequestExecutor>();
         services.AddSingleton<IRequestMessageBuilder, RequestMessageBuilder>();
