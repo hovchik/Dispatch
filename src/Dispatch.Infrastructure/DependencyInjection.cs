@@ -4,6 +4,7 @@ using Dispatch.Infrastructure.Http;
 using Dispatch.Infrastructure.Persistence;
 using Dispatch.Infrastructure.Protocols;
 using Dispatch.Infrastructure.Protocols.Grpc;
+using Dispatch.Infrastructure.Protocols.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -51,6 +52,10 @@ public static class DependencyInjection
         services.AddSingleton<IProtocolExecutor, SoapExecutor>();
         services.AddSingleton<GrpcSchemaProvider>();
         services.AddSingleton<IProtocolExecutor, GrpcExecutor>();
+        services.AddSingleton<IProtocolExecutor, MqttExecutor>();
+        services.AddSingleton<IProtocolExecutor, KafkaExecutor>();
+        services.AddSingleton<IProtocolExecutor, AmqpExecutor>();
+        services.AddSingleton<IProtocolExecutor, SocketExecutor>();
 
         services.AddSingleton<IRequestSender, RequestSender>();
         return services;

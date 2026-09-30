@@ -13,6 +13,7 @@
     <!-- A real gRPC server (generated code + official reflection) to prove wire compatibility of the dynamic client. -->
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="Grpc.AspNetCore.Server.Reflection" />
+    <PackageReference Include="MQTTnet.Server" />
   </ItemGroup>
   <ItemGroup>
     <Protobuf Include="Protos\interop.proto" GrpcServices="Server" />
