@@ -29,6 +29,8 @@ public sealed record MainServices(
     CollectionRunner Runner,
     LoadTester LoadTester,
     Dispatch.Application.Security.SecurityScanner Scanner,
+    Dispatch.Application.Minimize.RequestMinimizer Minimizer,
+    Dispatch.Application.RateLimits.RateLimitProber RateLimits,
     IFlowRepository Flows,
     Dispatch.Application.Flows.FlowRunner FlowRunner,
     IMonitorRepository Monitors,
@@ -124,6 +126,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
     public void ShowCode(ApiRequest request, ApiRequest resolved) =>
         Dialogs.ShowTool(new CodeSnippetViewModel(request, resolved, _services.Tabs.Clipboard));
+
+    public void ShowMinimizer(ApiRequest request) =>
+        Dialogs.ShowTool(new MinimizeViewModel(request, _services.Minimizer, Dialogs, _services.Tabs.Clipboard, () => ActiveEnvironment,
+            FindCollection(request.CollectionId)?.Variables, AddTab));
+
+    public void ShowRateLimit(ApiRequest request) =>
+        Dialogs.ShowTool(new RateLimitViewModel(request, _services.RateLimits, Dialogs, () => ActiveEnvironment,
+            FindCollection(request.CollectionId)?.Variables));
 
     public void ShowDiff(string title, ResponseViewModel left, ResponseViewModel right) =>
         Dialogs.ShowTool(new DiffViewModel(title, "Previous", "Latest", left.PrettyBody, right.PrettyBody, left.StatusText, right.StatusText));

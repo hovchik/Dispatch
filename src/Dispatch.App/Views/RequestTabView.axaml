@@ -76,10 +76,27 @@
           <TextBlock Text="{Binding SendLabel}" FontWeight="SemiBold" />
         </StackPanel>
       </Button>
-      <Button Grid.Column="2" Classes="icon" Margin="6,0,0,0" Command="{Binding ShowCodeCommand}"
-              ToolTip.Tip="Generate code (cURL, Python, C#, JavaScript, Go, grpcurl…)">
-        <PathIcon Data="{StaticResource IconCode}" Width="16" Height="16" />
-      </Button>
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="6,0,0,0" Spacing="2">
+        <Button Classes="icon" Command="{Binding ShowCodeCommand}"
+                ToolTip.Tip="Generate code (cURL, Python, C#, JavaScript, Go, grpcurl…)">
+          <PathIcon Data="{StaticResource IconCode}" Width="16" Height="16" />
+        </Button>
+        <Button Classes="icon" IsVisible="{Binding SupportsProbeTools}" ToolTip.Tip="Request tools: minimize, rate-limit mapper">
+          <PathIcon Data="{StaticResource IconFlask}" Width="15" Height="15" />
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedRight">
+              <MenuItem Header="Minimize request…" Command="{Binding MinimizeCommand}"
+                        ToolTip.Tip="Find the headers, cookies, params and body fields this response really depends on">
+                <MenuItem.Icon><PathIcon Data="{StaticResource IconFlask}" Width="12" Height="12" /></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="Probe rate limit…" Command="{Binding ProbeRateLimitCommand}"
+                        ToolTip.Tip="Discover the endpoint's real rate-limit policy and check its headers">
+                <MenuItem.Icon><PathIcon Data="{StaticResource IconGauge}" Width="12" Height="12" /></MenuItem.Icon>
+              </MenuItem>
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+      </StackPanel>
     </Grid>
 
     <!-- Request editors / response, split vertically -->

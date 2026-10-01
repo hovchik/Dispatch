@@ -22,6 +22,8 @@ public interface ITabHost
     void CloseTab(RequestTabViewModel tab);
     void ReportError(string message);
     void ShowCode(ApiRequest request, ApiRequest resolved);
+    void ShowMinimizer(ApiRequest request);
+    void ShowRateLimit(ApiRequest request);
     void ShowDiff(string title, ResponseViewModel left, ResponseViewModel right);
     void ShowHelp(string? topicId);
 }
@@ -155,7 +157,8 @@ public sealed partial class RequestTabViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsHttp), nameof(IsGraphQl), nameof(IsGrpc), nameof(IsSoap), nameof(IsWebSocket), nameof(IsSse),
         nameof(IsSocketIo), nameof(IsMqtt), nameof(IsKafka), nameof(IsAmqp), nameof(IsSocket), nameof(ShowMethod), nameof(ShowParams),
         nameof(ShowHeaders), nameof(ShowAuth), nameof(ShowHttpBody), nameof(ShowSettings), nameof(IsStreamingKind), nameof(CanCompose),
-        nameof(SendLabel), nameof(UrlWatermark), nameof(HeadersLabel), nameof(IsSessionKind), nameof(BodyFormat), nameof(Badge))]
+        nameof(SendLabel), nameof(UrlWatermark), nameof(HeadersLabel), nameof(IsSessionKind), nameof(BodyFormat), nameof(Badge),
+        nameof(SupportsProbeTools))]
     private RequestKind _kind;
 
     [ObservableProperty]
@@ -649,6 +652,15 @@ public sealed partial class RequestTabViewModel : ObservableObject
 
     [RelayCommand]
     private void ShowCode() => _host.ShowCode(ToModel(), Resolve(ToModel()));
+
+    /// <summary>The experimental request tools work on HTTP-style requests (headers, query, body).</summary>
+    public bool SupportsProbeTools => Kind is RequestKind.Http or RequestKind.GraphQl or RequestKind.Soap;
+
+    [RelayCommand]
+    private void Minimize() => _host.ShowMinimizer(ToModel());
+
+    [RelayCommand]
+    private void ProbeRateLimit() => _host.ShowRateLimit(ToModel());
 
     [RelayCommand]
     private void CompareWithPrevious()

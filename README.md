@@ -53,6 +53,25 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
   bounded active probes (injection and reflection, boundary input, missing authentication) for APIs you are
   authorised to test. `dispatch scan --fail-on high` gates CI; reports export to HTML / JSON.
 
+### Experimental: request forensics
+
+Two investigative tools that go beyond what API clients usually offer. Open them from the flask button next to
+**Send** and from the CLI:
+
+* **Request minimizer** (delta debugging for HTTP): give it a request and its outcome, such as a 403, a 500, a failing
+  assertion, a success, or a body containing some text. It keeps re-sending the request with headers, individual
+  cookies, query parameters, auth, form fields and JSON members removed (in halves, then smaller groups, one nesting
+  level at a time). It ends with the smallest request that gives the same outcome. Minimize a failure to see exactly
+  what triggers it; minimize a success to see what an endpoint really requires. The result is re-sent to confirm it,
+  and you can open it in a tab, copy it as cURL, or export an HTML / JSON report.
+  `dispatch minimize <collection> --request "Create order" [--match status|class|tests|body --contains text]`
+* **Rate-limit mapper**: it probes one endpoint to find its real policy. It measures **burst capacity**, **recovery
+  time**, and whether capacity comes back **all at once (fixed window)** or **gradually (token bucket / sliding window)**,
+  including the refill rate. It also checks the `X-RateLimit-*`, `RateLimit-*` and `Retry-After` headers against what
+  actually happened: a Retry-After that is too optimistic, an advertised limit that doesn't match, or a 429 that still
+  reports remaining quota. `dispatch ratelimit <collection> --request Login --expect-limit` fails CI when an endpoint
+  has no rate limit.
+
 ## Developer tools
 
 * **Import**: Postman (collections and environments), OpenAPI / Swagger (JSON or YAML), Insomnia, HAR, WSDL,
@@ -121,6 +140,8 @@ dotnet run --project src/Dispatch.Cli -- run tests/api.dispatch.json --update-sn
 dotnet run --project src/Dispatch.Cli -- flow "My Collection" --name "Login smoke"
 dotnet run --project src/Dispatch.Cli -- scan petstore.yaml --fail-on high -r cli,html
 dotnet run --project src/Dispatch.Cli -- docs "My Collection" --format html -o api.html
+dotnet run --project src/Dispatch.Cli -- minimize "My Collection" --request "Create order" -r cli,html
+dotnet run --project src/Dispatch.Cli -- ratelimit "My Collection" --request Login --expect-limit
 dotnet run --project src/Dispatch.Cli -- monitor --watch
 dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
 ```

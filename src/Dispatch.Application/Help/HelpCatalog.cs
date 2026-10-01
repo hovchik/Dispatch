@@ -65,6 +65,8 @@ public static class HelpCatalog
     public const string Flows = "flows";
     public const string Monitors = "monitors";
     public const string SecurityScan = "security-scan";
+    public const string Minimize = "minimize";
+    public const string RateLimit = "rate-limit";
     public const string Capture = "capture";
     public const string ImportExport = "import-export";
     public const string Docs = "docs";
@@ -273,6 +275,40 @@ public static class HelpCatalog
         ["security", "scan", "vulnerability", "headers", "cors", "injection", "owasp", "pentest"],
         null, [Cli]),
 
+        new(Minimize, "Tools", "Minimize a request", "Find the parts of a request its outcome really depends on.",
+        [
+            new HelpParagraph("Minimize takes a request and its current outcome (a 403, a 500, a failing assertion, or a success) and keeps re-sending it with parts taken away: headers, individual cookies, query parameters, auth, form fields and JSON body members. It ends with the smallest request that still gives the same outcome."),
+            new HelpSteps(
+            [
+                "Open a request and choose Tools → Minimize request… next to the Send button.",
+                "Pick what must stay the same: the status code, the status class (2xx, 4xx…), the status plus which tests fail, or a text the body has to contain.",
+                "Click Minimize. Parts are removed in halves first, then in smaller groups, one level of nesting at a time.",
+                "Required lists what the outcome depends on. Not needed lists everything that made no difference.",
+                "Open the minimal request in a new tab, copy it as cURL, or export an HTML / JSON report."
+            ]),
+            new HelpParagraph("Minimize a failure to find exactly what triggers a bug (\"a 500 only with sort=desc and Accept-Language: fr\"). Minimize a success to learn what an endpoint really requires, such as which of 20 copied browser headers and cookies matter."),
+            new HelpExample("From the command line", "dispatch minimize \"My Collection\" --request \"Create order\"\ndispatch minimize api.dispatch.json --request Search --match body --contains \"Internal error\" -r cli,html"),
+            new HelpTip("Every probe is a real request. For POST, PUT, PATCH or DELETE use a test environment, because each probe can create or change data.")
+        ],
+        ["minimize", "minimise", "reduce", "delta debugging", "ddmin", "root cause", "bisect", "required headers", "smallest", "reproduce"],
+        null, [Assertions, Cli]),
+
+        new(RateLimit, "Tools", "Rate-limit mapper", "Discover an endpoint's real rate limit and check its headers.",
+        [
+            new HelpParagraph("The rate-limit mapper probes one request to learn its real policy. It sends a burst until the first throttled response to measure capacity, then retries until requests are accepted again to measure recovery. A second burst shows whether capacity comes back all at once (a fixed window) or gradually (a token bucket or sliding window), and for gradual refill it measures the refill rate."),
+            new HelpParagraph("Along the way it reads X-RateLimit-*, RateLimit-* and Retry-After headers and checks them against what happened. For example, it flags a Retry-After that is too optimistic, an advertised limit that doesn't match, or a 429 that still claims requests are remaining."),
+            new HelpSteps(
+            [
+                "Open a request (ideally a cheap, read-only GET) and choose Tools → Probe rate limit… next to the Send button.",
+                "Set the request cap, time limit and concurrency, then click Probe.",
+                "Read the summary (e.g. \"100 requests per window of about 60 s\"), the insights and the timeline, and export an HTML / JSON report if needed."
+            ]),
+            new HelpExample("Fail CI when an endpoint has no rate limit", "dispatch ratelimit \"My Collection\" --request Login --max-requests 300 --expect-limit"),
+            new HelpTip("This deliberately sends many requests to one endpoint. Probe only APIs you own or are authorised to test, and preferably not production.")
+        ],
+        ["rate limit", "ratelimit", "throttle", "429", "retry-after", "quota", "token bucket", "sliding window", "fixed window", "burst"],
+        null, [LoadTest, Cli]),
+
         new(Capture, "Tools", "Capture proxy", "Record traffic from a browser or app.",
         [
             new HelpParagraph("Capture starts a local proxy. Point a browser, a mobile app or HTTP(S)_PROXY at it and every exchange is recorded. Save the captures to a collection or export a HAR file."),
@@ -327,7 +363,7 @@ public static class HelpCatalog
         new(Cli, "Tools", "Command line (CI)", "Run collections, flows, scans and mocks headlessly.",
         [
             new HelpParagraph("The dispatch command uses the same engine as the app. Point it at a file, a URL, a Dispatch folder or the name of a collection saved in the app. Exit code 0 means everything passed, 1 means failures, 2 a usage error."),
-            new HelpExample("Common commands", "dispatch run \"My Collection\" -e Staging -r cli,junit,html -o reports\ndispatch run api.dispatch.json --data users.csv --bail\ndispatch flow \"My Collection\" --name \"Login smoke\"\ndispatch mock petstore.yaml --port 4010 --latency 200\ndispatch docs \"My Collection\" --format html -o api.html\ndispatch help"),
+            new HelpExample("Common commands", "dispatch run \"My Collection\" -e Staging -r cli,junit,html -o reports\ndispatch run api.dispatch.json --data users.csv --bail\ndispatch flow \"My Collection\" --name \"Login smoke\"\ndispatch mock petstore.yaml --port 4010 --latency 200\ndispatch docs \"My Collection\" --format html -o api.html\ndispatch minimize \"My Collection\" --request Search\ndispatch ratelimit \"My Collection\" --request Login --expect-limit\ndispatch help"),
             new HelpTip("Export the collection as a git-friendly folder and run it from your repository in CI.")
         ],
         ["cli", "command line", "terminal", "ci", "pipeline", "headless", "github actions", "jenkins", "exit code"],
