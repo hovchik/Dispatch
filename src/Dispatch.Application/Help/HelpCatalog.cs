@@ -255,9 +255,11 @@ public static class HelpCatalog
                 "Add a Request step for login, then an Until step that polls a job until $.status equals done.",
                 "Run it and follow each step's result; run it in CI with dispatch flow."
             ]),
-            new HelpTip("Use flows when the order or a condition matters; use the plain runner when every request is independent.")
+            new HelpTip("Use flows when the order or a condition matters; use the plain runner when every request is independent."),
+            new HelpParagraph("Fork a run (what if…?): every run is recorded. Click Fork… next to any request in the run log, edit its response (or pick a preset: 500, 404, 401, 429, empty lists, timeout) and replay. The flow runs again from the start: requests before the fork are answered from the recording, the forked one gets your response, and the rest are either replayed from the recording (offline, nothing is sent) or sent live. The result lists what changed compared with the original run, e.g. a step that now fails, or loop steps that silently no longer run."),
+            new HelpExample("Fork from the command line", "dispatch flow \"My Collection\" --name \"Order check\" --record run.json\ndispatch flow \"My Collection\" --replay run.json --fork 2 --status 500 --offline\ndispatch flow \"My Collection\" --replay run.json --fork 2 --body @empty-orders.json")
         ],
-        ["flow", "workflow", "if", "loop", "repeat", "for-each", "retry", "until", "poll", "scenario"],
+        ["flow", "workflow", "if", "loop", "repeat", "for-each", "retry", "until", "poll", "scenario", "fork", "replay", "what if", "record"],
         null, [Extraction, Runner]),
 
         new(Monitors, "Tools", "Monitors", "Run a collection on a schedule and get alerts.",

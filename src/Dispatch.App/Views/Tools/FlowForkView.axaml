@@ -1,0 +1,94 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:flows="using:Dispatch.Application.Flows"
+             xmlns:conv="using:Dispatch.App.Converters"
+             xmlns:views="using:Dispatch.App.Views"
+             x:Class="Dispatch.App.Views.Tools.FlowForkView"
+             x:DataType="tools:FlowForkViewModel">
+  <Grid ColumnDefinitions="430,*" Margin="18">
+    <!-- The edited response -->
+    <DockPanel Margin="0,0,16,0">
+      <StackPanel DockPanel.Dock="Top" Spacing="6">
+        <TextBlock Text="What if…" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock TextWrapping="Wrap">
+          <Run Text="{Binding Heading}" FontWeight="SemiBold" /><Run Text=" originally returned " Foreground="{DynamicResource MutedTextBrush}" /><Run Text="{Binding Original}" />
+        </TextBlock>
+        <TextBlock Classes="section" Text="PRESETS" Margin="0,6,0,0" />
+        <WrapPanel>
+          <Button Content="500" Command="{Binding PresetCommand}" CommandParameter="500" Margin="0,0,4,4" Padding="8,2" />
+          <Button Content="503" Command="{Binding PresetCommand}" CommandParameter="503" Margin="0,0,4,4" Padding="8,2" />
+          <Button Content="404" Command="{Binding PresetCommand}" CommandParameter="404" Margin="0,0,4,4" Padding="8,2" />
+          <Button Content="401" Command="{Binding PresetCommand}" CommandParameter="401" Margin="0,0,4,4" Padding="8,2" />
+          <Button Content="429" Command="{Binding PresetCommand}" CommandParameter="429" Margin="0,0,4,4" Padding="8,2" />
+          <Button Content="Empty lists" Command="{Binding PresetCommand}" CommandParameter="empty" Margin="0,0,4,4" Padding="8,2" />
+          <Button Content="Timeout" Command="{Binding PresetCommand}" CommandParameter="timeout" Margin="0,0,4,4" Padding="8,2" />
+          <Button Content="Reset" Command="{Binding PresetCommand}" CommandParameter="reset" Margin="0,0,4,4" Padding="8,2" />
+        </WrapPanel>
+        <TextBlock Classes="section" Text="RESPONSE" Margin="0,6,0,0" />
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" IsEnabled="{Binding !NoResponse}">
+          <NumericUpDown Value="{Binding StatusCode}" Minimum="100" Maximum="599" FormatString="0" Width="120" />
+          <TextBox Grid.Column="1" Text="{Binding Reason}" Watermark="Reason phrase" />
+        </Grid>
+        <CheckBox Content="No response at all (timeout / connection error)" IsChecked="{Binding NoResponse}" />
+      </StackPanel>
+      <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,8,0,0">
+        <TextBlock Classes="section" Text="AFTER THIS REQUEST" />
+        <RadioButton GroupName="after" IsChecked="{Binding Offline}" Content="Replay the rest from the recording (offline, nothing is sent)" />
+        <RadioButton GroupName="after" IsChecked="{Binding !Offline}" Content="Send the rest for real (live)" />
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding ReplayCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" />
+              <TextBlock Text="Replay with this response" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StopCommand}" Content="Stop" />
+        </Grid>
+      </StackPanel>
+      <Border Classes="card" Padding="0" IsEnabled="{Binding !NoResponse}">
+        <views:CodeEditor Text="{Binding Body}" Format="Json" />
+      </Border>
+    </DockPanel>
+
+    <!-- The replay -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,*">
+      <TextBlock Text="{Binding Verdict}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"
+                 IsVisible="{Binding Verdict, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <ItemsControl Grid.Row="1" ItemsSource="{Binding Changes}" Margin="0,6,0,0">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="flows:FlowDivergence">
+            <Border Classes="card" Padding="10,5" Margin="0,0,0,4" BorderBrush="#9A6700" BorderThickness="3,0,0,0">
+              <TextBlock TextWrapping="Wrap">
+                <Run Text="{Binding Step}" FontWeight="SemiBold" /><Run Text="   " /><Run Text="{Binding Before}" Foreground="{DynamicResource MutedTextBrush}" /><Run Text="  →  " /><Run Text="{Binding After}" FontWeight="SemiBold" />
+              </TextBlock>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <TextBlock Grid.Row="2" Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" Margin="0,8,0,6" />
+      <Border Grid.Row="3" Classes="card" Padding="0">
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Log}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="flows:FlowEvent">
+                <Grid ColumnDefinitions="Auto,*,Auto" Margin="8,2">
+                  <TextBlock Text="{Binding Ok, Converter={x:Static conv:PassTextConverter.Instance}}"
+                             Foreground="{Binding Ok, Converter={x:Static conv:PassBrushConverter.Instance}}" FontWeight="Bold"
+                             Margin="{Binding Depth, Converter={x:Static tools:DepthIndentConverter.Instance}}" />
+                  <TextBlock Grid.Column="1" FontSize="12.5" Margin="6,0,0,0" TextWrapping="Wrap">
+                    <Run Text="{Binding ExchangeLabel}" Foreground="{DynamicResource MutedTextBrush}" /><Run Text=" " /><Run Text="{Binding StepName}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Detail}" Foreground="{DynamicResource MutedTextBrush}" />
+                  </TextBlock>
+                  <Border Grid.Column="2" CornerRadius="4" Padding="6,0" VerticalAlignment="Center" Background="{DynamicResource SurfaceAltBrush}"
+                          IsVisible="{Binding OriginLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock Text="{Binding OriginLabel}" FontSize="10.5" />
+                  </Border>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

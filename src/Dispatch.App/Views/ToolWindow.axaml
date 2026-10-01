@@ -19,6 +19,7 @@
     <DataTemplate DataType="tools:LawsViewModel"><tv:LawsView /></DataTemplate>
     <DataTemplate DataType="tools:FlowBuilderViewModel"><tv:FlowBuilderView /></DataTemplate>
     <DataTemplate DataType="tools:FlowManagerViewModel"><tv:FlowManagerView /></DataTemplate>
+    <DataTemplate DataType="tools:FlowForkViewModel"><tv:FlowForkView /></DataTemplate>
     <DataTemplate DataType="tools:MonitorManagerViewModel"><tv:MonitorManagerView /></DataTemplate>
     <DataTemplate DataType="tools:MonitorEditorViewModel"><tv:MonitorEditorView /></DataTemplate>
     <DataTemplate DataType="tools:CaptureViewModel"><tv:CaptureView /></DataTemplate>

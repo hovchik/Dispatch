@@ -156,16 +156,21 @@ public sealed partial class FlowBuilderViewModel : ObservableObject, ITool
     private readonly IFlowRepository _repository;
     private readonly FlowRunner _runner;
     private readonly Func<ApiEnvironment?> _environment;
+    private readonly IDialogService? _dialogs;
     private CancellationTokenSource? _cts;
 
+    /// <summary>The last run, for forking it.</summary>
+    private FlowRecording? _recording;
+
     public FlowBuilderViewModel(RequestCollection collection, TestFlow flow, IFlowRepository repository, FlowRunner runner,
-        Func<ApiEnvironment?> environment)
+        Func<ApiEnvironment?> environment, IDialogService? dialogs = null)
     {
         _collection = collection;
         _flow = flow;
         _repository = repository;
         _runner = runner;
         _environment = environment;
+        _dialogs = dialogs;
         Name = flow.Name;
         RequestChoices = collection.Requests.OrderBy(r => r.Folder).ThenBy(r => r.SortOrder)
             .Select(r => new FlowRequestChoice(r.Id, r.Folder.Length > 0 ? $"{r.Folder}/{r.Name}" : r.Name)).ToList();
@@ -188,7 +193,7 @@ public sealed partial class FlowBuilderViewModel : ObservableObject, ITool
     [ObservableProperty] private bool _isDirty;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StopCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunCommand), nameof(StopCommand), nameof(ForkCommand))]
     private bool _isRunning;
 
     [ObservableProperty] private string _status = "Add steps, then Run. Steps share one set of variables, so values extracted by one request feed the next.";
@@ -312,9 +317,12 @@ public sealed partial class FlowBuilderViewModel : ObservableObject, ITool
                 CollectionVariables = _collection.Variables,
                 CollectionSpec = _collection.SpecLocation
             }, progress, _cts.Token);
+            _recording = result.Recording;
+            ForkCommand.NotifyCanExecuteChanged();
             Status = (result.Passed ? "✓ Passed" : "✗ Failed") +
                      $" · {result.StepsRun} step(s), {result.RequestsSent} request(s), {result.TestsPassed}/{result.TestsPassed + result.TestsFailed} tests · " +
-                     $"{result.Duration.TotalSeconds:0.00} s" + (result.StopReason is { } r ? $" · {r}" : "");
+                     $"{result.Duration.TotalSeconds:0.00} s" + (result.StopReason is { } r ? $" · {r}" : "") +
+                     (result.Recording.Exchanges.Count > 0 ? " · Fork any request in the log to replay the run with a different response." : "");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -329,6 +337,16 @@ public sealed partial class FlowBuilderViewModel : ObservableObject, ITool
     }
 
     private bool CanRun() => !IsRunning;
+
+    private bool CanFork(FlowEvent? e) => !IsRunning && _recording is not null && _dialogs is not null && e?.Exchange is not null;
+
+    /// <summary>Opens the fork editor for one request of the last run.</summary>
+    [RelayCommand(CanExecute = nameof(CanFork))]
+    private void Fork(FlowEvent? e)
+    {
+        if (e?.Exchange is { } ordinal && _recording is not null && _dialogs is not null)
+            _dialogs.ShowTool(new FlowForkViewModel(_collection, _flow.Clone(), _runner, _environment, _recording, ordinal));
+    }
 
     [RelayCommand(CanExecute = nameof(IsRunning))]
     private void Stop() => _cts?.Cancel();
@@ -385,7 +403,7 @@ public sealed partial class FlowManagerViewModel : ObservableObject, ITool
     {
         if (flow is null)
             return;
-        _dialogs.ShowTool(new FlowBuilderViewModel(_collection, flow.Clone(), _repository, _runner, _environment));
+        _dialogs.ShowTool(new FlowBuilderViewModel(_collection, flow.Clone(), _repository, _runner, _environment, _dialogs));
     }
 
     [RelayCommand]
@@ -396,4 +414,155 @@ public sealed partial class FlowManagerViewModel : ObservableObject, ITool
         await _repository.DeleteAsync(flow.Id);
         await LoadAsync();
     }
+}
+
+/// <summary>
+/// "What if" for a flow run: replays the recorded run with one request's response edited, then shows how the rest of
+/// the flow behaves and what changed compared with the original run.
+/// </summary>
+public sealed partial class FlowForkViewModel : ObservableObject, ITool
+{
+    private readonly RequestCollection _collection;
+    private readonly TestFlow _flow;
+    private readonly FlowRunner _runner;
+    private readonly Func<ApiEnvironment?> _environment;
+    private readonly FlowRecording _recording;
+    private readonly RecordedExchange _exchange;
+    private CancellationTokenSource? _cts;
+
+    public FlowForkViewModel(RequestCollection collection, TestFlow flow, FlowRunner runner, Func<ApiEnvironment?> environment,
+        FlowRecording recording, int ordinal)
+    {
+        _collection = collection;
+        _flow = flow;
+        _runner = runner;
+        _environment = environment;
+        _recording = recording;
+        _exchange = recording.Find(ordinal) ?? throw new ArgumentOutOfRangeException(nameof(ordinal));
+        Load(_exchange.Response);
+    }
+
+    public string Title => $"Fork · {_flow.Name} · #{_exchange.Ordinal} {_exchange.StepName}";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.Flows;
+    public double Width => 1100;
+    public double Height => 760;
+
+    public string Original => _exchange.Response.Error is { } error
+        ? $"No response: {error}"
+        : $"{_exchange.Response.StatusCode} {_exchange.Response.ReasonPhrase} · {_exchange.Response.ElapsedMs:0} ms";
+    public string Heading => $"#{_exchange.Ordinal} {_exchange.StepName}";
+
+    public ObservableCollection<FlowEvent> Log { get; } = [];
+    public ObservableCollection<FlowDivergence> Changes { get; } = [];
+
+    [ObservableProperty] private decimal _statusCode;
+    [ObservableProperty] private string _reason = string.Empty;
+    [ObservableProperty] private string _body = string.Empty;
+    [ObservableProperty] private bool _noResponse;
+    [ObservableProperty] private bool _offline = true;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ReplayCommand), nameof(StopCommand))]
+    private bool _isRunning;
+
+    [ObservableProperty] private string _status =
+        "Edit the response, then Replay. Requests before this one are answered from the recording; choose whether later ones are replayed too or sent live.";
+    [ObservableProperty] private string _verdict = string.Empty;
+
+    private void Load(RecordedResponse response)
+    {
+        StatusCode = response.StatusCode;
+        Reason = response.ReasonPhrase;
+        Body = Application.Formatting.BodyFormatter.Pretty(response.Body, response.ContentType);
+        NoResponse = response.Error is not null;
+    }
+
+    private RecordedResponse Edited()
+    {
+        var edited = _exchange.Response.Clone();
+        edited.StatusCode = (int)StatusCode;
+        edited.ReasonPhrase = Reason;
+        edited.Body = Body;
+        edited.Error = NoResponse ? "Simulated: no response (timeout)" : null;
+        return edited;
+    }
+
+    /// <summary>Presets: 500, 404, 401, 429, empty, timeout, reset.</summary>
+    [RelayCommand]
+    private void Preset(string? kind)
+    {
+        var original = _exchange.Response;
+        switch (kind)
+        {
+            case "reset":
+                Load(original);
+                return;
+            case "empty":
+                Body = Application.Formatting.BodyFormatter.Pretty(ForkPresets.EmptyArrays(original).Body, original.ContentType);
+                NoResponse = false;
+                return;
+            case "timeout":
+                NoResponse = true;
+                return;
+            default:
+                if (int.TryParse(kind, out var code))
+                {
+                    StatusCode = code;
+                    Reason = ForkPresets.ReasonFor(code);
+                    Body = code >= 400 ? $$"""{"error":"{{Reason}}"}""" : Body;
+                    NoResponse = false;
+                }
+                return;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanReplay))]
+    private async Task ReplayAsync()
+    {
+        Log.Clear();
+        Changes.Clear();
+        Verdict = string.Empty;
+        IsRunning = true;
+        _cts = new CancellationTokenSource();
+        Status = "Replaying…";
+        try
+        {
+            var result = await _runner.RunAsync(_flow, new FlowRunOptions
+            {
+                Requests = _collection.Requests,
+                Environment = _environment(),
+                CollectionVariables = _collection.Variables,
+                CollectionSpec = _collection.SpecLocation,
+                Fork = new FlowFork
+                {
+                    Recording = _recording, ForkOrdinal = _exchange.Ordinal, Replacement = Edited(),
+                    After = Offline ? AfterFork.Recorded : AfterFork.Live
+                }
+            }, new Progress<FlowEvent>(Log.Add), _cts.Token);
+            foreach (var change in FlowRunDiff.Compare(_recording, result))
+                Changes.Add(change);
+            Verdict = !result.ForkReached ? "The replay never reached this request (the flow took another path)."
+                : Changes.Count == 0 ? "Same outcome as the original run: the flow handles this response."
+                : $"{Changes.Count} difference(s) from the original run.";
+            Status = (result.Passed ? "✓ Passed" : "✗ Failed") + $" · {result.RequestsSent} request(s) · {result.Duration.TotalSeconds:0.00} s" +
+                     (result.StopReason is { } r ? $" · {r}" : "");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Status = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsRunning = false;
+            _cts.Dispose();
+            _cts = null;
+        }
+    }
+
+    private bool CanReplay() => !IsRunning;
+
+    [RelayCommand(CanExecute = nameof(IsRunning))]
+    private void Stop() => _cts?.Cancel();
+
+    public void OnClosed() => _cts?.Cancel();
 }

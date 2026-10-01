@@ -46,6 +46,10 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
   compare with ignore paths, line diff for text. The CLI records with `--update-snapshots`.
 * **Test flows**: chain requests with control flow — if, repeat, for-each, until (retry with a wait), set-variable,
   script, delay and stop/fail — in a visual builder, sharing one set of variables. Run headless with `dispatch flow`.
+  **Fork a run:** every flow run is recorded. Pick any request in the run log, edit its response (500, an empty list,
+  a timeout, or any body) and replay the flow. Requests before the fork come from the recording, and the rest are
+  replayed offline or sent live. The result shows what changed compared with the original run. From the CLI:
+  `dispatch flow --record run.json`, then `--replay run.json --fork 2 --status 500 --offline`.
 * **Monitors**: run a collection on an interval or cron schedule and alert via **Slack, a webhook, or email**
   (every-run / on-failure / on-change, with recovery notices and a response-time ceiling). `dispatch monitor --watch`
   runs them as a daemon; runs are kept as history.
