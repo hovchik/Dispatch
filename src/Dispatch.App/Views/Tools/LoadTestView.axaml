@@ -7,31 +7,39 @@
              x:Class="Dispatch.App.Views.Tools.LoadTestView"
              x:DataType="tools:LoadTestViewModel">
   <UserControl.Styles>
-    <Style Selector="Border.stat">
-      <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
-      <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Padding" Value="12,8" />
+    <Style Selector="Grid.th TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
     </Style>
-    <Style Selector="Border.stat TextBlock.value">
-      <Setter Property="FontSize" Value="20" />
-      <Setter Property="FontWeight" Value="Bold" />
+    <Style Selector="Grid.row TextBlock">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
   </UserControl.Styles>
   <Grid ColumnDefinitions="300,*" Margin="18">
+    <!-- Setup -->
     <DockPanel Margin="0,0,16,0">
       <TextBlock DockPanel.Dock="Top" Text="Load test" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10" />
-      <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,10,0,0">
-        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
-          <TextBlock Classes="label" Text="Virtual users" />
-          <NumericUpDown Grid.Column="1" Value="{Binding Users}" Minimum="1" Maximum="10000" Width="130" FormatString="0" />
-          <TextBlock Grid.Row="1" Classes="label" Text="Duration (s)" />
-          <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding DurationSeconds}" Minimum="1" Maximum="86400" Width="130" FormatString="0" />
-          <TextBlock Grid.Row="2" Classes="label" Text="Ramp-up (s)" />
-          <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding RampUpSeconds}" Minimum="0" Maximum="3600" Width="130" FormatString="0" />
-          <TextBlock Grid.Row="3" Classes="label" Text="Think time (ms)" />
-          <NumericUpDown Grid.Row="3" Grid.Column="1" Value="{Binding ThinkTimeMs}" Minimum="0" Maximum="600000" Width="130" FormatString="0" />
-        </Grid>
-        <CheckBox Content="Evaluate assertions (failures count as errors)" IsChecked="{Binding RunChecks}" />
+      <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,10,0,0">
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="panelTitle" Text="Load profile" Margin="0" />
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6" IsEnabled="{Binding !IsRunning}">
+              <TextBlock Classes="label" Text="Virtual users" />
+              <NumericUpDown Grid.Column="1" Value="{Binding Users}" Minimum="1" Maximum="10000" Width="130" FormatString="0" />
+              <TextBlock Grid.Row="1" Classes="label" Text="Duration (s)" />
+              <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding DurationSeconds}" Minimum="1" Maximum="86400" Width="130" FormatString="0" />
+              <TextBlock Grid.Row="2" Classes="label" Text="Ramp-up (s)" />
+              <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding RampUpSeconds}" Minimum="0" Maximum="3600" Width="130" FormatString="0" />
+              <TextBlock Grid.Row="3" Classes="label" Text="Think time (ms)" />
+              <NumericUpDown Grid.Row="3" Grid.Column="1" Value="{Binding ThinkTimeMs}" Minimum="0" Maximum="600000" Width="130" FormatString="0" />
+            </Grid>
+            <CheckBox IsChecked="{Binding RunChecks}" IsEnabled="{Binding !IsRunning}">
+              <TextBlock Text="Evaluate assertions (failures count as errors)" TextWrapping="Wrap" />
+            </CheckBox>
+          </StackPanel>
+        </Border>
         <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
           <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StartCommand}">
             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -67,64 +75,227 @@
       </Border>
     </DockPanel>
 
-    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,Auto,140,Auto,*">
-      <UniformGrid Columns="4" ColumnSpacing="8" RowSpacing="8">
-        <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="Requests" /><TextBlock Classes="value" Text="{Binding TotalRequests}" /></StackPanel></Border>
-        <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="Req/s" /><TextBlock Classes="value" Text="{Binding RequestsPerSecond}" /></StackPanel></Border>
-        <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="Errors" /><TextBlock Classes="value" Text="{Binding ErrorRate}" /></StackPanel></Border>
-        <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="p50" /><TextBlock Classes="value" Text="{Binding P50}" /></StackPanel></Border>
-        <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="p95" /><TextBlock Classes="value" Text="{Binding P95}" /></StackPanel></Border>
-        <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="p99" /><TextBlock Classes="value" Text="{Binding P99}" /></StackPanel></Border>
-        <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="Active users" /><TextBlock Classes="value" Text="{Binding ActiveUsers}" /></StackPanel></Border>
-      </UniformGrid>
-      <ProgressBar Grid.Row="1" Value="{Binding Progress}" Maximum="100" Height="4" MinHeight="4" Margin="0,10,0,4" />
-      <TextBlock Grid.Row="2" Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" />
-      <TextBlock Grid.Row="3" Classes="section" Text="REQUESTS PER SECOND (RED = SECONDS WITH ERRORS)" Margin="0,12,0,4" />
-      <Border Grid.Row="4" Classes="card" Padding="8">
-        <ItemsControl ItemsSource="{Binding Timeline}" VerticalAlignment="Bottom">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Bottom" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="tools:TimelineBar">
-              <Panel VerticalAlignment="Bottom" ToolTip.Tip="{Binding Tooltip}">
-                <Rectangle Width="5" Height="{Binding Height}" Fill="#FF6C37" RadiusX="1" RadiusY="1" IsVisible="{Binding !HasErrors}" />
-                <Rectangle Width="5" Height="{Binding Height}" Fill="#EF4444" RadiusX="1" RadiusY="1" IsVisible="{Binding HasErrors}" />
-              </Panel>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </Border>
-      <TextBlock Grid.Row="5" Classes="section" Text="PER REQUEST" Margin="0,12,0,4" />
-      <Border Grid.Row="6" Classes="card" Padding="8">
-        <ScrollViewer>
-          <StackPanel Spacing="8">
-            <ItemsControl ItemsSource="{Binding PerRequest}">
+    <TabControl Grid.Column="1" SelectedIndex="{Binding SelectedTab}" Padding="0,8,0,0">
+      <!-- Live -->
+      <TabItem Header="Live">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,140,Auto,*">
+          <UniformGrid Columns="4" ColumnSpacing="8" RowSpacing="8">
+            <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="Requests" /><TextBlock Classes="statvalue" Text="{Binding TotalRequests}" /></StackPanel></Border>
+            <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="Req/s" /><TextBlock Classes="statvalue" Text="{Binding RequestsPerSecond}" /></StackPanel></Border>
+            <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="Errors" /><TextBlock Classes="statvalue" Text="{Binding ErrorRate}" /></StackPanel></Border>
+            <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="Active users" /><TextBlock Classes="statvalue" Text="{Binding ActiveUsers}" /></StackPanel></Border>
+            <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="p50" /><TextBlock Classes="statvalue" Text="{Binding P50}" /></StackPanel></Border>
+            <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="p95" /><TextBlock Classes="statvalue" Text="{Binding P95}" /></StackPanel></Border>
+            <Border Classes="stat"><StackPanel><TextBlock Classes="muted" FontSize="11" Text="p99" /><TextBlock Classes="statvalue" Text="{Binding P99}" /></StackPanel></Border>
+          </UniformGrid>
+          <ProgressBar Grid.Row="1" Value="{Binding Progress}" Maximum="100" Height="4" MinHeight="4" Margin="0,10,0,4" />
+          <TextBlock Grid.Row="2" Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" />
+          <TextBlock Grid.Row="3" Classes="section" Text="REQUESTS PER SECOND (RED = SECONDS WITH ERRORS)" Margin="0,12,0,4" />
+          <Border Grid.Row="4" Classes="card" Padding="8">
+            <ItemsControl ItemsSource="{Binding Timeline}" VerticalAlignment="Bottom">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Bottom" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="load:LoadRequestStats">
-                  <Grid ColumnDefinitions="*,80,80,90,90,90" Margin="0,2">
-                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Column="1" Text="{Binding Count, StringFormat='{}{0} req'}" TextAlignment="Right" />
-                    <TextBlock Grid.Column="2" Text="{Binding Errors, StringFormat='{}{0} err'}" TextAlignment="Right" />
-                    <TextBlock Grid.Column="3" Text="{Binding Latency.P50, StringFormat='p50 {0:0} ms'}" TextAlignment="Right" Classes="muted" />
-                    <TextBlock Grid.Column="4" Text="{Binding Latency.P95, StringFormat='p95 {0:0} ms'}" TextAlignment="Right" Classes="muted" />
-                    <TextBlock Grid.Column="5" Text="{Binding Latency.Max, StringFormat='max {0:0} ms'}" TextAlignment="Right" Classes="muted" />
-                  </Grid>
+                <DataTemplate x:DataType="tools:TimelineBar">
+                  <Panel VerticalAlignment="Bottom" ToolTip.Tip="{Binding Tooltip}">
+                    <Rectangle Width="5" Height="{Binding Height}" Fill="#FF6C37" RadiusX="1" RadiusY="1" IsVisible="{Binding !HasErrors}" />
+                    <Rectangle Width="5" Height="{Binding Height}" Fill="#EF4444" RadiusX="1" RadiusY="1" IsVisible="{Binding HasErrors}" />
+                  </Panel>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <ItemsControl ItemsSource="{Binding Errors}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="x:String">
-                  <SelectableTextBlock Text="{Binding}" Foreground="#EF4444" FontSize="12" TextWrapping="Wrap" />
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
+          </Border>
+          <TextBlock Grid.Row="5" Classes="section" Text="PER REQUEST" Margin="0,12,0,4" />
+          <Border Grid.Row="6" Classes="card" Padding="8">
+            <ScrollViewer>
+              <StackPanel Spacing="8">
+                <ItemsControl ItemsSource="{Binding PerRequest}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="load:LoadRequestStats">
+                      <Grid ColumnDefinitions="*,80,80,90,90,90" Margin="0,2">
+                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Text="{Binding Count, StringFormat='{}{0} req'}" TextAlignment="Right" />
+                        <TextBlock Grid.Column="2" Text="{Binding Errors, StringFormat='{}{0} err'}" TextAlignment="Right" />
+                        <TextBlock Grid.Column="3" Text="{Binding Latency.P50, StringFormat='p50 {0:0} ms'}" TextAlignment="Right" Classes="muted" />
+                        <TextBlock Grid.Column="4" Text="{Binding Latency.P95, StringFormat='p95 {0:0} ms'}" TextAlignment="Right" Classes="muted" />
+                        <TextBlock Grid.Column="5" Text="{Binding Latency.Max, StringFormat='max {0:0} ms'}" TextAlignment="Right" Classes="muted" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ItemsControl ItemsSource="{Binding Errors}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <SelectableTextBlock Text="{Binding}" Foreground="#EF4444" FontSize="12" TextWrapping="Wrap" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </ScrollViewer>
+          </Border>
+        </Grid>
+      </TabItem>
+
+      <!-- Report -->
+      <TabItem Header="Report">
+        <Panel>
+          <StackPanel IsVisible="{Binding !HasReport}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6" MaxWidth="360">
+            <PathIcon Data="{StaticResource IconChart}" Width="32" Height="32" Foreground="{DynamicResource MutedTextBrush}" />
+            <TextBlock Text="No report yet" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock Classes="hint" TextAlignment="Center"
+                       Text="When a test finishes (or you stop it), a detailed report appears here: verdict, insights, latency distribution, status codes and per-request statistics." />
           </StackPanel>
-        </ScrollViewer>
-      </Border>
-    </Grid>
+          <ScrollViewer IsVisible="{Binding HasReport}">
+            <StackPanel Spacing="14" Margin="0,0,10,10">
+              <!-- Header -->
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                <Border Classes="pill" Background="{Binding VerdictBrush}">
+                  <TextBlock Text="{Binding Verdict}" Foreground="White" FontWeight="Bold" FontSize="12" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <TextBlock Text="Test summary" FontSize="16" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding ReportSubtitle}" Classes="muted" FontSize="11.5" TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="2" Command="{Binding OpenReportCommand}" VerticalAlignment="Center" ToolTip.Tip="Open the HTML report in your browser">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource IconExport}" Width="12" Height="12" />
+                    <TextBlock Text="Open in browser" />
+                  </StackPanel>
+                </Button>
+                <DropDownButton Grid.Column="3" Content="Export" VerticalAlignment="Center">
+                  <DropDownButton.Flyout>
+                    <MenuFlyout>
+                      <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+                      <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+                      <MenuItem Header="CSV (per request)…" Command="{Binding ExportCommand}" CommandParameter="csv" />
+                    </MenuFlyout>
+                  </DropDownButton.Flyout>
+                </DropDownButton>
+              </Grid>
+
+              <ItemsControl ItemsSource="{Binding ReportStats}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate><UniformGrid Columns="6" ColumnSpacing="8" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+              </ItemsControl>
+
+              <StackPanel Spacing="0">
+                <TextBlock Classes="section" Text="INSIGHTS" Margin="0,0,0,6" />
+                <ItemsControl ItemsSource="{Binding Insights}" />
+              </StackPanel>
+
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Border Classes="panel">
+                  <StackPanel>
+                    <TextBlock Classes="panelTitle" Text="Latency distribution" />
+                    <ItemsControl ItemsSource="{Binding Histogram}" />
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Classes="panel">
+                  <StackPanel>
+                    <TextBlock Classes="panelTitle" Text="Status codes" />
+                    <ItemsControl ItemsSource="{Binding StatusBars}" />
+                  </StackPanel>
+                </Border>
+              </Grid>
+
+              <Border Classes="panel">
+                <StackPanel>
+                  <TextBlock Classes="panelTitle" Text="Latency percentiles" />
+                  <ItemsControl ItemsSource="{Binding LatencyTiles}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><UniformGrid Columns="6" ColumnSpacing="8" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+
+              <Border Classes="panel">
+                <StackPanel>
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="panelTitle" Text="Requests per second over time" />
+                    <TextBlock Grid.Column="1" Classes="hint" Text="red = seconds with errors · hover a bar for details" />
+                  </Grid>
+                  <!-- One column per second, stretched to the full width. -->
+                  <ItemsControl ItemsSource="{Binding Timeline}" Height="120">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <UniformGrid Rows="1" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="tools:TimelineBar">
+                        <Panel VerticalAlignment="Bottom" Margin="1,0" MaxWidth="28" ToolTip.Tip="{Binding Tooltip}" Background="Transparent">
+                          <Rectangle Height="{Binding Height}" Fill="#FF6C37" RadiusX="1" RadiusY="1" IsVisible="{Binding !HasErrors}" />
+                          <Rectangle Height="{Binding Height}" Fill="#EF4444" RadiusX="1" RadiusY="1" IsVisible="{Binding HasErrors}" />
+                        </Panel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+
+              <Border Classes="panel">
+                <StackPanel Spacing="2">
+                  <TextBlock Classes="panelTitle" Text="Per request (slowest first, latency in ms)" />
+                  <Grid Classes="th" ColumnDefinitions="*,64,56,56,52,52,52,52,52,52" Margin="0,0,0,4">
+                    <TextBlock Text="REQUEST" />
+                    <TextBlock Grid.Column="1" Text="COUNT" TextAlignment="Right" />
+                    <TextBlock Grid.Column="2" Text="ERRORS" TextAlignment="Right" />
+                    <TextBlock Grid.Column="3" Text="ERR %" TextAlignment="Right" />
+                    <TextBlock Grid.Column="4" Text="AVG" TextAlignment="Right" />
+                    <TextBlock Grid.Column="5" Text="P50" TextAlignment="Right" />
+                    <TextBlock Grid.Column="6" Text="P90" TextAlignment="Right" />
+                    <TextBlock Grid.Column="7" Text="P95" TextAlignment="Right" />
+                    <TextBlock Grid.Column="8" Text="P99" TextAlignment="Right" />
+                    <TextBlock Grid.Column="9" Text="MAX" TextAlignment="Right" />
+                  </Grid>
+                  <ItemsControl ItemsSource="{Binding ReportRequests}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="tools:LoadRequestRow">
+                        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,5">
+                          <StackPanel>
+                            <Grid Classes="row" ColumnDefinitions="*,64,56,56,52,52,52,52,52,52">
+                              <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" ToolTip.Tip="{Binding Name}" />
+                              <TextBlock Grid.Column="1" Text="{Binding Count}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="2" Text="{Binding Errors}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="3" Text="{Binding ErrorRate}" TextAlignment="Right" Foreground="#EF4444" IsVisible="{Binding HasErrors}" />
+                              <TextBlock Grid.Column="3" Text="{Binding ErrorRate}" TextAlignment="Right" Classes="muted" IsVisible="{Binding !HasErrors}" />
+                              <TextBlock Grid.Column="4" Text="{Binding Mean}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="5" Text="{Binding P50}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="6" Text="{Binding P90}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="7" Text="{Binding P95}" TextAlignment="Right" FontWeight="SemiBold" />
+                              <TextBlock Grid.Column="8" Text="{Binding P99}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="9" Text="{Binding Max}" TextAlignment="Right" />
+                            </Grid>
+                            <TextBlock Text="{Binding Statuses, StringFormat='status {0}'}" Classes="muted" FontSize="11" />
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+
+              <Border Classes="panel" IsVisible="{Binding HasSampleErrors}">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="panelTitle" Text="Errors (distinct samples)" />
+                  <ItemsControl ItemsSource="{Binding Errors}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <SelectableTextBlock Text="{Binding}" Foreground="#EF4444" FontSize="12" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap" Margin="0,2" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </Panel>
+      </TabItem>
+    </TabControl>
   </Grid>
 </UserControl>

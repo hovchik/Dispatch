@@ -19,15 +19,16 @@ public sealed class MethodBrushConverter : IValueConverter
     private static readonly IBrush Delete = Brush("#EF4444");
     private static readonly IBrush Other = Brush("#8B8F98");
 
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value switch
-    {
-        HttpVerb.Get => Get,
-        HttpVerb.Post => Post,
-        HttpVerb.Put => Put,
-        HttpVerb.Patch => Patch,
-        HttpVerb.Delete => Delete,
-        _ => Other
-    };
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        (value is string text && Enum.TryParse<HttpVerb>(text, ignoreCase: true, out var verb) ? verb : value) switch
+        {
+            HttpVerb.Get => Get,
+            HttpVerb.Post => Post,
+            HttpVerb.Put => Put,
+            HttpVerb.Patch => Patch,
+            HttpVerb.Delete => Delete,
+            _ => Other
+        };
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();

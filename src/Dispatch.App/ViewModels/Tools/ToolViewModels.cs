@@ -601,48 +601,214 @@ public sealed class EnabledBrush : Avalonia.Data.Converters.IValueConverter
     public object? ConvertBack(object? value, Type t, object? p, System.Globalization.CultureInfo c) => null;
 }
 
-/// <summary>The traffic capture proxy: start it, watch requests arrive, save them to a collection or HAR.</summary>
+/// <summary>The traffic capture proxy: start it, watch requests arrive, inspect them, report on them, save them.</summary>
 public sealed partial class CaptureViewModel : ObservableObject, ITool
 {
+    private const int MaxExchanges = 1000;
     private readonly Dispatch.Infrastructure.Capture.CaptureProxy _proxy;
     private readonly Dispatch.Infrastructure.Capture.CertificateAuthority _authority;
     private readonly IDialogService _dialogs;
+    private readonly IClipboardService _clipboard;
     private readonly ICollectionRepository _collections;
     private readonly Func<Task> _onSaved;
 
     public CaptureViewModel(Dispatch.Infrastructure.Capture.CaptureProxy proxy, Dispatch.Infrastructure.Capture.CertificateAuthority authority,
-        IDialogService dialogs, ICollectionRepository collections, Func<Task> onSaved)
+        IDialogService dialogs, IClipboardService clipboard, ICollectionRepository collections, Func<Task> onSaved)
     {
         _proxy = proxy;
         _authority = authority;
         _dialogs = dialogs;
+        _clipboard = clipboard;
         _collections = collections;
         _onSaved = onSaved;
-        _proxy.Captured += e => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-        {
-            Exchanges.Insert(0, e);
-            if (Exchanges.Count > 1000)
-                Exchanges.RemoveAt(Exchanges.Count - 1);
-        });
+        _proxy.Captured += e => Avalonia.Threading.Dispatcher.UIThread.Post(() => Add(e));
     }
 
     public string Title => "Capture proxy";
     public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.Capture;
-    public double Width => 1040;
-    public double Height => 720;
+    public double Width => 1200;
+    public double Height => 800;
 
+    /// <summary>Everything captured, newest first.</summary>
     public ObservableCollection<Dispatch.Application.Capture.CapturedExchange> Exchanges { get; } = [];
 
-    [ObservableProperty] private decimal _port = 8899;
+    /// <summary>What the traffic list shows after the search and "errors only" filters.</summary>
+    public ObservableCollection<Dispatch.Application.Capture.CapturedExchange> Visible { get; } = [];
+
+    // ---- Settings ----
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProxyAddress), nameof(ProxyEnvironment))]
+    private decimal _port = 8899;
+
     [ObservableProperty] private string _hostFilter = "";
     [ObservableProperty] private bool _decryptHttps = true;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProxyAddress), nameof(ProxyEnvironment))]
+    private bool _allowRemote;
+
+    [ObservableProperty] private decimal _maxBodyKb = 1024;
+
+    [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(StopCommand))]
+    [NotifyPropertyChangedFor(nameof(StateText), nameof(ProxyAddress), nameof(ProxyEnvironment))]
     private bool _isRunning;
 
-    [ObservableProperty] private string _status = "Start the proxy, then point your browser, app, or HTTP(S)_PROXY at it.";
+    [ObservableProperty] private string _status = "Configure the proxy on the left, click Start, then point your browser, app or HTTP(S)_PROXY at it.";
     [ObservableProperty] private Dispatch.Application.Capture.CapturedExchange? _selected;
+
+    // ---- Traffic filters ----
+    [ObservableProperty] private string _search = "";
+    [ObservableProperty] private bool _errorsOnly;
+    [ObservableProperty] private string _countText = "No traffic yet";
+
+    /// <summary>0 = traffic, 1 = report.</summary>
+    [ObservableProperty] private int _selectedTab;
+
+    // ---- Report ----
+    public ObservableCollection<StatTile> ReportStats { get; } = [];
+    public ObservableCollection<Dispatch.Application.Reporting.ReportInsight> Insights { get; } = [];
+    public ObservableCollection<ReportBar> StatusBars { get; } = [];
+    public ObservableCollection<ReportBar> MethodBars { get; } = [];
+    public ObservableCollection<ReportBar> ContentTypeBars { get; } = [];
+    public ObservableCollection<ReportBar> HostBars { get; } = [];
+    public ObservableCollection<Dispatch.Application.Capture.CaptureHostStats> Hosts { get; } = [];
+    public ObservableCollection<Dispatch.Application.Capture.CaptureEndpointStats> Endpoints { get; } = [];
+    public ObservableCollection<Dispatch.Application.Capture.CapturedExchange> Slowest { get; } = [];
+    public ObservableCollection<Dispatch.Application.Capture.CapturedExchange> Failed { get; } = [];
+
+    [ObservableProperty] private string _verdict = "";
+    [ObservableProperty] private Avalonia.Media.IBrush _verdictBrush = ReportBrushes.Neutral;
+    [ObservableProperty] private string _reportSubtitle = "";
+    [ObservableProperty] private bool _hasFailures;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasReport))]
+    [NotifyCanExecuteChangedFor(nameof(ExportReportCommand), nameof(OpenReportCommand))]
+    private Dispatch.Application.Capture.CaptureSummary? _report;
+
+    public bool HasReport => Report is { Total: > 0 };
+    public bool HasTraffic => Exchanges.Count > 0;
+    public string StateText => IsRunning ? "Listening" : "Stopped";
+
+    /// <summary>The host:port clients should use. With remote access on, the machine's LAN address.</summary>
+    public string ProxyAddress => $"{(AllowRemote ? LanAddress() : "127.0.0.1")}:{(IsRunning && _proxy.Port > 0 ? _proxy.Port : (int)Port)}";
+
+    public string ProxyEnvironment => $"export HTTP_PROXY=http://{ProxyAddress}\nexport HTTPS_PROXY=http://{ProxyAddress}";
+
+    partial void OnSearchChanged(string value) => RefreshVisible();
+    partial void OnErrorsOnlyChanged(bool value) => RefreshVisible();
+
+    partial void OnSelectedTabChanged(int value)
+    {
+        if (value == 1)
+            RefreshReport();
+    }
+
+    /// <summary>Adds a captured exchange (newest first) and keeps the filtered list and counters in step.</summary>
+    public void Add(Dispatch.Application.Capture.CapturedExchange exchange)
+    {
+        Exchanges.Insert(0, exchange);
+        if (Exchanges.Count > MaxExchanges)
+        {
+            var dropped = Exchanges[^1];
+            Exchanges.RemoveAt(Exchanges.Count - 1);
+            Visible.Remove(dropped);
+        }
+        if (Matches(exchange))
+            Visible.Insert(0, exchange);
+        UpdateCount();
+        if (SelectedTab == 1)
+            RefreshReport();
+    }
+
+    private bool Matches(Dispatch.Application.Capture.CapturedExchange e)
+    {
+        if (ErrorsOnly && !Dispatch.Application.Capture.CaptureSummary.IsError(e))
+            return false;
+        var q = Search.Trim();
+        return q.Length == 0
+               || e.Url.Contains(q, StringComparison.OrdinalIgnoreCase)
+               || e.Method.Equals(q, StringComparison.OrdinalIgnoreCase)
+               || e.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture) == q;
+    }
+
+    private void RefreshVisible()
+    {
+        Visible.Clear();
+        foreach (var e in Exchanges.Where(Matches))
+            Visible.Add(e);
+        if (Selected is not null && !Visible.Contains(Selected))
+            Selected = null;
+        UpdateCount();
+    }
+
+    private void UpdateCount()
+    {
+        var errors = Exchanges.Count(Dispatch.Application.Capture.CaptureSummary.IsError);
+        CountText = Exchanges.Count == 0 ? "No traffic yet"
+            : (Visible.Count == Exchanges.Count ? $"{Exchanges.Count} request(s)" : $"{Visible.Count} of {Exchanges.Count} request(s)") +
+              (errors > 0 ? $" · {errors} error(s)" : "");
+        OnPropertyChanged(nameof(HasTraffic));
+        SaveToCollectionCommand.NotifyCanExecuteChanged();
+        ExportHarCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand]
+    private void RefreshReport()
+    {
+        var summary = Dispatch.Application.Capture.CaptureSummary.From(Exchanges);
+        Verdict = summary.Total == 0 ? "NO DATA" : summary.Errors == 0 ? "NO ERRORS" : $"{summary.Errors} ERROR(S)";
+        VerdictBrush = summary.Total == 0 ? ReportBrushes.Neutral
+            : summary.Errors == 0 ? ReportBrushes.Good
+            : summary.ErrorRate < 0.05 ? ReportBrushes.Warning : ReportBrushes.Bad;
+        ReportSubtitle = summary.First is { } first
+            ? $"{first:yyyy-MM-dd HH:mm:ss} – {summary.Last:HH:mm:ss} · {summary.Span.TotalSeconds:0} s · {summary.Hosts.Count} host(s)"
+            : "";
+
+        ReportStats.Clear();
+        ReportStats.Add(new StatTile("Requests", summary.Total.ToString("N0")));
+        ReportStats.Add(new StatTile("Error rate", $"{summary.ErrorRate * 100:0.0}%", $"{summary.Errors} failed",
+            summary.Errors > 0 ? ReportBrushes.Bad : ReportBrushes.Good));
+        ReportStats.Add(new StatTile("Hosts", summary.Hosts.Count.ToString()));
+        ReportStats.Add(new StatTile("HTTPS", summary.Total == 0 ? "–" : $"{100.0 * summary.Secure / summary.Total:0}%", $"{summary.Secure} encrypted"));
+        ReportStats.Add(new StatTile("Average", $"{summary.Latency.Mean:0} ms", $"p95 {summary.Latency.P95:0} ms"));
+        ReportStats.Add(new StatTile("Received", ReportBrushes.Bytes(summary.Bytes)));
+
+        Insights.Clear();
+        foreach (var i in summary.Insights)
+            Insights.Add(i);
+
+        Fill(StatusBars, summary.StatusClasses, c => ReportBrushes.ForStatus(c.Label));
+        Fill(MethodBars, summary.Methods, _ => ReportBrushes.Accent);
+        Fill(ContentTypeBars, summary.ContentTypes.Take(6), _ => ReportBrushes.Info);
+        Fill(HostBars, summary.Hosts.Take(8).Select(h => new Dispatch.Application.Capture.CaptureCount(h.Host, h.Requests)), _ => ReportBrushes.Accent);
+
+        Hosts.Clear();
+        foreach (var h in summary.Hosts)
+            Hosts.Add(h);
+        Endpoints.Clear();
+        foreach (var e in summary.Endpoints.Take(30))
+            Endpoints.Add(e);
+        Slowest.Clear();
+        foreach (var e in summary.Slowest)
+            Slowest.Add(e);
+        Failed.Clear();
+        foreach (var e in summary.Failed.Take(100))
+            Failed.Add(e);
+        HasFailures = Failed.Count > 0;
+        Report = summary;
+
+        static void Fill(ObservableCollection<ReportBar> target, IEnumerable<Dispatch.Application.Capture.CaptureCount> counts,
+            Func<Dispatch.Application.Capture.CaptureCount, Avalonia.Media.IBrush> brush)
+        {
+            target.Clear();
+            var list = counts.ToList();
+            var max = list.Count == 0 ? 1 : Math.Max(1, list.Max(c => c.Count));
+            foreach (var c in list)
+                target.Add(new ReportBar(c.Label, c.Count, max, brush(c)));
+        }
+    }
 
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
@@ -652,11 +818,14 @@ public sealed partial class CaptureViewModel : ObservableObject, ITool
             await _proxy.StartAsync(new Dispatch.Infrastructure.Capture.CaptureProxyOptions
             {
                 Port = (int)Port,
+                Public = AllowRemote,
                 HostFilter = HostFilter.Trim(),
-                DecryptHttps = DecryptHttps
+                DecryptHttps = DecryptHttps,
+                MaxBodyBytes = (int)Math.Clamp(MaxBodyKb, 1, 100 * 1024) * 1024
             });
             IsRunning = true;
-            Status = $"Listening on http://127.0.0.1:{_proxy.Port}" + (DecryptHttps ? " · HTTPS decrypted (trust the CA, button below)" : " · HTTPS tunnelled");
+            Status = $"Listening on {ProxyAddress}" + (DecryptHttps ? " · HTTPS is decrypted (clients must trust the Dispatch CA)" : " · HTTPS is tunnelled, not recorded") +
+                     (HostFilter.Trim().Length > 0 ? $" · recording hosts matching \"{HostFilter.Trim()}\"" : "");
         }
         catch (Exception ex)
         {
@@ -672,10 +841,34 @@ public sealed partial class CaptureViewModel : ObservableObject, ITool
         await _proxy.StopAsync();
         IsRunning = false;
         Status = $"Stopped · {Exchanges.Count} exchange(s) captured.";
+        RefreshReport();
     }
 
     [RelayCommand]
-    private void Clear() => Exchanges.Clear();
+    private void Clear()
+    {
+        Exchanges.Clear();
+        Visible.Clear();
+        Selected = null;
+        UpdateCount();
+        RefreshReport();
+    }
+
+    [RelayCommand]
+    private Task CopyAddressAsync() => CopyAsync(ProxyAddress, "Proxy address copied.");
+
+    [RelayCommand]
+    private Task CopyEnvironmentAsync() => CopyAsync(ProxyEnvironment, "Shell command copied.");
+
+    [RelayCommand]
+    private Task CopyUrlAsync(Dispatch.Application.Capture.CapturedExchange? exchange) =>
+        exchange is null ? Task.CompletedTask : CopyAsync(exchange.Url, "URL copied.");
+
+    private async Task CopyAsync(string text, string message)
+    {
+        await _clipboard.SetTextAsync(text);
+        Status = message;
+    }
 
     [RelayCommand]
     private async Task ExportCaAsync()
@@ -684,15 +877,13 @@ public sealed partial class CaptureViewModel : ObservableObject, ITool
         if (path is not null)
         {
             await File.WriteAllTextAsync(path, _authority.CaCertificatePem);
-            Status = $"CA written to {path}. Trust it so HTTPS clients don't warn.";
+            Status = $"CA written to {path}. Add it to your OS / browser trust store so HTTPS clients don't warn.";
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(HasTraffic))]
     private async Task ExportHarAsync()
     {
-        if (Exchanges.Count == 0)
-            return;
         var path = await _dialogs.SaveFileAsync("Export HAR", "capture.har", new FileFilter("HAR", "*.har"));
         if (path is not null)
         {
@@ -701,28 +892,72 @@ public sealed partial class CaptureViewModel : ObservableObject, ITool
         }
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(HasReport))]
+    private async Task ExportReportAsync(string? format)
+    {
+        RefreshReport();
+        if (Report is null)
+            return;
+        var (ext, content, filter) = format == "json"
+            ? (".json", Report.Json(), new FileFilter("JSON", "*.json"))
+            : (".html", Report.Html(), new FileFilter("HTML", "*.html"));
+        var path = await _dialogs.SaveFileAsync("Save capture report", "capture-report" + ext, filter);
+        if (path is not null)
+        {
+            await File.WriteAllTextAsync(path, content);
+            Status = $"Report saved to {path}";
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasReport))]
+    private void OpenReport()
+    {
+        RefreshReport();
+        if (Report is null)
+            return;
+        try
+        {
+            ShellOpener.OpenTemp("capture-report", ".html", System.Text.Encoding.UTF8.GetBytes(Report.Html()));
+        }
+        catch (Exception ex)
+        {
+            Status = $"Could not open the report: {ex.Message}";
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasTraffic))]
     private async Task SaveToCollectionAsync()
     {
-        if (Exchanges.Count == 0)
-            return;
         var collection = new RequestCollection { Name = $"Captured {DateTime.Now:yyyy-MM-dd HH:mm}" };
         await _collections.AddAsync(collection);
-        foreach (var exchange in Exchanges.Reverse())
+        // Save what's visible, so the filters double as a "pick what to keep" step.
+        var toSave = Visible.Reverse().ToList();
+        foreach (var exchange in toSave)
         {
             var request = Dispatch.Application.Capture.CaptureConverter.ToRequest(exchange);
             request.CollectionId = collection.Id;
             await _collections.SaveRequestAsync(request);
         }
         await _onSaved();
-        Status = $"Saved {Exchanges.Count} request(s) to collection \"{collection.Name}\".";
+        Status = $"Saved {toSave.Count} request(s) to collection \"{collection.Name}\".";
     }
 
-    [RelayCommand]
-    private async Task SendToTabAsync(Dispatch.Application.Capture.CapturedExchange? exchange)
+    private static string LanAddress()
     {
-        if (exchange is not null)
-            await Task.CompletedTask; // reserved for "open in a tab"; selection drives the detail pane
+        try
+        {
+            var address = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up
+                            && n.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+                .Select(a => a.Address)
+                .FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !System.Net.IPAddress.IsLoopback(a));
+            return address?.ToString() ?? "127.0.0.1";
+        }
+        catch (System.Net.NetworkInformation.NetworkInformationException)
+        {
+            return "127.0.0.1";
+        }
     }
 
     public void OnClosed() => _ = _proxy.StopAsync();

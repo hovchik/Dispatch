@@ -124,7 +124,9 @@ public static class ReportWriters
             .Append(Stat("Tests", report.TotalTests.ToString(CultureInfo.InvariantCulture), null))
             .Append(Stat("Failed tests", report.FailedTests.ToString(CultureInfo.InvariantCulture), report.FailedTests > 0))
             .Append(Stat("Avg. response", $"{report.AverageResponseTime.TotalMilliseconds:0} ms", null))
-            .Append("</div><div class=\"filter\"><label><input type=\"checkbox\" id=\"onlyFailed\"> Show only failures</label></div>");
+            .Append("</div>");
+        AppendSummary(sb, RunSummary.From(report));
+        sb.Append("<h2>All results</h2><div class=\"filter\"><label><input type=\"checkbox\" id=\"onlyFailed\"> Show only failures</label></div>");
 
         static string Stat(string label, string value, bool? bad) =>
             $"<div class=\"stat\"><span class=\"muted\">{label}</span><b{(bad is null ? "" : $" style=\"color:var(--{(bad.Value ? "bad" : "ok")})\"")}>{value}</b></div>";
@@ -161,6 +163,32 @@ public static class ReportWriters
         return sb.ToString();
     }
 
+    private static void AppendSummary(StringBuilder sb, RunSummary summary)
+    {
+        static string E(string? s) => WebUtility.HtmlEncode(s ?? "");
+        sb.Append("<h2>Insights</h2><ul class=\"ins\">");
+        foreach (var i in summary.Insights)
+            sb.Append($"<li class=\"{i.Css}\">{E(i.Text)}</li>");
+        sb.Append("</ul>");
+
+        sb.Append("<h2>Per request</h2><table><tr><th>Request</th><th class=\"r\">Runs</th><th class=\"r\">Passed</th><th class=\"r\">Failed</th>")
+            .Append("<th class=\"r\">Tests</th><th class=\"r\">avg</th><th class=\"r\">min</th><th class=\"r\">max</th><th>Statuses</th></tr>");
+        foreach (var r in summary.Requests)
+            sb.Append($"<tr><td>{E(r.Name)}</td><td class=\"r\">{r.Runs}</td><td class=\"r ok\">{r.Passed}</td>")
+                .Append($"<td class=\"r{(r.Failed > 0 ? " bad" : "")}\">{r.Failed}</td><td class=\"r\">{r.Tests - r.FailedTests}/{r.Tests}</td>")
+                .Append(FormattableString.Invariant($"<td class=\"r\">{r.Latency.Mean:0} ms</td><td class=\"r\">{r.Latency.Min:0} ms</td><td class=\"r\">{r.Latency.Max:0} ms</td>"))
+                .Append($"<td>{E(r.StatusesText)}</td></tr>");
+        sb.Append("</table>");
+
+        if (summary.Failures.Count > 0)
+        {
+            sb.Append("<h2>Failures</h2><table><tr><th>Request</th><th class=\"r\">Iteration</th><th>Check</th><th>Message</th></tr>");
+            foreach (var f in summary.Failures)
+                sb.Append($"<tr><td>{E(f.Request)}</td><td class=\"r\">#{f.Iteration}</td><td>{E(f.Check)}</td><td class=\"bad\">{E(f.Message)}</td></tr>");
+            sb.Append("</table>");
+        }
+    }
+
     private const string HtmlStyles = """
         :root{--bg:#fff;--fg:#1d1f24;--muted:#6b7280;--card:#f6f7f9;--line:#e5e7eb;--ok:#16a34a;--bad:#dc2626}
         @media (prefers-color-scheme:dark){:root{--bg:#16181d;--fg:#e8eaed;--muted:#9aa0a6;--card:#1f2228;--line:#2d3139}}
@@ -178,6 +206,12 @@ public static class ReportWriters
         li.fail{color:var(--bad)}li.pass{color:var(--ok)}.msg{color:var(--muted);white-space:pre-wrap;display:block;margin-left:22px}
         code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all}
         .filter{margin:8px 0 16px}
+        h2{font-size:15px;margin:28px 0 10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+        table{width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border-radius:10px;overflow:hidden}
+        th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-size:12px}
+        td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}td.ok{color:var(--ok)}td.bad{color:var(--bad)}
+        ul.ins{list-style:none;padding:0;margin:0}ul.ins li{padding:8px 12px;border-radius:8px;margin:6px 0;background:var(--card);border-left:4px solid var(--muted);border-top:0}
+        ul.ins li.good{border-left-color:var(--ok)}ul.ins li.warning{border-left-color:#d97706}ul.ins li.bad{border-left-color:var(--bad)}
         """;
 
     /// <summary>A compact console summary, one line per request.</summary>
