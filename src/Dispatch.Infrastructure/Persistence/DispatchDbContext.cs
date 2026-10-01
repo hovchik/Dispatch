@@ -61,6 +61,7 @@ public sealed class DispatchDbContext(DbContextOptions<DispatchDbContext> option
             b.Property(r => r.Settings).HasJsonConversion();
             b.Property(r => r.Assertions).HasJsonConversion();
             b.Property(r => r.Extractions).HasJsonConversion();
+            b.Property(r => r.Expectations).HasJsonConversion();
             b.Property(r => r.Examples).HasJsonConversion();
             b.HasIndex(r => r.CollectionId);
         });

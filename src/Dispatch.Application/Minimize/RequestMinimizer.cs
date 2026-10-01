@@ -143,6 +143,7 @@ public sealed class RequestMinimizer(IRequestSender sender)
             Environment = options.Environment,
             CollectionVariables = options.CollectionVariables,
             RecordHistory = false,
+            CheckExpectations = false,
             RunScripts = options.RunScripts,
             Snapshots = Testing.SnapshotMode.Verify
         };

@@ -65,6 +65,7 @@ public static class HelpCatalog
     public const string Flows = "flows";
     public const string Monitors = "monitors";
     public const string SecurityScan = "security-scan";
+    public const string MessageChecks = "message-checks";
     public const string Minimize = "minimize";
     public const string RateLimit = "rate-limit";
     public const string Capture = "capture";
@@ -274,6 +275,24 @@ public static class HelpCatalog
         ],
         ["security", "scan", "vulnerability", "headers", "cors", "injection", "owasp", "pentest"],
         null, [Cli]),
+
+        new(MessageChecks, "Testing", "Message checks (cross-protocol)", "Assert that a request causes the right Kafka, MQTT, RabbitMQ or WebSocket message.",
+        [
+            new HelpParagraph("Many APIs do their real work asynchronously: POST /orders returns 201, and then an event appears on a Kafka topic, an MQTT topic, a RabbitMQ queue or a WebSocket. A message check verifies that consequence as part of the request's tests."),
+            new HelpSteps(
+            [
+                "Save a listener in the same collection: a streaming request that subscribes to the channel, e.g. Kafka in Subscribe mode on orders.created, MQTT on orders/#, AMQP on a queue or exchange, or a WebSocket / SSE / Socket.IO URL. A broker request in Publish mode is switched to subscribe automatically.",
+                "Open the request that should cause the message (e.g. POST /orders), and in Extract save what you need from the response, e.g. orderId from $.id.",
+                "In the Messages tab click Add, pick the listener, and describe the message: a JSONPath (empty = the whole message), an operator and the expected value, e.g. $.orderId == {{orderId}}.",
+                "Optionally filter by topic / routing key / event name, set the time limit, or tick none to require that no matching message arrives (e.g. no payment.failed event).",
+                "Send. Listeners subscribe before the request goes out, and each check shows ✓ or ✗ in the Tests results, with how long the message took or what arrived instead."
+            ]),
+            new HelpParagraph("Message checks run everywhere tests run: in the app, the collection runner, test flows, monitors and dispatch run in CI. Only messages that arrive after the request was sent count, so retained or earlier messages can't produce a false pass."),
+            new HelpExample("A check, as it appears in the results", "Message on Order events [orders/created] where $.orderId == 1042 within 2000 ms  ✓ after 37 ms"),
+            new HelpTip("For Kafka, use a dedicated consumer group and 'latest' offsets on the listener, so old records are not replayed into the check.")
+        ],
+        ["message", "event", "consequence", "kafka", "mqtt", "amqp", "rabbitmq", "websocket", "sse", "socket.io", "async", "event-driven", "side effect", "topic"],
+        null, [Assertions, Extraction, Protocols]),
 
         new(Minimize, "Tools", "Minimize a request", "Find the parts of a request its outcome really depends on.",
         [

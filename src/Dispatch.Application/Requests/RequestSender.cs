@@ -24,6 +24,12 @@ public sealed class SendOptions
     public bool RecordHistory { get; init; } = true;
     public bool RunScripts { get; init; } = true;
 
+    /// <summary>The owning collection's requests: message expectations find their listener requests here.</summary>
+    public IReadOnlyList<ApiRequest>? CollectionRequests { get; init; }
+
+    /// <summary>Open listeners and check message expectations. Off for tools that send many probes (load test, scans).</summary>
+    public bool CheckExpectations { get; init; } = true;
+
     /// <summary>Whether snapshot assertions record missing snapshots, overwrite them, or only compare.</summary>
     public SnapshotMode Snapshots { get; init; } = SnapshotMode.RecordMissing;
 }
@@ -173,6 +179,13 @@ public sealed class RequestSender : IRequestSender
             Interactive = options.Interactive
         };
 
+        // Listeners for message expectations subscribe before the request goes out, so nothing it causes is missed.
+        await using var consequences = options.CheckExpectations
+            ? await Consequences.ConsequenceSession.StartAsync(working, options.CollectionRequests,
+                kind => _executors.GetValueOrDefault(kind), variables, cancellationToken).ConfigureAwait(false)
+            : null;
+        consequences?.MarkTriggered();
+
         ApiResponse response;
         try
         {
@@ -212,6 +225,10 @@ public sealed class RequestSender : IRequestSender
             if (post.Error is not null)
                 tests.Add(new TestResult("Test script", false, post.Error));
         }
+
+        // 6. Message expectations: did the request cause the right messages on other channels?
+        if (consequences is not null)
+            tests.AddRange(await consequences.EvaluateAsync(response, variables.Resolve, cancellationToken).ConfigureAwait(false));
 
         if (options.RecordHistory && !cancellationToken.IsCancellationRequested)
             await RecordHistoryAsync(request, response).ConfigureAwait(false);

@@ -85,6 +85,7 @@ public sealed class AmqpExecutor : IProtocolExecutor
                         return Task.CompletedTask;
                     };
                     await channel.BasicConsumeAsync(queue, autoAck: true, consumer, cancellationToken).ConfigureAwait(false);
+                    log.Listening();
                 }
 
                 if (publish)

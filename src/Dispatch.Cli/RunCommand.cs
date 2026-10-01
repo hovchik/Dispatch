@@ -38,9 +38,11 @@ public static class RunCommand
 
         var timeout = args.Int("timeout", 0);
         var insecure = args.Flag("insecure");
+        // Listeners of message expectations come from the whole collection and get the same transport options.
+        IReadOnlyList<ApiRequest> collectionRequests = collection.Requests;
         if (timeout > 0 || insecure)
         {
-            requests = requests.Select(r =>
+            ApiRequest Adjust(ApiRequest r)
             {
                 var copy = r.Clone();
                 if (timeout > 0 && copy.Settings.TimeoutMs == 0)
@@ -48,7 +50,9 @@ public static class RunCommand
                 if (insecure)
                     copy.Settings.VerifySsl = false;
                 return copy;
-            }).ToList();
+            }
+            requests = requests.Select(Adjust).ToList();
+            collectionRequests = collection.Requests.Select(Adjust).ToList();
         }
 
         var data = args.Option("data") is { } dataPath ? DataFile.Load(dataPath) : [];
@@ -70,6 +74,7 @@ public static class RunCommand
         {
             Name = collection.Name,
             Requests = requests,
+            CollectionRequests = collectionRequests,
             Environment = runEnvironment,
             CollectionVariables = collection.Variables,
             CollectionSpec = collection.SpecLocation,

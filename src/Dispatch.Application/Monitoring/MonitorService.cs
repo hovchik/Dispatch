@@ -22,6 +22,7 @@ public sealed class MonitorService(CollectionRunner runner, IAlertSender? alerts
         {
             Name = monitor.Name,
             Requests = requests,
+            CollectionRequests = context.Collection.Requests,
             Environment = context.Environment,
             CollectionVariables = context.Collection.Variables,
             CollectionSpec = context.Collection.SpecLocation,

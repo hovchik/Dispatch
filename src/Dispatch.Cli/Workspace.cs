@@ -93,9 +93,9 @@ public sealed class Workspace(IServiceProvider services)
             collection.Id = Guid.NewGuid();
             collection.Requests = [];
             await collections.AddAsync(collection);
+            RequestIdentity.Reassign(requests);
             foreach (var request in requests)
             {
-                request.Id = Guid.NewGuid();
                 request.CollectionId = collection.Id;
                 await collections.SaveRequestAsync(request);
             }

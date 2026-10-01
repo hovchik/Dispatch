@@ -198,6 +198,7 @@ public sealed partial class RunnerViewModel : ObservableObject, ITool
             {
                 Name = CollectionName,
                 Requests = selected,
+                CollectionRequests = _collection.Requests,
                 Environment = _environment(),
                 CollectionVariables = _collection.Variables,
                 CollectionSpec = _collection.SpecLocation,

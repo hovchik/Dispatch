@@ -142,6 +142,7 @@ public sealed class RateLimitProber(IRequestSender sender)
             Environment = options.Environment,
             CollectionVariables = options.CollectionVariables,
             RecordHistory = false,
+            CheckExpectations = false,
             RunScripts = false
         };
         var gate = new Lock();

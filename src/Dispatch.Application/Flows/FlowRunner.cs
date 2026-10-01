@@ -189,6 +189,7 @@ public sealed class FlowRunner(IRequestSender sender)
         {
             Variables = state.Variables,
             CollectionSpec = state.Options.CollectionSpec,
+            CollectionRequests = state.Options.Requests,
             RecordHistory = state.Options.RecordHistory
         }, ct).ConfigureAwait(false);
 

@@ -67,14 +67,21 @@ public static class DocsGenerator
             if (folder.Length > 0)
                 sb.Append($"<h2 class=\"group\">{E(folder)}</h2>\n");
             foreach (var r in requests)
-                AppendRequest(sb, r, options);
+                AppendRequest(sb, r, options, collection.Requests);
         }
 
         sb.Append("</main>\n<script>").Append(Script).Append("</script>\n</body></html>\n");
         return sb.ToString();
     }
 
-    private static void AppendRequest(StringBuilder sb, ApiRequest r, DocsOptions options)
+    /// <summary>Enabled assertions and message checks, described in plain language.</summary>
+    private static List<string> Checks(ApiRequest r, IReadOnlyList<ApiRequest> all) =>
+        r.Assertions.Where(a => a.Enabled).Select(AssertionEvaluator.Describe)
+            .Concat(r.Expectations.Where(e => e.Enabled).Select(e =>
+                Consequences.ConsequenceSession.Describe(e, all.FirstOrDefault(x => x.Id == e.ListenerId)?.Name ?? "(missing listener)")))
+            .ToList();
+
+    private static void AppendRequest(StringBuilder sb, ApiRequest r, DocsOptions options, IReadOnlyList<ApiRequest> all)
     {
         sb.Append($"<section class=\"endpoint\" id=\"{Anchor(r)}\">\n");
         sb.Append($"<h3><span class=\"badge {BadgeClass(r)}\">{E(Badge(r))}</span> {E(r.Name)}</h3>\n");
@@ -136,11 +143,11 @@ public static class DocsGenerator
             }
         }
 
-        if (options.IncludeTests && r.Assertions.Any(a => a.Enabled))
+        if (options.IncludeTests && Checks(r, all) is { Count: > 0 } checks)
         {
             sb.Append("<h4>Checks</h4>\n<ul class=\"checks\">\n");
-            foreach (var a in r.Assertions.Where(a => a.Enabled))
-                sb.Append("<li>").Append(E(AssertionEvaluator.Describe(a))).Append("</li>\n");
+            foreach (var check in checks)
+                sb.Append("<li>").Append(E(check)).Append("</li>\n");
             sb.Append("</ul>\n");
         }
 
@@ -261,11 +268,11 @@ public static class DocsGenerator
                     sb.Append($"**Method:** `{r.Protocol.Grpc.Service}/{r.Protocol.Grpc.Method}`\n\n```json\n{BodyFormatter.Pretty(r.Protocol.Grpc.Message, BodyFormat.Json).Trim()}\n```\n\n");
                 if (r.Kind is RequestKind.Http or RequestKind.Soap && r.Body.Mode is BodyMode.Json or BodyMode.Xml or BodyMode.Text && r.Body.Content.Trim().Length > 0)
                     sb.Append($"**Body**\n\n```{(r.Body.Mode == BodyMode.Json ? "json" : r.Body.Mode == BodyMode.Xml ? "xml" : "")}\n{BodyFormatter.Pretty(r.Body.Content, r.Body.Mode == BodyMode.Json ? BodyFormat.Json : BodyFormat.Text).Trim()}\n```\n\n");
-                if (options.IncludeTests && r.Assertions.Any(a => a.Enabled))
+                if (options.IncludeTests && Checks(r, collection.Requests) is { Count: > 0 } checks)
                 {
                     sb.Append("**Checks**\n\n");
-                    foreach (var a in r.Assertions.Where(a => a.Enabled))
-                        sb.Append($"- {AssertionEvaluator.Describe(a)}\n");
+                    foreach (var check in checks)
+                        sb.Append($"- {check}\n");
                     sb.Append('\n');
                 }
                 if (options.IncludeExamples)

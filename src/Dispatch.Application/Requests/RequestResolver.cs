@@ -24,7 +24,8 @@ public static class RequestResolver
         nameof(ApiRequest.Examples),
         nameof(ApiRequest.Description),
         nameof(ApiRequest.Name),
-        nameof(ApiRequest.Folder)
+        nameof(ApiRequest.Folder),
+        nameof(ApiRequest.Expectations)
     };
 
     public static ApiRequest Resolve(ApiRequest request, IReadOnlyDictionary<string, string> variables)

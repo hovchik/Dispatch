@@ -78,6 +78,8 @@ public sealed class MqttExecutor : IProtocolExecutor
                     failed = true;
                     reason = $"Subscribe refused: {granted}";
                 }
+                else
+                    log.Listening();
             }
 
             if (publish && !failed)

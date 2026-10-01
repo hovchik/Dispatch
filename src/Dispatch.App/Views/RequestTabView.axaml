@@ -693,6 +693,67 @@
           </DockPanel>
         </TabItem>
 
+        <TabItem ToolTip.Tip="Messages this request must cause on Kafka, MQTT, RabbitMQ, WebSocket, SSE or Socket.IO">
+          <TabItem.Header>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="Messages" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding Expectations.Count}" Classes="muted" FontSize="11" VerticalAlignment="Center"
+                         IsVisible="{Binding Expectations.HasRows}" />
+            </StackPanel>
+          </TabItem.Header>
+          <DockPanel Margin="0,8,0,0">
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,6">
+              <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
+                         Text="Check what this request causes elsewhere: a listener (a saved MQTT, Kafka, AMQP, WebSocket, SSE or Socket.IO request in this collection) subscribes before the request is sent, then a matching message must arrive in time. Expected values can use variables extracted from this response, e.g. {{orderId}}." />
+              <Button Classes="link" Content="Learn more" Command="{Binding $parent[UserControl].((vm:RequestTabViewModel)DataContext).ShowHelpCommand}" CommandParameter="message-checks" Grid.Column="1" Margin="8,0" />
+              <Button Grid.Column="2" Classes="icon" Command="{Binding RefreshListenersCommand}" ToolTip.Tip="Reload listeners from the collection" Margin="0,0,6,0">
+                <PathIcon Data="{StaticResource IconRefresh}" Width="13" Height="13" />
+              </Button>
+              <Button Grid.Column="3" Content="Add" Classes="accent" Padding="10,2" FontSize="12" Command="{Binding Expectations.AddCommand}" />
+            </Grid>
+            <Border Classes="card" ClipToBounds="True">
+              <Panel>
+                <TextBlock Classes="muted" Margin="12" TextWrapping="Wrap" IsVisible="{Binding !Expectations.HasRows}"
+                           Text="No message checks yet. Example: after POST /orders, a message on the Kafka topic orders.created with $.orderId equal to {{orderId}} within 2000 ms. Save a subscribing request (e.g. Kafka, consume from orders.created) in this collection first; it becomes the listener." />
+                <ScrollViewer>
+                  <ItemsControl ItemsSource="{Binding Expectations.Rows}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="ed:ExpectationRow">
+                        <Border Classes="message">
+                          <Grid ColumnDefinitions="28,Auto,*,Auto,*,Auto,Auto,Auto,24,32" RowDefinitions="Auto">
+                            <CheckBox IsChecked="{Binding Enabled}" MinWidth="0" Padding="0" />
+                            <ComboBox Grid.Column="1" Classes="compact" MinWidth="170" PlaceholderText="Listener…"
+                                      ItemsSource="{Binding $parent[TabItem].((vm:RequestTabViewModel)DataContext).Expectations.Listeners}"
+                                      SelectedItem="{Binding Listener}" ToolTip.Tip="The saved streaming request that subscribes to the channel" />
+                            <TextBox Grid.Column="2" Classes="mono" Text="{Binding Path}" Watermark="$.orderId (empty = whole message)" Margin="6,0" MinHeight="28" />
+                            <ComboBox Grid.Column="3" ItemsSource="{x:Static ed:ExpectationsEditor.Operators}" SelectedItem="{Binding Operator}"
+                                      Classes="compact" MinWidth="120" ItemTemplate="{StaticResource EnumLabel}" />
+                            <TextBox Grid.Column="4" Classes="mono" Text="{Binding Expected}" Watermark="Expected, e.g. {{orderId}}"
+                                     IsEnabled="{Binding NeedsExpected}" Margin="6,0" MinHeight="28" />
+                            <TextBox Grid.Column="5" Classes="mono" Text="{Binding Channel}" Watermark="Topic / event filter" Width="140" MinHeight="28"
+                                     ToolTip.Tip="Only messages whose topic, routing key or event name contains this text" />
+                            <NumericUpDown Grid.Column="6" Value="{Binding TimeoutMs}" Minimum="0" Maximum="600000" Increment="500" FormatString="0 ms"
+                                           Width="145" Margin="6,0" ToolTip.Tip="How long after sending the message may arrive" />
+                            <CheckBox Grid.Column="7" IsChecked="{Binding ExpectNone}" Content="none" MinWidth="0"
+                                      ToolTip.Tip="Invert: no matching message may arrive in time (e.g. no failure event)" />
+                            <TextBlock Grid.Column="8" Text="{Binding Passed, Converter={x:Static conv:PassTextConverter.Instance}}"
+                                       Foreground="{Binding Passed, Converter={x:Static conv:PassBrushConverter.Instance}}"
+                                       FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            <Button Grid.Column="9" Classes="icon" Command="{Binding $parent[TabItem].((vm:RequestTabViewModel)DataContext).Expectations.RemoveCommand}"
+                                    CommandParameter="{Binding}">
+                              <PathIcon Data="{StaticResource IconTrash}" />
+                            </Button>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </Panel>
+            </Border>
+          </DockPanel>
+        </TabItem>
+
         <TabItem Header="Docs">
           <DockPanel Margin="0,8,0,0">
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">

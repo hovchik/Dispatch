@@ -53,6 +53,16 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
   bounded active probes (injection and reflection, boundary input, missing authentication) for APIs you are
   authorised to test. `dispatch scan --fail-on high` gates CI; reports export to HTML / JSON.
 
+### Message checks: cross-protocol consequence assertions
+
+A request's tests can include **messages it must cause on other channels**. For example, after `POST /orders` there
+must be a message on the Kafka topic `orders.created` with `$.orderId == {{orderId}}` within 2 s, and no
+`payment.failed` event on MQTT. The listener is any saved MQTT, Kafka, AMQP, WebSocket, SSE or Socket.IO request in the
+collection. It subscribes *before* the request is sent, so nothing is missed, and only messages that arrive afterwards
+count. Expected values can use variables extracted from the response. The checks appear as normal test results in the
+app, the collection runner, flows, monitors and `dispatch run`, with how long the message took or what arrived instead.
+Edit them in a request's **Messages** tab.
+
 ### Experimental: request forensics
 
 Two investigative tools that go beyond what API clients usually offer. Open them from the flask button next to

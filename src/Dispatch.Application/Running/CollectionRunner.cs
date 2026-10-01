@@ -10,6 +10,9 @@ public sealed class RunOptions
 {
     public string Name { get; init; } = "Collection run";
     public required IReadOnlyList<ApiRequest> Requests { get; init; }
+
+    /// <summary>Every request of the collection (defaults to <see cref="Requests"/>), where message expectations find their listeners.</summary>
+    public IReadOnlyList<ApiRequest>? CollectionRequests { get; init; }
     public ApiEnvironment? Environment { get; init; }
     public IReadOnlyList<KeyValueItem> CollectionVariables { get; init; } = [];
     public string? CollectionSpec { get; init; }
@@ -95,6 +98,7 @@ public sealed class CollectionRunner(IRequestSender sender)
                     {
                         Variables = variables,
                         CollectionSpec = options.CollectionSpec,
+                        CollectionRequests = options.CollectionRequests ?? options.Requests,
                         RecordHistory = options.RecordHistory,
                         Snapshots = options.Snapshots
                     }, cancellationToken).ConfigureAwait(false);
