@@ -30,6 +30,8 @@ public static class Program
           dispatch minimize <collection> [...]    Shrink a request to the parts its outcome depends on
                                                   (--request n, --match status|class|tests|body, --contains text)
           dispatch ratelimit <collection> [...]   Discover an endpoint's real rate limit (--request n, --expect-limit)
+          dispatch impact <collection> [...]      What breaks because a response changed shape (--request n,
+                                                  --baseline snapshot|example|file, --current file)
           dispatch flow <collection> [--name n]   Run saved test flow(s) of a collection
           dispatch monitor [--once|--watch] [...]  Run scheduled monitors and send alerts
           dispatch capture [--port 8899] [...]     Record proxied traffic to a HAR or Dispatch collection
@@ -91,6 +93,7 @@ public static class Program
                 "scan" => await ScanCommand.ExecuteAsync(rest, cancel.Token),
                 "minimize" or "minimise" => await MinimizeCommand.ExecuteAsync(rest, cancel.Token),
                 "ratelimit" or "rate-limit" => await RateLimitCommand.ExecuteAsync(rest, cancel.Token),
+                "impact" => await ImpactCommand.ExecuteAsync(rest, cancel.Token),
                 "flow" => await FlowCommand.ExecuteAsync(rest, cancel.Token),
                 "monitor" => await MonitorCommand.ExecuteAsync(rest, cancel.Token),
                 "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),

@@ -81,13 +81,17 @@
                 ToolTip.Tip="Generate code (cURL, Python, C#, JavaScript, Go, grpcurl…)">
           <PathIcon Data="{StaticResource IconCode}" Width="16" Height="16" />
         </Button>
-        <Button Classes="icon" IsVisible="{Binding SupportsProbeTools}" ToolTip.Tip="Request tools: minimize, rate-limit mapper">
+        <Button Classes="icon" IsVisible="{Binding SupportsProbeTools}" ToolTip.Tip="Request tools: minimize, change impact, rate-limit mapper">
           <PathIcon Data="{StaticResource IconFlask}" Width="15" Height="15" />
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedRight">
               <MenuItem Header="Minimize request…" Command="{Binding MinimizeCommand}"
                         ToolTip.Tip="Find the headers, cookies, params and body fields this response really depends on">
                 <MenuItem.Icon><PathIcon Data="{StaticResource IconFlask}" Width="12" Height="12" /></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="Change impact…" Command="{Binding ShowImpactCommand}"
+                        ToolTip.Tip="What in the collection depends on fields that changed since the previous response, snapshot or example">
+                <MenuItem.Icon><PathIcon Data="{StaticResource IconDiff}" Width="12" Height="12" /></MenuItem.Icon>
               </MenuItem>
               <MenuItem Header="Probe rate limit…" Command="{Binding ProbeRateLimitCommand}"
                         ToolTip.Tip="Discover the endpoint's real rate-limit policy and check its headers">

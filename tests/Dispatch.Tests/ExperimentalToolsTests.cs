@@ -267,16 +267,16 @@ public class RateLimitProberTests
     [Fact]
     public async Task Maps_a_token_bucket_and_flags_a_missing_retry_after()
     {
-        // Bucket of 5 tokens, refilled at 5 per second; no headers at all.
+        // Bucket of 6 tokens, refilled at 2 per second (slow enough that timing jitter under load doesn't matter); no headers.
         var gate = new object();
-        double tokens = 5;
+        double tokens = 6;
         var last = DateTimeOffset.UtcNow;
         await using var server = await TestServer.StartAsync(app => app.MapGet("/bucket", () =>
         {
             lock (gate)
             {
                 var now = DateTimeOffset.UtcNow;
-                tokens = Math.Min(5, tokens + (now - last).TotalSeconds * 5);
+                tokens = Math.Min(6, tokens + (now - last).TotalSeconds * 2);
                 last = now;
                 if (tokens < 1)
                     return Results.StatusCode(429);
@@ -289,9 +289,10 @@ public class RateLimitProberTests
         var report = await Prober(services).ProbeAsync(new ApiRequest { Name = "Bucket", Url = $"{server.BaseUrl}/bucket" }, Fast());
 
         Assert.True(report.Throttled);
-        Assert.InRange(report.BurstCapacity, 5, 7);
+        Assert.InRange(report.BurstCapacity, 6, 8);
         Assert.Equal(RefillKind.Gradual, report.Refill);
-        Assert.InRange(report.RefillPerSecond!.Value, 3, 8);
+        Assert.False(report.RefillIsLowerBound);
+        Assert.InRange(report.RefillPerSecond!.Value, 1.2, 3.2);
         Assert.Contains(report.Insights, i => i.Text.Contains("no Retry-After"));
         Assert.Contains(report.Insights, i => i.Text.Contains("No rate-limit headers"));
     }

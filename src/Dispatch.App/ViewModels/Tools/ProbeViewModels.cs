@@ -300,7 +300,7 @@ public sealed partial class RateLimitViewModel : ObservableObject, ITool
         RefillText = report.Refill switch
         {
             RefillKind.FixedWindow => $"Fixed window ≈ {RateLimitReport.Seconds(report.WindowEstimate)}",
-            RefillKind.Gradual => $"Gradual ≈ {report.RefillPerSecond:0.##} req/s",
+            RefillKind.Gradual => $"Gradual {(report.RefillIsLowerBound ? "≥" : "≈")} {report.RefillPerSecond:0.##} req/s",
             RefillKind.NoLimitObserved => "No limit observed",
             _ => "Unknown"
         };

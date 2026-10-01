@@ -36,9 +36,13 @@ public enum RateLimitPhase
     Rate
 }
 
-/// <summary>One request sent during the probe.</summary>
+/// <summary>One request sent during the probe. <see cref="AtMs"/> is when its response arrived.</summary>
 public sealed record RateLimitSample(double AtMs, RateLimitPhase Phase, int Status, bool Throttled, bool Error,
-    int? Remaining, double? RetryAfterSeconds);
+    int? Remaining, double? RetryAfterSeconds)
+{
+    /// <summary>When the request was sent (ms since the probe started).</summary>
+    public double SentAtMs { get; init; }
+}
 
 /// <summary>How the limit gives capacity back once it has been used up.</summary>
 public enum RefillKind
@@ -97,6 +101,9 @@ public sealed class RateLimitReport
 
     /// <summary>Estimated requests per second the limit gives back, for gradual refill.</summary>
     public double? RefillPerSecond { get; set; }
+
+    /// <summary>The bucket was full again after the measuring wait, so the real refill rate may be higher.</summary>
+    public bool RefillIsLowerBound { get; set; }
     public AdvertisedLimit? Advertised { get; set; }
     public List<ReportInsight> Insights { get; } = [];
 
@@ -106,7 +113,7 @@ public sealed class RateLimitReport
         : Refill switch
         {
             RefillKind.FixedWindow => $"{BurstCapacity} requests per window of about {Seconds(WindowEstimate)} (fixed window)",
-            RefillKind.Gradual => $"Burst of {BurstCapacity}, then about {RefillPerSecond?.ToString("0.##", CultureInfo.InvariantCulture) ?? "?"} req/s " +
+            RefillKind.Gradual => $"Burst of {BurstCapacity}, then {(RefillIsLowerBound ? "at least" : "about")} {RefillPerSecond?.ToString("0.##", CultureInfo.InvariantCulture) ?? "?"} req/s " +
                                   "(token bucket or sliding window)",
             _ => $"Throttled after {BurstCapacity} requests; refill behaviour not determined"
         };
@@ -158,12 +165,13 @@ public sealed class RateLimitProber(IRequestSender sender)
                     return null;
                 reserved++;
             }
+            var sentAt = clock.Elapsed.TotalMilliseconds;
             var response = await sender.SendAsync(request, sendOptions, ct).ConfigureAwait(false);
             var retryAfter = RateLimitHeaders.RetryAfterSeconds(response.Headers);
             var throttled = response.HasResponse && (options.ThrottleStatuses.Contains(response.StatusCode)
                                                      || response.StatusCode == 503 && retryAfter is not null);
             var sample = new RateLimitSample(clock.Elapsed.TotalMilliseconds, phase, response.StatusCode, throttled, !response.HasResponse,
-                RateLimitHeaders.Read(response.Headers)?.Remaining, retryAfter);
+                RateLimitHeaders.Read(response.Headers)?.Remaining, retryAfter) { SentAtMs = sentAt };
             lock (gate)
             {
                 report.Samples.Add(sample);
@@ -201,9 +209,11 @@ public sealed class RateLimitProber(IRequestSender sender)
                     bool failing;
                     lock (gate)
                     {
+                        // Every accepted response was admitted by the server, including ones still in flight when another
+                        // request got the first throttled response (no new requests start after that).
                         if (sample.Throttled)
                             firstThrottle ??= sample;
-                        else if (!sample.Error && firstThrottle is null)
+                        else if (!sample.Error)
                             accepted++;
                         failing = sample.Error && errors >= 5 && accepted == 0;
                     }
@@ -217,16 +227,23 @@ public sealed class RateLimitProber(IRequestSender sender)
         }
 
         /// <summary>Polls until a request is accepted again. Returns that sample, or null on timeout / budget.</summary>
-        async Task<RateLimitSample?> RecoverAsync(RateLimitPhase phase)
+        /// <summary>
+        /// Polls until a request is accepted again. Also returns when the last rejected poll was sent: the limit reset
+        /// somewhere between that and the accepted one.
+        /// </summary>
+        async Task<(RateLimitSample? Accepted, double? LastRejectedSentAt)> RecoverAsync(RateLimitPhase phase)
         {
+            double? lastRejected = null;
             while (true)
             {
                 await Task.Delay(options.PollInterval, ct).ConfigureAwait(false);
                 var sample = await SendAsync(phase).ConfigureAwait(false);
                 if (sample is null)
-                    return null;
+                    return (null, lastRejected);
                 if (!sample.Throttled && !sample.Error)
-                    return sample;
+                    return (sample, lastRejected);
+                if (sample.Throttled)
+                    lastRejected = sample.SentAtMs;
             }
         }
 
@@ -239,17 +256,19 @@ public sealed class RateLimitProber(IRequestSender sender)
                 report.Error = "The request got no response; fix it before probing its rate limit.";
                 return Finish(report, clock);
             }
-            var windowStart = baseline.AtMs;
+            // The server's window starts when it receives the first request, i.e. after it was sent, not when the
+            // response arrived (a cold first connection can take a while).
+            var windowStart = baseline.SentAtMs;
             if (baseline.Throttled)
             {
                 // Already throttled (a previous run, other clients): wait for a clean start.
-                var clean = await RecoverAsync(RateLimitPhase.Baseline).ConfigureAwait(false);
+                var (clean, _) = await RecoverAsync(RateLimitPhase.Baseline).ConfigureAwait(false);
                 if (clean is null)
                 {
                     report.Error = "The endpoint was already throttled and did not recover within the time limit.";
                     return Finish(report, clock);
                 }
-                windowStart = clean.AtMs;
+                windowStart = clean.SentAtMs;
             }
 
             // ---- 2. Burst until throttled ----
@@ -267,14 +286,17 @@ public sealed class RateLimitProber(IRequestSender sender)
             report.RetryAfterSeconds = throttle.RetryAfterSeconds;
 
             // ---- 3. Recovery ----
-            var recovered = await RecoverAsync(RateLimitPhase.Recovery).ConfigureAwait(false);
+            var (recovered, lastRejected) = await RecoverAsync(RateLimitPhase.Recovery).ConfigureAwait(false);
             if (recovered is null)
             {
                 report.Stopped = true;
                 return Finish(report, clock);
             }
-            report.Recovery = TimeSpan.FromMilliseconds(recovered.AtMs - throttle.AtMs);
-            report.WindowEstimate = TimeSpan.FromMilliseconds(recovered.AtMs - windowStart);
+            // The limit reset between the last rejected retry and the first accepted one; take the middle, measured on
+            // send times so slow responses don't stretch it.
+            var resetAt = ((lastRejected ?? throttle.SentAtMs) + recovered.SentAtMs) / 2;
+            report.Recovery = TimeSpan.FromMilliseconds(Math.Max(0, resetAt - throttle.AtMs));
+            report.WindowEstimate = TimeSpan.FromMilliseconds(Math.Max(0, resetAt - windowStart));
 
             // ---- 4. How much capacity came back? ----
             var (refilled, secondThrottle, _) = await BurstAsync(RateLimitPhase.Refill, report.BurstCapacity + 5).ConfigureAwait(false);
@@ -287,11 +309,27 @@ public sealed class RateLimitProber(IRequestSender sender)
 
             // ---- 5. Gradual: measure the refill rate over a timed wait ----
             report.Refill = RefillKind.Gradual;
-            var wait = TimeSpan.FromMilliseconds(Math.Clamp(report.Recovery.Value.TotalMilliseconds * 4, 1000, 15000));
-            await Task.Delay(wait, ct).ConfigureAwait(false);
-            var (afterWait, _, _) = await BurstAsync(RateLimitPhase.Rate, report.BurstCapacity + 5).ConfigureAwait(false);
-            // Capacity regained during the wait (capped by the bucket size, so this is a lower bound when full).
-            report.RefillPerSecond = afterWait / wait.TotalSeconds;
+            // About one request comes back per recovery time, so wait long enough to regain roughly ¾ of the burst capacity:
+            // enough requests that counting them is precise, few enough that the bucket can't fill up (which would cap the
+            // count). The rate is measured from the moment the bucket was last empty (the previous first throttled
+            // request) to the next one, so the burst's own duration is included.
+            // If it still comes back full (recovery looked slower than it is, e.g. on a busy server), halve the wait and
+            // measure again; each burst drains the bucket, so the next measurement starts from empty.
+            var emptyAt = secondThrottle.SentAtMs;
+            var wait = TimeSpan.FromMilliseconds(Math.Clamp(report.Recovery.Value.TotalMilliseconds * report.BurstCapacity * 0.75, 500, 15000));
+            for (var attempt = 0; ; attempt++)
+            {
+                await Task.Delay(wait, ct).ConfigureAwait(false);
+                var (regained, nextThrottle, _) = await BurstAsync(RateLimitPhase.Rate, report.BurstCapacity + 5).ConfigureAwait(false);
+                var until = nextThrottle?.SentAtMs ?? clock.Elapsed.TotalMilliseconds;
+                report.RefillPerSecond = regained / Math.Max(0.001, (until - emptyAt) / 1000);
+                // A full bucket means more could have come back: the rate is at least this.
+                report.RefillIsLowerBound = regained >= report.BurstCapacity || nextThrottle is null;
+                if (!report.RefillIsLowerBound || nextThrottle is null || attempt == 2 || wait.TotalMilliseconds <= 200)
+                    break;
+                emptyAt = nextThrottle.SentAtMs;
+                wait = TimeSpan.FromMilliseconds(Math.Max(200, wait.TotalMilliseconds / 2));
+            }
         }
         catch (OperationCanceledException)
         {

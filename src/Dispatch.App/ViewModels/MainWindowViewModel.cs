@@ -135,6 +135,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         Dialogs.ShowTool(new RateLimitViewModel(request, _services.RateLimits, Dialogs, () => ActiveEnvironment,
             FindCollection(request.CollectionId)?.Variables));
 
+    public void ShowImpact(ApiRequest request, string? currentBody, string? previousBody)
+    {
+        var collection = FindCollection(request.CollectionId);
+        // The open tab's (possibly unsaved) version of the request replaces the stored one.
+        var requests = collection?.Requests.Select(r => r.Id == request.Id ? request : r).ToList();
+        var tool = new ImpactViewModel(request, currentBody, previousBody, requests,
+            async () => collection is null
+                ? []
+                : (await _services.Flows.GetAllAsync()).Where(f => f.CollectionId == collection.Id).ToList(),
+            Dialogs);
+        Dialogs.ShowTool(tool);
+        _ = tool.AnalyzeAsync();
+    }
+
     public void ShowDiff(string title, ResponseViewModel left, ResponseViewModel right) =>
         Dialogs.ShowTool(new DiffViewModel(title, "Previous", "Latest", left.PrettyBody, right.PrettyBody, left.StatusText, right.StatusText));
 

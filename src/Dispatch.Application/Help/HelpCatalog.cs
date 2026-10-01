@@ -66,6 +66,7 @@ public static class HelpCatalog
     public const string Monitors = "monitors";
     public const string SecurityScan = "security-scan";
     public const string MessageChecks = "message-checks";
+    public const string ChangeImpact = "change-impact";
     public const string Minimize = "minimize";
     public const string RateLimit = "rate-limit";
     public const string Capture = "capture";
@@ -294,6 +295,22 @@ public static class HelpCatalog
         ["message", "event", "consequence", "kafka", "mqtt", "amqp", "rabbitmq", "websocket", "sse", "socket.io", "async", "event-driven", "side effect", "topic"],
         null, [Assertions, Extraction, Protocols]),
 
+        new(ChangeImpact, "Testing", "Change impact map", "See what breaks when a response changes shape.",
+        [
+            new HelpParagraph("When an API renames, removes or retypes a field, the change impact map lists everything in the collection that depends on it. That covers the request's JSONPath assertions and snapshot, the variables its extraction rules will no longer set, every request, script and message check that uses those variables (followed through chains of extractions), saved examples that still show the old shape, and the test flows that run any of them."),
+            new HelpSteps(
+            [
+                "Send the request so its latest response is loaded.",
+                "Choose Tools → Change impact… next to the Send button.",
+                "Pick what to compare with: the previous response, the recorded snapshot, or a saved example.",
+                "Read the shape changes on the left and the affected items on the right. Breaks will fail; Worth checking are heuristic matches. Renames come with the corrected path."
+            ]),
+            new HelpExample("In CI: fail when the live API breaks the collection's tests", "dispatch impact \"My Collection\" --request \"Get user\" --baseline snapshot -r cli,html"),
+            new HelpTip("Renames are detected when a removed and an added field have the same type and value, or are the only same-typed pair under one parent. Check suggested paths before applying them.")
+        ],
+        ["impact", "breaking change", "rename", "renamed field", "schema change", "blast radius", "dependency", "json shape", "api change", "regression"],
+        null, [Assertions, Extraction, Flows, Cli]),
+
         new(Minimize, "Tools", "Minimize a request", "Find the parts of a request its outcome really depends on.",
         [
             new HelpParagraph("Minimize takes a request and its current outcome (a 403, a 500, a failing assertion, or a success) and keeps re-sending it with parts taken away: headers, individual cookies, query parameters, auth, form fields and JSON body members. It ends with the smallest request that still gives the same outcome."),
@@ -382,7 +399,7 @@ public static class HelpCatalog
         new(Cli, "Tools", "Command line (CI)", "Run collections, flows, scans and mocks headlessly.",
         [
             new HelpParagraph("The dispatch command uses the same engine as the app. Point it at a file, a URL, a Dispatch folder or the name of a collection saved in the app. Exit code 0 means everything passed, 1 means failures, 2 a usage error."),
-            new HelpExample("Common commands", "dispatch run \"My Collection\" -e Staging -r cli,junit,html -o reports\ndispatch run api.dispatch.json --data users.csv --bail\ndispatch flow \"My Collection\" --name \"Login smoke\"\ndispatch mock petstore.yaml --port 4010 --latency 200\ndispatch docs \"My Collection\" --format html -o api.html\ndispatch minimize \"My Collection\" --request Search\ndispatch ratelimit \"My Collection\" --request Login --expect-limit\ndispatch help"),
+            new HelpExample("Common commands", "dispatch run \"My Collection\" -e Staging -r cli,junit,html -o reports\ndispatch run api.dispatch.json --data users.csv --bail\ndispatch flow \"My Collection\" --name \"Login smoke\"\ndispatch mock petstore.yaml --port 4010 --latency 200\ndispatch docs \"My Collection\" --format html -o api.html\ndispatch minimize \"My Collection\" --request Search\ndispatch ratelimit \"My Collection\" --request Login --expect-limit\ndispatch impact \"My Collection\" --request \"Get user\"\ndispatch help"),
             new HelpTip("Export the collection as a git-friendly folder and run it from your repository in CI.")
         ],
         ["cli", "command line", "terminal", "ci", "pipeline", "headless", "github actions", "jenkins", "exit code"],

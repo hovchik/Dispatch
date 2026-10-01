@@ -80,7 +80,7 @@ public static class RateLimitInsights
             case RefillKind.Gradual:
                 yield return new ReportInsight(InsightLevel.Info,
                     $"Capacity comes back gradually (only {report.CapacityAfterRecovery} available right after recovery): a token bucket or " +
-                    $"sliding window, refilling at about {report.RefillPerSecond:0.##} req/s.");
+                    $"sliding window, refilling at {(report.RefillIsLowerBound ? "at least" : "about")} {report.RefillPerSecond:0.##} req/s.");
                 if (report.RefillPerSecond is { } rate && rate > 0)
                     yield return new ReportInsight(InsightLevel.Info,
                         $"Sustained throughput is about {rate * 60:0} requests per minute, with bursts of up to {report.BurstCapacity}.");
@@ -208,6 +208,7 @@ public static class RateLimitReportWriter
             ["refill"] = report.Refill.ToString(),
             ["capacityAfterRecovery"] = report.CapacityAfterRecovery,
             ["refillPerSecond"] = report.RefillPerSecond is { } rate ? Math.Round(rate, 3) : null,
+            ["refillIsLowerBound"] = report.RefillIsLowerBound,
             ["advertised"] = report.Advertised is { } a
                 ? new JsonObject
                 {

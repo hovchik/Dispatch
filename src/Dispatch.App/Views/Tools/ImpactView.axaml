@@ -1,0 +1,108 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:imp="using:Dispatch.Application.Impact"
+             x:Class="Dispatch.App.Views.Tools.ImpactView"
+             x:DataType="tools:ImpactViewModel">
+  <Grid ColumnDefinitions="320,*" Margin="18">
+    <!-- Baseline and shape changes -->
+    <DockPanel Margin="0,0,16,0">
+      <StackPanel DockPanel.Dock="Top" Spacing="8">
+        <TextBlock Text="Change impact" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Compares the latest response's structure with a baseline and lists every test, variable, request and flow that depends on what changed." />
+        <TextBlock Classes="section" Text="COMPARE WITH" Margin="0,6,0,0" />
+        <ComboBox ItemsSource="{Binding Baselines}" SelectedItem="{Binding SelectedBaseline}" HorizontalAlignment="Stretch"
+                  PlaceholderText="No baseline available">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="imp:ImpactBaseline">
+              <TextBlock Text="{Binding Name}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <DropDownButton Content="Export report" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+          <DropDownButton.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+              <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+            </MenuFlyout>
+          </DropDownButton.Flyout>
+        </DropDownButton>
+        <TextBlock Classes="section" Text="RESPONSE SHAPE" Margin="0,8,0,0" />
+      </StackPanel>
+      <TextBlock DockPanel.Dock="Bottom" Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
+      <Border Classes="card" Padding="10">
+        <Panel>
+          <TextBlock Classes="muted" Text="No structural change." IsVisible="{Binding NoChanges}" />
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Changes}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="imp:ShapeChange">
+                  <SelectableTextBlock Text="{Binding}" FontFamily="{StaticResource MonoFont}" FontSize="12" Margin="0,2" TextWrapping="Wrap"
+                                       Foreground="{Binding Kind, Converter={x:Static tools:ShapeChangeBrush.Instance}}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Panel>
+      </Border>
+    </DockPanel>
+
+    <!-- What is affected -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Border CornerRadius="8" Padding="12,6" Background="#33CF222E">
+          <StackPanel>
+            <TextBlock Text="{Binding BreakCount}" FontSize="22" FontWeight="Bold" Foreground="#CF222E" />
+            <TextBlock Text="Breaks" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="#339A6700">
+          <StackPanel>
+            <TextBlock Text="{Binding PossibleCount}" FontSize="22" FontWeight="Bold" Foreground="#9A6700" />
+            <TextBlock Text="Worth checking" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding VariableCount}" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="Broken variables" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+      <TextBlock Grid.Row="1" Text="{Binding Summary}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,12,0,10"
+                 IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <Border Grid.Row="2" Classes="card" Padding="0">
+        <Panel>
+          <TextBlock Classes="muted" Margin="12" TextWrapping="Wrap" Text="Nothing in this collection depends on the changed fields."
+                     IsVisible="{Binding NoImpact}" />
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Items}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="imp:ImpactItem">
+                  <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="12,8" Background="{DynamicResource SurfaceBrush}">
+                    <StackPanel Spacing="3">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Border CornerRadius="4" Padding="6,1" VerticalAlignment="Center"
+                                Background="{Binding Severity, Converter={x:Static tools:ImpactSeverityBrush.Instance}}">
+                          <TextBlock Text="{Binding SeverityText}" FontSize="11" FontWeight="Bold" Foreground="White" />
+                        </Border>
+                        <TextBlock Text="{Binding Owner}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Location}" Classes="muted" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+                      <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="13" />
+                      <TextBlock FontSize="12" Foreground="#22A06B" TextWrapping="Wrap"
+                                 IsVisible="{Binding Suggestion, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <Run Text="Fix:" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Suggestion}" />
+                      </TextBlock>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Panel>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

@@ -63,6 +63,17 @@ count. Expected values can use variables extracted from the response. The checks
 app, the collection runner, flows, monitors and `dispatch run`, with how long the message took or what arrived instead.
 Edit them in a request's **Messages** tab.
 
+### Change impact map
+
+When a response changes shape (a field renamed, removed or retyped), **Tools → Change impact…** compares it with the
+previous response, the recorded snapshot or a saved example. It then lists everything in the collection that depends
+on the change: the request's JSONPath assertions and snapshot, the variables its extraction rules will no longer set,
+and every request, script, message check and test flow that uses those variables. Chains are followed (a request that
+uses a broken variable can break what it extracts too), and saved examples that still serve the old shape are flagged.
+Renames come with the corrected path, e.g. *"renamed `$.user.id` → `$.user.userId` breaks 3 tests, 2 extractions,
+2 requests and 1 flow"*. `dispatch impact <collection> --request "Get user"` checks the live API against the snapshot
+in CI and fails when something breaks.
+
 ### Experimental: request forensics
 
 Two investigative tools that go beyond what API clients usually offer. Open them from the flask button next to
@@ -152,6 +163,7 @@ dotnet run --project src/Dispatch.Cli -- scan petstore.yaml --fail-on high -r cl
 dotnet run --project src/Dispatch.Cli -- docs "My Collection" --format html -o api.html
 dotnet run --project src/Dispatch.Cli -- minimize "My Collection" --request "Create order" -r cli,html
 dotnet run --project src/Dispatch.Cli -- ratelimit "My Collection" --request Login --expect-limit
+dotnet run --project src/Dispatch.Cli -- impact "My Collection" --request "Get user" --baseline snapshot -r cli,html
 dotnet run --project src/Dispatch.Cli -- monitor --watch
 dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
 ```

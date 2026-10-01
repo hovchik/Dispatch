@@ -391,13 +391,30 @@ public class HttpProtocolExecutorTests
         Assert.NotNull(response.Timings?.Connect);
     }
 
+    // Next candidate port. Ports come from 20000-31999, below the OS's ephemeral range (32768+ on Linux, 49152+ on
+    // Windows and macOS), so a port handed out here can't be taken by an outgoing connection or a port-0 server before the
+    // test binds it. Each port is handed out at most once per run, so parallel tests never get the same one.
+    private static int _nextPort = 20000 + Environment.ProcessId % 400 * 25;
+
+    /// <summary>A port that is free now and that no other test in this run will be given.</summary>
     internal static int FreePort()
     {
-        var l = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
-        l.Start();
-        var port = ((IPEndPoint)l.LocalEndpoint).Port;
-        l.Stop();
-        return port;
+        for (var attempt = 0; attempt < 2000; attempt++)
+        {
+            var port = 20000 + (Interlocked.Increment(ref _nextPort) - 20000) % 12000;
+            try
+            {
+                var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, port);
+                probe.Start();
+                probe.Stop();
+                return port;
+            }
+            catch (System.Net.Sockets.SocketException)
+            {
+                // In use by something else; try the next one.
+            }
+        }
+        throw new InvalidOperationException("No free TCP port found for the test.");
     }
 }
 
