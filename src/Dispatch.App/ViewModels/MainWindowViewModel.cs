@@ -32,6 +32,8 @@ public sealed record MainServices(
     Dispatch.Application.Flows.FlowRunner FlowRunner,
     IMonitorRepository Monitors,
     Dispatch.Application.Monitoring.MonitorService MonitorService,
+    Dispatch.Infrastructure.Capture.CertificateAuthority CaptureAuthority,
+    Func<Dispatch.Infrastructure.Capture.CaptureProxy> CaptureProxyFactory,
     GrpcSchemaProvider GrpcSchemas,
     Infrastructure.Auth.SystemBrowserInteraction OAuth);
 
@@ -229,6 +231,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
     private void OpenCookies() => Dialogs.ShowTool(new CookiesViewModel(_services.Cookies));
 
     [RelayCommand]
+    private void OpenCapture() => Dialogs.ShowTool(new CaptureViewModel(_services.CaptureProxyFactory(), _services.CaptureAuthority,
+        Dialogs, _services.Tabs.Collections, Collections.LoadAsync));
+
+    [RelayCommand]
     private void OpenRunner() => OpenCollectionTool(CollectionAction.Run);
 
     [RelayCommand]
@@ -358,6 +364,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
                 _ = RunCollectionActionAsync(node, CollectionAction.Scan);
         });
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
+        yield return new PaletteItem("Capture proxy…", "Record browser / app traffic into a collection", OpenCapture);
         foreach (var collection in Collections.Items)
             yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
                 () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));

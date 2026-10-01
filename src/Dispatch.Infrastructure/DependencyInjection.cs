@@ -77,6 +77,8 @@ public static class DependencyInjection
         services.AddSingleton<Dispatch.Application.Flows.FlowRunner>();
         services.AddSingleton<Dispatch.Application.Monitoring.IAlertSender, Monitoring.AlertSender>();
         services.AddSingleton<Dispatch.Application.Monitoring.MonitorService>();
+        services.AddSingleton<Capture.CertificateAuthority>();
+        services.AddTransient<Capture.CaptureProxy>();
         return services;
     }
 }
