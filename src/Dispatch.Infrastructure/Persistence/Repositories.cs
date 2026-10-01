@@ -205,6 +205,35 @@ public sealed class HistoryRepository(IDbContextFactory<DispatchDbContext> facto
     }
 }
 
+public sealed class FlowRepository(IDbContextFactory<DispatchDbContext> factory) : IFlowRepository
+{
+    public async Task<IReadOnlyList<TestFlow>> GetAllAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Flows.AsNoTracking().OrderBy(f => f.SortOrder).ThenBy(f => f.Name).ToListAsync(ct);
+    }
+
+    public async Task SaveAsync(TestFlow flow, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        flow.UpdatedAt = DateTimeOffset.UtcNow;
+        if (await db.Flows.AnyAsync(f => f.Id == flow.Id, ct))
+            db.Flows.Update(flow);
+        else
+        {
+            flow.SortOrder = (await db.Flows.MaxAsync(f => (int?)f.SortOrder, ct) ?? -1) + 1;
+            db.Flows.Add(flow);
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteAsync(Guid flowId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await db.Flows.Where(f => f.Id == flowId).ExecuteDeleteAsync(ct);
+    }
+}
+
 public sealed class SettingsRepository(IDbContextFactory<DispatchDbContext> factory) : ISettingsRepository
 {
     public async Task<string?> GetAsync(string key, CancellationToken ct = default)

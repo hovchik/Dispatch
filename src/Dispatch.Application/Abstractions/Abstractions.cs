@@ -99,6 +99,13 @@ public interface ICollectionRepository
     Task DeleteRequestAsync(Guid requestId, CancellationToken ct = default);
 }
 
+public interface IFlowRepository
+{
+    Task<IReadOnlyList<TestFlow>> GetAllAsync(CancellationToken ct = default);
+    Task SaveAsync(TestFlow flow, CancellationToken ct = default);
+    Task DeleteAsync(Guid flowId, CancellationToken ct = default);
+}
+
 public interface IEnvironmentRepository
 {
     Task<IReadOnlyList<ApiEnvironment>> GetAllAsync(CancellationToken ct = default);

@@ -38,6 +38,9 @@ public interface IRequestSender
     /// test script, history. Never throws for request / network errors.
     /// </summary>
     Task<ApiResponse> SendAsync(ApiRequest request, SendOptions options, CancellationToken cancellationToken);
+
+    /// <summary>Runs only a request's pre-request script against <paramref name="variables"/> (for flow Script steps). No HTTP call.</summary>
+    Task<ApiResponse> SendWithScriptOnlyAsync(ApiRequest request, VariableContext variables, CancellationToken cancellationToken);
 }
 
 /// <summary>Variables that live for the app session: runtime values from extraction/scripts, and globals.</summary>
@@ -109,6 +112,16 @@ public sealed class RequestSender : IRequestSender
 
     public Task<ApiResponse> SendAsync(ApiRequest request, ApiEnvironment? environment, CancellationToken cancellationToken) =>
         SendAsync(request, new SendOptions { Environment = environment }, cancellationToken);
+
+    public async Task<ApiResponse> SendWithScriptOnlyAsync(ApiRequest request, VariableContext variables, CancellationToken cancellationToken)
+    {
+        var log = new List<string>();
+        if (_scripts is null || string.IsNullOrWhiteSpace(request.PreRequestScript))
+            return new ApiResponse { ScriptLog = log };
+        var working = request.Clone();
+        var pre = await _scripts.RunPreRequestAsync(working.PreRequestScript, working, variables, cancellationToken).ConfigureAwait(false);
+        return new ApiResponse { Error = pre.Error, ScriptLog = pre.Log };
+    }
 
     public async Task<ApiResponse> SendAsync(ApiRequest request, SendOptions options, CancellationToken cancellationToken)
     {

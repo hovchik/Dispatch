@@ -573,3 +573,13 @@ public sealed class ScanSeverityBrush : Avalonia.Data.Converters.IValueConverter
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) => null;
 }
+
+
+/// <summary>Flow-log depth → left margin thickness.</summary>
+public sealed class DepthIndentConverter : Avalonia.Data.Converters.IValueConverter
+{
+    public static readonly DepthIndentConverter Instance = new();
+    public object Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) =>
+        new Avalonia.Thickness(value is int d ? Math.Clamp(d, 0, 10) * 14 : 0, 0, 0, 0);
+    public object? ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) => null;
+}

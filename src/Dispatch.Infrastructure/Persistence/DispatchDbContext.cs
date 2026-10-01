@@ -21,6 +21,7 @@ public sealed class DispatchDbContext(DbContextOptions<DispatchDbContext> option
     public DbSet<ApiEnvironment> Environments => Set<ApiEnvironment>();
     public DbSet<HistoryEntry> History => Set<HistoryEntry>();
     public DbSet<SettingEntry> Settings => Set<SettingEntry>();
+    public DbSet<TestFlow> Flows => Set<TestFlow>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -79,6 +80,15 @@ public sealed class DispatchDbContext(DbContextOptions<DispatchDbContext> option
             b.Property(h => h.Request).HasJsonConversion();
             b.Property(h => h.Response).HasNullableJsonConversion();
             b.HasIndex(h => h.Timestamp);
+        });
+
+        modelBuilder.Entity<TestFlow>(b =>
+        {
+            b.ToTable("Flows");
+            b.HasKey(f => f.Id);
+            b.Property(f => f.Name).IsRequired().HasMaxLength(200);
+            b.Property(f => f.Steps).HasJsonConversion();
+            b.HasIndex(f => f.CollectionId);
         });
 
         modelBuilder.Entity<SettingEntry>(b =>

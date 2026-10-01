@@ -24,7 +24,8 @@ public enum CollectionAction
     Settings,
     DocsHtml,
     DocsMarkdown,
-    Scan
+    Scan,
+    Flows
 }
 
 public sealed partial class CollectionsViewModel(ICollectionRepository repository) : ObservableObject
