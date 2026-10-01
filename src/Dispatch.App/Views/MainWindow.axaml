@@ -99,6 +99,13 @@
               <TextBlock Text="Capture" />
             </StackPanel>
           </Button>
+          <Button Classes="tool" Command="{Binding OpenClientFuzzCommand}"
+                  ToolTip.Tip="Client fuzzing: vary responses to your app through a proxy (nulls, empty lists, 500s…) and see what breaks">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconFlask}" />
+              <TextBlock Text="Fuzz app" />
+            </StackPanel>
+          </Button>
         </StackPanel>
 
         <Button Grid.Column="2" HorizontalAlignment="Center" MinWidth="240" Margin="12,0" Padding="10,5"

@@ -71,6 +71,26 @@ count. Expected values can use variables extracted from the response. The checks
 app, the collection runner, flows, monitors and `dispatch run`, with how long the message took or what arrived instead.
 Edit them in a request's **Messages** tab.
 
+### Client fuzzing
+
+**Fuzz app** in the toolbar (or `dispatch fuzz-client`) fuzzes the client instead of the server. It is a proxy, like
+Capture, between your web or mobile app and its API. After a few normal responses per endpoint it changes one response
+at a time:
+
+* a null or missing field, an empty or single-item list
+* an unexpected enum value, a wrong type, an unknown field, very long text
+* a 500 / 503 / 429 / 401, a malformed, empty or slow body
+
+It then watches what the app does next, and flags:
+
+* retry storms
+* broken values sent back to the API (`GET /avatars/undefined`, `null`, `NaN`, `[object Object]`)
+* calls to error trackers (Sentry, `/errors`, `/log`…)
+* an app that goes silent where it normally continues
+
+The result reads like *"breaks when `$.user.avatar` is missing: GET /avatars/undefined"*. Reports export as HTML and
+JSON, and `--fail-on-break` gates CI runs of automated UI tests that go through the proxy.
+
 ### API laws (inferred invariants)
 
 **Collection menu → API laws…** learns the rules an API keeps from its traffic: recent history, runs of the collection,
@@ -195,6 +215,7 @@ dotnet run --project src/Dispatch.Cli -- impact "My Collection" --request "Get u
 dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
 dotnet run --project src/Dispatch.Cli -- monitor --watch
 dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
+dotnet run --project src/Dispatch.Cli -- fuzz-client --port 8899 --host api.myapp.com --duration 10m -r cli,html
 ```
 
 `<collection>` can be any importable file, a URL, a Dispatch folder, or the name of a collection saved in the

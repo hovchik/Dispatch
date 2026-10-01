@@ -37,6 +37,8 @@ public static class Program
           dispatch flow <collection> [--name n]   Run saved test flow(s) of a collection
           dispatch monitor [--once|--watch] [...]  Run scheduled monitors and send alerts
           dispatch capture [--port 8899] [...]     Record proxied traffic to a HAR or Dispatch collection
+          dispatch fuzz-client [--port 8899] [...] Vary responses to an app through a proxy to find how it breaks
+                                                  (--host h, --window 5s, --kinds NullField,EmptyArray,…, --duration 10m)
           dispatch version
 
         <collection> is a file (Dispatch, Postman, Insomnia, HAR, OpenAPI, .http), a Dispatch folder, a URL,
@@ -100,6 +102,7 @@ public static class Program
                 "flow" => await FlowCommand.ExecuteAsync(rest, cancel.Token),
                 "monitor" => await MonitorCommand.ExecuteAsync(rest, cancel.Token),
                 "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),
+                "fuzz-client" => await FuzzClientCommand.ExecuteAsync(rest, cancel.Token),
                 "version" or "--version" => Version(),
                 _ => throw new UsageException($"Unknown command '{command}'. Run 'dispatch --help'.")
             };

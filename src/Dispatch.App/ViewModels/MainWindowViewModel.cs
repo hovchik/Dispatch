@@ -266,6 +266,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         Dialogs, _services.Tabs.Clipboard, _services.Tabs.Collections, Collections.LoadAsync));
 
     [RelayCommand]
+    private void OpenClientFuzz() => Dialogs.ShowTool(new ClientFuzzViewModel(_services.CaptureProxyFactory, _services.CaptureAuthority,
+        Dialogs, _services.Tabs.Clipboard));
+
+    [RelayCommand]
     private void OpenRunner() => OpenCollectionTool(CollectionAction.Run);
 
     [RelayCommand]
@@ -464,6 +468,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         });
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
         yield return new PaletteItem("Capture proxy…", "Record browser / app traffic into a collection", OpenCapture);
+        yield return new PaletteItem("Client fuzzing…", "Vary responses to an app through a proxy to find how it breaks", OpenClientFuzz);
         foreach (var collection in Collections.Items)
             yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
                 () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));

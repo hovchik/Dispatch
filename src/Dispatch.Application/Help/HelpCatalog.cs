@@ -68,6 +68,7 @@ public static class HelpCatalog
     public const string MessageChecks = "message-checks";
     public const string ChangeImpact = "change-impact";
     public const string ApiLaws = "api-laws";
+    public const string ClientFuzz = "client-fuzz";
     public const string Minimize = "minimize";
     public const string RateLimit = "rate-limit";
     public const string Capture = "capture";
@@ -332,6 +333,23 @@ public static class HelpCatalog
         ],
         ["laws", "invariants", "properties", "anomaly", "infer", "learn", "property-based", "daikon", "consistency", "rules"],
         null, [Assertions, Capture, Cli]),
+
+        new(ClientFuzz, "Tools", "Client fuzzing", "Find out how your app breaks when the API answers unexpectedly.",
+        [
+            new HelpParagraph("Client fuzzing tests the app, not the API. Like the capture proxy, it sits between your web or mobile app and its API. It lets a few normal responses per endpoint through, then changes one response at a time: a null or missing field, an empty or single-item list, an unexpected enum value, a wrong type, an unknown extra field, very long text, a 500 / 503 / 429 / 401, a malformed or empty body, or a slow response."),
+            new HelpParagraph("After each change it watches what the app does next. It flags retry storms (many repeats of the same call), broken values sent back to the API (GET /users/undefined, null, NaN, [object Object]), calls to error trackers (Sentry, /errors, /log…), and an app that goes silent where it normally continues. The result reads like: the app breaks when $.user.avatar is null: GET /avatars/undefined."),
+            new HelpSteps(
+            [
+                "Click Fuzz app in the toolbar, choose the port and the kinds of variation, and click Start.",
+                "Point the app at the proxy address, as with the capture proxy. For HTTPS, export the CA and trust it on the device.",
+                "Use the app as usual, revisiting screens so endpoints are requested several times. Each variation is tried once, and you get a live verdict.",
+                "Stop and export an HTML or JSON report."
+            ]),
+            new HelpExample("From the command line", "dispatch fuzz-client --port 8899 --host api.myapp.com --window 5s --duration 10m -r cli,html\ndispatch fuzz-client --kinds NullField,DropField,EmptyArray --fail-on-break"),
+            new HelpTip("Use a test account: variations such as 401 or empty lists can make an app sign out or show empty states. Signals are heuristics, so a quiet app isn't proof that it copes. Check flagged screens yourself.")
+        ],
+        ["fuzz", "fuzzing", "client", "app", "mobile", "frontend", "resilience", "chaos", "null", "crash", "robustness", "proxy"],
+        null, [Capture, Mock]),
 
         new(Minimize, "Tools", "Minimize a request", "Find the parts of a request its outcome really depends on.",
         [
