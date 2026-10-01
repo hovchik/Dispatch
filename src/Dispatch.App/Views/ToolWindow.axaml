@@ -22,6 +22,19 @@
     <DataTemplate DataType="tools:DiffViewModel"><tv:DiffView /></DataTemplate>
     <DataTemplate DataType="tools:CodeSnippetViewModel"><tv:CodeSnippetView /></DataTemplate>
     <DataTemplate DataType="tools:CollectionSettingsViewModel"><tv:CollectionSettingsView /></DataTemplate>
+    <DataTemplate DataType="tools:HelpViewModel"><tv:HelpView /></DataTemplate>
   </Window.DataTemplates>
-  <ContentControl Content="{ReflectionBinding}" />
+  <DockPanel>
+    <!-- Tools linked to a help topic get a "How does this work?" link above their content. -->
+    <Border x:Name="HelpBar" DockPanel.Dock="Top" IsVisible="False" Padding="12,4"
+            BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+      <Button Classes="link" HorizontalAlignment="Right" Click="OnHelpClick" ToolTip.Tip="Open the guide for this tool (F1)">
+        <StackPanel Orientation="Horizontal" Spacing="5">
+          <PathIcon Data="{StaticResource IconHelp}" Width="12" Height="12" />
+          <TextBlock Text="How does this work?" />
+        </StackPanel>
+      </Button>
+    </Border>
+    <ContentControl Content="{ReflectionBinding}" />
+  </DockPanel>
 </Window>

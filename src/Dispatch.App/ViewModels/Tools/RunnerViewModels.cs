@@ -56,6 +56,7 @@ public sealed partial class RunnerViewModel : ObservableObject, ITool
     }
 
     public string Title => $"Run · {CollectionName}";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.Runner;
     public double Width => 1000;
     public double Height => 700;
     public string CollectionName { get; }
@@ -234,6 +235,7 @@ public sealed partial class MockServerViewModel : ObservableObject, ITool
     }
 
     public string Title => $"Mock server · {_collection.Name}";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.Mock;
     public double Width => 960;
     public double Height => 660;
     public string Hint { get; }
@@ -343,6 +345,7 @@ public sealed partial class LoadTestViewModel : ObservableObject, ITool
     }
 
     public string Title => $"Load test · {_collection.Name}";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.LoadTest;
     public double Width => 1000;
     public double Height => 720;
 

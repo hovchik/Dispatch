@@ -18,9 +18,13 @@
                IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
     <Panel>
-      <TextBlock Classes="muted" TextWrapping="Wrap" Margin="16" TextAlignment="Center"
-                 Text="No collections yet. Click + to create one, save a request, or import a Postman / OpenAPI / HAR file."
-                 IsVisible="{Binding Items.Count, Converter={x:Static conv:IsZeroConverter.Instance}}" />
+      <StackPanel Margin="16" Spacing="10" IsVisible="{Binding Items.Count, Converter={x:Static conv:IsZeroConverter.Instance}}">
+        <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
+                   Text="No collections yet. Click + to create one, save a request, or import a Postman / OpenAPI / HAR file." />
+        <Button HorizontalAlignment="Center" Content="Add example collection"
+                Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LoadSamplesCommand}"
+                ToolTip.Tip="Ready-made requests that show tests, variables, chaining, scripts and auth" />
+      </StackPanel>
 
       <TreeView ItemsSource="{Binding Items}" Padding="4,0">
         <TreeView.Styles>

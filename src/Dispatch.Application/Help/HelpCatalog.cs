@@ -1,0 +1,341 @@
+namespace Dispatch.Application.Help;
+
+/// <summary>One piece of a help topic: a paragraph, numbered steps, a copyable example or a tip.</summary>
+public abstract record HelpBlock;
+
+public sealed record HelpParagraph(string Text) : HelpBlock;
+
+public sealed record HelpSteps(IReadOnlyList<string> Items) : HelpBlock
+{
+    public IReadOnlyList<HelpStep> Numbered => Items.Select((text, i) => new HelpStep(i + 1, text)).ToList();
+}
+
+public sealed record HelpStep(int Number, string Text);
+
+/// <summary>A code or text sample the reader can copy into the app.</summary>
+public sealed record HelpExample(string Caption, string Code) : HelpBlock;
+
+public sealed record HelpTip(string Text) : HelpBlock;
+
+/// <summary>
+/// A help article. <see cref="TryIt"/> names a request in <see cref="SampleCollection"/> that demonstrates the topic.
+/// </summary>
+public sealed record HelpTopic(
+    string Id,
+    string Category,
+    string Title,
+    string Summary,
+    IReadOnlyList<HelpBlock> Blocks,
+    IReadOnlyList<string> Keywords,
+    string? TryIt = null,
+    IReadOnlyList<string>? Related = null)
+{
+    public bool Matches(string query)
+    {
+        var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return terms.All(t => Text.Contains(t, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string Text => string.Join('\n', new[] { Title, Summary, Category }
+        .Concat(Keywords)
+        .Concat(Blocks.Select(b => b switch
+        {
+            HelpParagraph p => p.Text,
+            HelpSteps s => string.Join('\n', s.Items),
+            HelpExample e => e.Caption + "\n" + e.Code,
+            HelpTip t => t.Text,
+            _ => ""
+        })));
+}
+
+/// <summary>The built-in user guide shown in the Help window and linked from hints across the app.</summary>
+public static class HelpCatalog
+{
+    public const string GettingStarted = "getting-started";
+    public const string Requests = "requests";
+    public const string Variables = "variables";
+    public const string Collections = "collections";
+    public const string Assertions = "assertions";
+    public const string Extraction = "extraction";
+    public const string Scripts = "scripts";
+    public const string Auth = "auth";
+    public const string Runner = "runner";
+    public const string Mock = "mock";
+    public const string LoadTest = "load-test";
+    public const string Flows = "flows";
+    public const string Monitors = "monitors";
+    public const string SecurityScan = "security-scan";
+    public const string Capture = "capture";
+    public const string ImportExport = "import-export";
+    public const string Docs = "docs";
+    public const string Protocols = "protocols";
+    public const string Cli = "cli";
+    public const string Shortcuts = "shortcuts";
+
+    public static HelpTopic? Find(string? id) => All.FirstOrDefault(t => t.Id == id);
+
+    public static IEnumerable<HelpTopic> Search(string? query) =>
+        string.IsNullOrWhiteSpace(query) ? All : All.Where(t => t.Matches(query));
+
+    public static IReadOnlyList<HelpTopic> All { get; } =
+    [
+        new(GettingStarted, "Basics", "Getting started", "Send your first request in under a minute.",
+        [
+            new HelpParagraph("Dispatch sends requests over HTTP, GraphQL, gRPC, SOAP, WebSocket, SSE, Socket.IO, MQTT, Kafka, AMQP and raw TCP/UDP, and checks the responses for you. Everything you open lives in a tab; tabs can be saved into collections."),
+            new HelpSteps(
+            [
+                "Click New (or press Ctrl+T). The arrow next to New lists every protocol.",
+                "Pick a method and type a URL, for example https://jsonplaceholder.typicode.com/posts/1.",
+                "Press Send or Ctrl+Enter. The response appears on the right with its status, time and size.",
+                "Press Ctrl+S to save the request into a collection so you can find it again in the sidebar."
+            ]),
+            new HelpExample("A URL to try", "https://jsonplaceholder.typicode.com/posts/1"),
+            new HelpTip("Load the example collection (Help → Load example collection) for ready-made requests that show tests, variables, chaining and scripts. Every topic with a Try it button opens one of them."),
+            new HelpTip("Press Ctrl+K at any time to search requests and commands, and F1 to come back to this guide.")
+        ],
+        ["start", "first", "welcome", "new", "tutorial", "intro"], "Simple GET", [Requests, Collections, Variables]),
+
+        new(Requests, "Basics", "Building requests", "Methods, query parameters, headers and bodies.",
+        [
+            new HelpParagraph("The URL bar and the Params tab stay in sync: type ?page=2 in the URL and a row appears in Params, or add a row and the URL updates. Untick a row to leave it out without deleting it."),
+            new HelpParagraph("Body offers JSON, XML, text, form-urlencoded, multipart (with files) and binary. Dispatch sets the Content-Type for you unless you add one in Headers."),
+            new HelpExample("A JSON body with fake data", "{\n  \"name\": \"{{$randomFullName}}\",\n  \"email\": \"{{$randomEmail}}\",\n  \"age\": {{$randomInt(18,90)}}\n}"),
+            new HelpParagraph("The response panel shows the body (pretty, raw, table for JSON arrays, or a preview), headers, cookies, test results and a timeline with DNS, connect, TLS and time to first byte. Filter the body with a JSONPath such as $.items[0].name."),
+            new HelpTip("Turn a cURL command into a request with Import → paste. Generate code for any request (cURL, Python, C#, Go, JS…) from the command palette.")
+        ],
+        ["url", "method", "params", "query", "headers", "body", "json", "form", "multipart", "file", "curl", "response", "timeline"],
+        "POST JSON with fake data", [Variables, Auth]),
+
+        new(Variables, "Basics", "Variables & environments", "Reuse values with {{placeholders}}.",
+        [
+            new HelpParagraph("Write {{name}} anywhere in a request: the URL, headers, body, auth or assertions. Before sending, Dispatch replaces it with the value from the narrowest scope that defines it."),
+            new HelpExample("Scopes, from weakest to strongest", "globals < collection < environment < data row < runtime"),
+            new HelpSteps(
+            [
+                "Open the Environments tab in the sidebar and click + to create one, e.g. \"Staging\".",
+                "Add variables such as baseUrl = https://staging.example.com. Tick Secret for passwords and tokens: they are encrypted at rest and left out of exports.",
+                "Choose the environment in the drop-down at the top right. Requests now resolve {{baseUrl}} from it.",
+                "Collection variables live under the collection's menu → Settings & variables."
+            ]),
+            new HelpExample("A URL that uses variables", "{{baseUrl}}/users/{{userId}}"),
+            new HelpParagraph("Dynamic values generate something new on every send. Type {{$ to get autocomplete."),
+            new HelpExample("Dynamic values", "{{$guid}}  {{$timestamp}}  {{$randomInt(1,100)}}\n{{$randomEmail}}  {{$randomFullName}}  {{$randomDate(-30,30)}}"),
+            new HelpTip("Switching the environment is the quickest way to point a whole collection at dev, staging or production.")
+        ],
+        ["environment", "variable", "placeholder", "secret", "global", "dynamic", "faker", "random", "scope", "baseurl"],
+        "Simple GET", [Extraction, Scripts]),
+
+        new(Collections, "Basics", "Collections, folders & history", "Organise and find your requests.",
+        [
+            new HelpParagraph("A collection groups saved requests, optionally in nested folders, with its own variables and an OpenAPI document for contract checks. Right-click a collection for the runner, mock server, load test, flows, monitors, security scan, docs and export."),
+            new HelpSteps(
+            [
+                "Press Ctrl+S on a tab and pick a collection (a new one is created if you have none).",
+                "Right-click a request → Move to folder… and type a path such as Users/Admin.",
+                "Use the search box above the tree to filter requests by name or URL."
+            ]),
+            new HelpParagraph("History records every request you send. Click an entry to open it again, or right-click two entries to compare their responses side by side."),
+            new HelpTip("Unsaved tabs show their title in italics; a dot on a tab means it has unsaved changes.")
+        ],
+        ["collection", "folder", "save", "history", "organise", "organize", "tree", "compare"],
+        null, [ImportExport, Runner]),
+
+        new(Assertions, "Testing", "Assertions (no-code tests)", "Check status, time, headers and body without writing code.",
+        [
+            new HelpParagraph("Open the Tests tab and click Add. Each row reads as: source, path, operator, expected value. Assertions run after every send, in the collection runner and in the CLI; results appear in the response's Tests tab."),
+            new HelpExample("Examples of assertion rows", "Status                         equals        200\nResponse time (ms)             less than     500\nHeader   Content-Type          contains      json\nJSONPath $.data[0].id          exists\nJSONPath $.items               has length    10\nJSON Schema  {\"type\":\"object\"}   is valid"),
+            new HelpParagraph("+ Status and + Time pre-fill rows from the last response. + Contract validates the response against the collection's OpenAPI document. + Snapshot records the current response and fails when a later one differs; list changing fields such as $.timestamp as ignore paths."),
+            new HelpTip("Expected values can use variables, e.g. JSONPath $.id equals {{userId}}.")
+        ],
+        ["test", "assert", "check", "expect", "status", "jsonpath", "xpath", "schema", "contract", "openapi", "snapshot"],
+        "Simple GET", [Scripts, Runner]),
+
+        new(Extraction, "Testing", "Extraction & chaining", "Pass values from one response to the next request.",
+        [
+            new HelpParagraph("The Extract tab copies a value out of the response into a variable. Later requests use it as {{name}}. Typical use: log in once, extract the token, and send it as a Bearer token everywhere else."),
+            new HelpSteps(
+            [
+                "In the login request open Extract and click Add.",
+                "Variable: token · Source: JSONPath · Path: $.access_token.",
+                "Scope: Environment writes it to the active environment (kept), Runtime keeps it for this session only.",
+                "In other requests set Auth → Bearer token to {{token}}."
+            ]),
+            new HelpExample("Paths you can extract from", "JSONPath   $.data.id\nHeader     Location\nXPath      //order/@id\nRegex      token=([a-z0-9]+)"),
+            new HelpTip("Try the two \"Chaining\" requests in the example collection: send step 1, then step 2 uses the id it extracted.")
+        ],
+        ["extract", "chain", "chaining", "token", "login", "capture value", "pass", "variable"],
+        "Chaining 1: extract a user id", [Variables, Flows]),
+
+        new(Scripts, "Testing", "Scripts (pm API)", "Pre-request and test scripts in JavaScript, Postman-compatible.",
+        [
+            new HelpParagraph("Pre-request scripts run before sending and can set variables or change the request. Test scripts run after the response and can define tests with pm.test and pm.expect. Postman scripts usually work unchanged."),
+            new HelpExample("Test script", "pm.test(\"Status is 200\", () => pm.response.to.have.status(200));\n\npm.test(\"Has a title\", () => {\n  const json = pm.response.json();\n  pm.expect(json).to.have.property(\"title\");\n});\n\npm.environment.set(\"todoId\", pm.response.json().id);"),
+            new HelpExample("Pre-request script", "pm.variables.set(\"requestId\", Date.now().toString());\npm.request.headers.upsert({ key: \"X-Trace\", value: \"dispatch\" });"),
+            new HelpTip("The Snippets menu in the Tests tab inserts common checks. console.log output appears in the response's Console tab."),
+            new HelpTip("pm.visualizer.set(template, data) renders a custom HTML view of the response.")
+        ],
+        ["script", "javascript", "js", "pm", "postman", "pre-request", "test script", "expect", "console", "visualizer"],
+        "Test script", [Assertions, Extraction]),
+
+        new(Auth, "Basics", "Authorization", "Bearer, Basic, API key, OAuth 2.0, AWS, Digest, NTLM and mTLS.",
+        [
+            new HelpParagraph("Choose a type in the Auth tab. Dispatch adds the right header (or query parameter) when sending, so you don't have to build it by hand."),
+            new HelpSteps(
+            [
+                "Bearer: paste a token or use {{token}}.",
+                "API key: name, value, and whether it goes in a header or the query string.",
+                "OAuth 2.0: fill in the token URL, client id, secret and scope. Dispatch fetches the token when you send, caches it and refreshes it when it expires. Authorization code (with PKCE) and device code open your browser.",
+                "Client certificates (mTLS) are under the Settings tab."
+            ]),
+            new HelpTip("Store secrets in an environment variable marked Secret and reference it, so the value never ends up in exports."),
+            new HelpTip("JWTs in responses are decoded for you in the response's JWT tab.")
+        ],
+        ["auth", "authorization", "bearer", "token", "basic", "api key", "oauth", "oauth2", "pkce", "aws", "sigv4", "digest", "ntlm", "mtls", "certificate", "jwt"],
+        "Bearer token", [Variables, Extraction]),
+
+        new(Runner, "Testing", "Collection runner & data-driven runs", "Run many requests in order and get a report.",
+        [
+            new HelpParagraph("The runner sends the requests of a collection one after another, evaluates their assertions and scripts, and shows a pass/fail summary. Open it from Runner in the toolbar or the collection's menu → Run collection…"),
+            new HelpSteps(
+            [
+                "Tick and reorder the requests to run.",
+                "Set iterations, a delay between requests, and whether to stop at the first failure.",
+                "Optionally choose a CSV or JSON data file: each row is one iteration and its columns become variables.",
+                "Click Run, then export an HTML, JUnit XML or JSON report."
+            ]),
+            new HelpExample("users.csv: each column is a {{variable}}", "email,password,expectedStatus\nalice@example.com,secret1,200\nbob@example.com,wrong,401"),
+            new HelpTip("The same run works headless: dispatch run \"My Collection\" --data users.csv -r junit,html.")
+        ],
+        ["runner", "run", "collection run", "iterations", "data", "csv", "data-driven", "report", "junit", "html report"],
+        null, [Assertions, Cli, Flows]),
+
+        new(Mock, "Tools", "Mock server", "Serve fake responses before the real API exists.",
+        [
+            new HelpParagraph("The mock server answers on a local port with the saved examples of a collection. Save a response with \"Save as example\" below the response, or write one in the request's Examples tab."),
+            new HelpSteps(
+            [
+                "Save at least one example on a request.",
+                "Open Mock in the toolbar (or the collection's menu → Mock server…) and click Start.",
+                "Point your app at the shown address, e.g. http://localhost:3000."
+            ]),
+            new HelpParagraph("You can add latency, jitter, an error rate and dropped connections to test how your client copes. Dynamic mode generates fresh fake data from schemas; stateful mode remembers POST/PUT/PATCH/DELETE like a tiny database."),
+            new HelpExample("Templating in an example body", "{ \"id\": \"{{$guid}}\", \"name\": \"{{body.name}}\", \"agent\": \"{{header.User-Agent}}\" }")
+        ],
+        ["mock", "stub", "fake", "example", "latency", "server", "crud", "offline"],
+        "Simple GET", [Collections]),
+
+        new(LoadTest, "Tools", "Load testing", "Virtual users, ramp-up and latency percentiles.",
+        [
+            new HelpParagraph("Load test sends the chosen requests from many virtual users at once and charts requests per second, p50/p95/p99 latency and errors live."),
+            new HelpSteps(
+            [
+                "Open Load test in the toolbar.",
+                "Choose virtual users, duration, ramp-up and think time.",
+                "Start, watch the chart, and compare per-request statistics at the end."
+            ]),
+            new HelpTip("Only load test systems you own or are allowed to test. Start small (5–10 users) and increase."),
+            new HelpExample("From CI, failing if p95 is above 300 ms", "dispatch load \"My Collection\" --users 50 --duration 60s --max-p95 300")
+        ],
+        ["load", "performance", "stress", "virtual users", "rps", "latency", "p95", "percentile", "benchmark"],
+        null, [Runner, Cli]),
+
+        new(Flows, "Testing", "Test flows", "Chain requests with conditions, loops and retries.",
+        [
+            new HelpParagraph("A flow is a visual script of steps that share one set of variables: send a request, if/else, repeat, for-each, until (retry with a wait), set a variable, run a script, delay, or stop/fail."),
+            new HelpSteps(
+            [
+                "Collection menu → Test flows… → New flow.",
+                "Add a Request step for login, then an Until step that polls a job until $.status equals done.",
+                "Run it and follow each step's result; run it in CI with dispatch flow."
+            ]),
+            new HelpTip("Use flows when the order or a condition matters; use the plain runner when every request is independent.")
+        ],
+        ["flow", "workflow", "if", "loop", "repeat", "for-each", "retry", "until", "poll", "scenario"],
+        null, [Extraction, Runner]),
+
+        new(Monitors, "Tools", "Monitors", "Run a collection on a schedule and get alerts.",
+        [
+            new HelpParagraph("A monitor runs a collection every few minutes or on a cron schedule and alerts Slack, a webhook or email on every run, on failure, or when the result changes, with a recovery notice when it passes again."),
+            new HelpExample("Cron: every 15 minutes on weekdays", "*/15 * * * 1-5"),
+            new HelpTip("Monitors run while the app is open. For an always-on monitor use the CLI daemon: dispatch monitor --watch.")
+        ],
+        ["monitor", "schedule", "cron", "alert", "slack", "webhook", "email", "uptime"],
+        null, [Runner, Cli]),
+
+        new(SecurityScan, "Tools", "Security scan", "Passive checks and bounded active probes.",
+        [
+            new HelpParagraph("The scanner checks transport security, security headers, CORS and information leaks, and can send bounded probes for injection, reflection, boundary input and missing authentication."),
+            new HelpTip("Scan only APIs you are authorised to test. Active probes send unusual input to the server."),
+            new HelpExample("Gate a CI build on high-severity findings", "dispatch scan \"My Collection\" --fail-on high -r cli,html")
+        ],
+        ["security", "scan", "vulnerability", "headers", "cors", "injection", "owasp", "pentest"],
+        null, [Cli]),
+
+        new(Capture, "Tools", "Capture proxy", "Record traffic from a browser or app.",
+        [
+            new HelpParagraph("Capture starts a local proxy. Point a browser, a mobile app or HTTP(S)_PROXY at it and every exchange is recorded. Save the captures to a collection or export a HAR file."),
+            new HelpSteps(
+            [
+                "Open Capture in the toolbar and click Start.",
+                "For HTTPS, install the local certificate authority shown in the window (only on machines you control).",
+                "Set the proxy in your browser or app to the shown address, e.g. 127.0.0.1:8899.",
+                "Select the exchanges you want and save them to a collection."
+            ]),
+            new HelpExample("Capture traffic from a terminal command", "HTTPS_PROXY=http://127.0.0.1:8899 curl https://example.com")
+        ],
+        ["capture", "proxy", "record", "har", "traffic", "intercept", "sniff", "browser"],
+        null, [ImportExport]),
+
+        new(ImportExport, "Basics", "Import & export", "Bring in Postman, OpenAPI, Insomnia, HAR, WSDL, .proto, .http or cURL.",
+        [
+            new HelpParagraph("Click Import (Ctrl+O) and choose a file, a URL or paste text. Dispatch detects the format and creates a collection (and environments, for Postman)."),
+            new HelpExample("Paste a cURL command into Import", "curl -X POST https://httpbin.org/post \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"hello\":\"world\"}'"),
+            new HelpParagraph("Export a collection from its menu as a Dispatch file, a git-friendly folder (one file per request), a Postman v2.1 collection or a .http file.")
+        ],
+        ["import", "export", "postman", "openapi", "swagger", "insomnia", "har", "wsdl", "proto", "http file", "curl", "git"],
+        null, [Collections, Docs]),
+
+        new(Docs, "Tools", "API documentation", "Generate a reference page from a collection.",
+        [
+            new HelpParagraph("Describe each request in its Docs tab using Markdown. Then collection menu → Generate API docs creates a self-contained HTML page (with sidebar, search, examples and code samples; secrets redacted) or a Markdown file."),
+            new HelpExample("A request description", "## Get a user\n\nReturns one user by id.\n\n| Field | Type |\n|---|---|\n| id | number |\n| name | string |")
+        ],
+        ["docs", "documentation", "markdown", "reference", "html", "describe", "description"],
+        null, [Collections]),
+
+        new(Protocols, "Basics", "Other protocols", "GraphQL, gRPC, SOAP, WebSocket, SSE, Socket.IO, MQTT, Kafka, AMQP, TCP/UDP.",
+        [
+            new HelpParagraph("Use the arrow next to New to pick a protocol. Each one has its own tab next to Params and Headers."),
+            new HelpSteps(
+            [
+                "GraphQL: write the query and variables; Fetch schema introspects the server and lists its fields.",
+                "gRPC: enter host:port, load the schema via server reflection or .proto files, pick a method; a message template is generated.",
+                "SOAP: load the WSDL, choose an operation and fill in the generated envelope.",
+                "WebSocket, SSE, Socket.IO: Connect opens a live session; messages appear in a timestamped log.",
+                "MQTT, Kafka, AMQP: publish/produce and subscribe/consume against a broker address.",
+                "TCP / UDP: send text, hex or base64 payloads to tcp://host:port or udp://host:port."
+            ]),
+            new HelpExample("GraphQL query (try it on https://countries.trevorblades.com/)", "query {\n  country(code: \"AM\") {\n    name\n    capital\n    emoji\n  }\n}"),
+            new HelpExample("WebSocket echo server", "wss://echo.websocket.org")
+        ],
+        ["graphql", "grpc", "soap", "wsdl", "websocket", "ws", "sse", "socket.io", "mqtt", "kafka", "amqp", "rabbitmq", "tcp", "udp", "stream"],
+        "GraphQL query", [Requests]),
+
+        new(Cli, "Tools", "Command line (CI)", "Run collections, flows, scans and mocks headlessly.",
+        [
+            new HelpParagraph("The dispatch command uses the same engine as the app. Point it at a file, a URL, a Dispatch folder or the name of a collection saved in the app. Exit code 0 means everything passed, 1 means failures, 2 a usage error."),
+            new HelpExample("Common commands", "dispatch run \"My Collection\" -e Staging -r cli,junit,html -o reports\ndispatch run api.dispatch.json --data users.csv --bail\ndispatch flow \"My Collection\" --name \"Login smoke\"\ndispatch mock petstore.yaml --port 4010 --latency 200\ndispatch docs \"My Collection\" --format html -o api.html\ndispatch help"),
+            new HelpTip("Export the collection as a git-friendly folder and run it from your repository in CI.")
+        ],
+        ["cli", "command line", "terminal", "ci", "pipeline", "headless", "github actions", "jenkins", "exit code"],
+        null, [Runner, ImportExport]),
+
+        new(Shortcuts, "Basics", "Keyboard shortcuts", "Work faster without the mouse.",
+        [
+            new HelpExample("Shortcuts", "F1                      Help\nCtrl+Enter              Send / connect\nCtrl+K or Ctrl+Shift+P  Command palette\nCtrl+T                  New HTTP request\nCtrl+S                  Save\nCtrl+W                  Close tab\nCtrl+O                  Import"),
+            new HelpTip("Double-click a tab title to rename it.")
+        ],
+        ["keyboard", "shortcut", "hotkey", "keys", "palette"],
+        null, [GettingStarted])
+    ];
+}

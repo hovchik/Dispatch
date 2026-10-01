@@ -80,6 +80,18 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
   (Ctrl+K) that searches every request and command, JSONPath / XPath filtering of response bodies, and a light or
   dark theme.
 
+### Help & onboarding
+
+* **Welcome screen** on first launch with the four basics (send, save, variables, tests); reopen it from the **?**
+  menu at the top right.
+* **User guide** (`F1`, the **?** menu, or `Help: …` in the command palette): searchable topics with step-by-step
+  instructions, copyable examples and tips, covering every feature from variables to the CLI. Tool windows (runner,
+  mock server, flows, ...) have a "How does this work?" link to their topic, and request tabs link to theirs with
+  "Learn more".
+* **Example collection**: one click adds "Dispatch examples", ten ready-to-send requests against public echo services
+  that show assertions, dynamic fake data, auth, test and pre-request scripts, chaining with extraction, GraphQL and
+  WebSocket, each with a description in its Docs tab. Topics with a **Try it** button open the matching example.
+
 ### Shortcuts
 
 | Keys | Action |
@@ -90,6 +102,7 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
 | `Ctrl+T` | New HTTP request (the arrow next to **New** offers every protocol) |
 | `Ctrl+W` | Close tab |
 | `Ctrl+O` | Import |
+| `F1` | User guide |
 
 ## CLI
 

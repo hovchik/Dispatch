@@ -12,16 +12,23 @@ public interface IDialogService
     Task<string?> OpenFolderAsync(string title);
     Task<string?> SaveFileAsync(string title, string suggestedName, params FileFilter[] filters);
 
-    /// <summary>Shows a tool (runner, mock server, ...) in its own window owned by the main window.</summary>
+    /// <summary>
+    /// Shows a tool (runner, mock server, ...) in its own window owned by the main window. Showing a tool that is
+    /// already open brings its window to the front.
+    /// </summary>
     void ShowTool(ViewModels.Tools.ITool tool);
 }
 
 /// <summary>File pickers and child windows via the main window (Avalonia's storage APIs hang off a TopLevel).</summary>
 public sealed class DialogService : IDialogService
 {
+    private readonly Dictionary<ViewModels.Tools.ITool, Window> _open = [];
     private Window? _owner;
 
     public void Attach(Window owner) => _owner = owner;
+
+    /// <summary>Opens a help topic; tool windows call it from their help link and F1.</summary>
+    public Action<string?>? HelpRequested { get; set; }
 
     private IStorageProvider Storage => _owner?.StorageProvider ?? throw new InvalidOperationException("No window to show dialogs from.");
 
@@ -65,8 +72,21 @@ public sealed class DialogService : IDialogService
 
     public void ShowTool(ViewModels.Tools.ITool tool)
     {
-        var window = new Views.ToolWindow { DataContext = tool, Title = $"{tool.Title} · Dispatch", Width = tool.Width, Height = tool.Height };
-        window.Closed += (_, _) => tool.OnClosed();
+        if (_open.TryGetValue(tool, out var existing))
+        {
+            existing.Activate();
+            return;
+        }
+        var window = new Views.ToolWindow
+        {
+            DataContext = tool, Title = $"{tool.Title} · Dispatch", Width = tool.Width, Height = tool.Height, HelpRequested = HelpRequested
+        };
+        _open[tool] = window;
+        window.Closed += (_, _) =>
+        {
+            _open.Remove(tool);
+            tool.OnClosed();
+        };
         if (_owner is null)
             window.Show();
         else

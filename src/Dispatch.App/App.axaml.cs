@@ -25,6 +25,7 @@ public sealed class App : Avalonia.Application
             var window = new MainWindow { DataContext = viewModel };
             _services.GetRequiredService<ClipboardService>().Attach(window);
             _services.GetRequiredService<DialogService>().Attach(window);
+            _services.GetRequiredService<DialogService>().HelpRequested = viewModel.ShowHelp;
 
             // Last line of defence: surface unexpected UI-thread errors instead of crashing.
             Dispatcher.UIThread.UnhandledException += (_, e) =>

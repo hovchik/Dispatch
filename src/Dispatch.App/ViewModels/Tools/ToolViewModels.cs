@@ -18,6 +18,9 @@ public interface ITool
     double Width => 900;
     double Height => 640;
 
+    /// <summary>Help topic (<see cref="Dispatch.Application.Help.HelpCatalog"/>) linked from the window's Help button.</summary>
+    string? HelpTopic => null;
+
     /// <summary>Called when the window closes (stop servers, cancel runs).</summary>
     void OnClosed() { }
 }
@@ -32,6 +35,7 @@ public sealed partial class ImportViewModel(
     Func<Task> onImported) : ObservableObject, ITool
 {
     public string Title => "Import";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.ImportExport;
     public double Width => 760;
     public double Height => 600;
 
@@ -297,6 +301,7 @@ public sealed partial class CodeSnippetViewModel : ObservableObject, ITool
     }
 
     public string Title => $"Code · {_request.Name}";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.Requests;
     public double Width => 820;
     public double Height => 560;
     public IReadOnlyList<CodeTarget> Targets { get; }
@@ -347,6 +352,7 @@ public sealed partial class CollectionSettingsViewModel : ObservableObject, IToo
     }
 
     public string Title => $"Collection · {_model.Name}";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.Variables;
     public double Width => 760;
     public double Height => 600;
 
@@ -465,6 +471,7 @@ public sealed partial class SecurityScanViewModel : ObservableObject, ITool
     }
 
     public string Title => $"Security scan · {_collection.Name}";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.SecurityScan;
     public double Width => 1000;
     public double Height => 720;
 
@@ -620,6 +627,7 @@ public sealed partial class CaptureViewModel : ObservableObject, ITool
     }
 
     public string Title => "Capture proxy";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.Capture;
     public double Width => 1040;
     public double Height => 720;
 
