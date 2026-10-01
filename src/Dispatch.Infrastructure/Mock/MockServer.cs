@@ -44,6 +44,9 @@ public sealed class MockServerOptions
 
     /// <summary>Seed for generated data, for repeatable mocks.</summary>
     public int? Seed { get; init; }
+
+    /// <summary>Replay speed for recorded WebSocket / SSE sessions: 1 = original timing, 0 = no delays.</summary>
+    public double SessionSpeed { get; init; } = 1;
 }
 
 public sealed record MockLogEntry(DateTimeOffset Time, string Method, string Path, int Status, string? Matched, double Milliseconds, string? Note = null);
@@ -96,6 +99,7 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
             k.Limits.MaxRequestBodySize = 10 * 1024 * 1024;
         });
         var app = builder.Build();
+        app.UseWebSockets();
         app.Run(HandleAsync);
         await app.StartAsync(ct).ConfigureAwait(false);
         _app = app;
@@ -243,6 +247,12 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
             return;
         }
 
+        if (context.WebSockets.IsWebSocketRequest)
+        {
+            await ReplayWebSocketAsync(context, path, stopwatch).ConfigureAwait(false);
+            return;
+        }
+
         if (_options.ErrorRate > 0 && Random.Shared.NextDouble() < _options.ErrorRate)
         {
             response.StatusCode = _options.ErrorStatus;
@@ -259,6 +269,15 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
         var query = request.Query.ToDictionary(q => q.Key, q => q.Value.ToString(), StringComparer.Ordinal);
         var headers = request.Headers.ToDictionary(h => h.Key, h => h.Value.ToString(), StringComparer.OrdinalIgnoreCase);
         var match = _routes.Match(request.Method, path, query, headers, body);
+
+        // A recorded SSE session: for clients asking for an event stream, or GETs no HTTP route handles.
+        if (HttpMethods.IsGet(request.Method)
+            && (request.Headers.Accept.ToString().Contains("text/event-stream", StringComparison.OrdinalIgnoreCase) || match is null)
+            && _routes.Match(SessionMethods.Sse, path, query, headers, "") is { Example: { } sseExample } sse)
+        {
+            await ReplaySseAsync(context, path, sse.Request, sseExample, stopwatch).ConfigureAwait(false);
+            return;
+        }
 
         if (match is null)
         {
@@ -309,6 +328,124 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
         if (!HttpMethods.IsHead(request.Method) && (example.Body.Length > 0 || (_options.DynamicData && example.Schema.Length > 0)))
             await response.WriteAsync(RenderBody(example, variables)).ConfigureAwait(false);
         Log(request.Method, path, example.StatusCode, $"{match.Request.Name} / {example.Name}", stopwatch);
+    }
+
+    // ---- Recorded streaming sessions ---------------------------------------------------------------
+
+    private SessionReplayOptions SessionReplayOptions => new() { Speed = _options.SessionSpeed };
+
+    /// <summary>Replays a recorded WebSocket session, answering each client message with the matching recorded segment.</summary>
+    private async Task ReplayWebSocketAsync(HttpContext context, string path, Stopwatch stopwatch)
+    {
+        var query = context.Request.Query.ToDictionary(q => q.Key, q => q.Value.ToString(), StringComparer.Ordinal);
+        var headers = context.Request.Headers.ToDictionary(h => h.Key, h => h.Value.ToString(), StringComparer.OrdinalIgnoreCase);
+        if (_routes.Match(SessionMethods.WebSocket, path, query, headers, "") is not { Example: { } example } match)
+        {
+            context.Response.StatusCode = 404;
+            Log("WS", path, 404, null, stopwatch, "no recorded WebSocket session for this path");
+            return;
+        }
+
+        var name = $"{match.Request.Name} / {example.Name}";
+        var protocols = context.WebSockets.WebSocketRequestedProtocols;
+        using var socket = await context.WebSockets.AcceptWebSocketAsync(protocols.Count > 0 ? protocols[0] : null).ConfigureAwait(false);
+        var player = new SessionPlayer(example.Session, SessionReplayOptions);
+        Log("WS", path, 101, name, stopwatch, $"connected · replaying {player.SegmentCount} recorded exchange(s)");
+
+        var ct = context.RequestAborted;
+        var outgoing = System.Threading.Channels.Channel.CreateUnbounded<IReadOnlyList<ScheduledMessage>>();
+        outgoing.Writer.TryWrite(player.Opening());
+
+        // One sender, so replies keep their order and frames never interleave.
+        var sending = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var batch in outgoing.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+                    foreach (var message in batch)
+                    {
+                        if (message.Delay > TimeSpan.Zero)
+                            await Task.Delay(message.Delay, ct).ConfigureAwait(false);
+                        if (socket.State != System.Net.WebSockets.WebSocketState.Open)
+                            return;
+                        await socket.SendAsync(Encoding.UTF8.GetBytes(message.Content), System.Net.WebSockets.WebSocketMessageType.Text, true, ct)
+                            .ConfigureAwait(false);
+                    }
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or System.Net.WebSockets.WebSocketException)
+            {
+            }
+        }, CancellationToken.None);
+
+        var buffer = new byte[64 * 1024];
+        try
+        {
+            while (socket.State == System.Net.WebSockets.WebSocketState.Open)
+            {
+                using var frame = new MemoryStream();
+                System.Net.WebSockets.WebSocketReceiveResult received;
+                do
+                {
+                    received = await socket.ReceiveAsync(buffer, ct).ConfigureAwait(false);
+                    frame.Write(buffer, 0, received.Count);
+                } while (!received.EndOfMessage);
+                if (received.MessageType == System.Net.WebSockets.WebSocketMessageType.Close)
+                {
+                    await socket.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, null, CancellationToken.None).ConfigureAwait(false);
+                    break;
+                }
+                var reply = player.OnClientMessage(Encoding.UTF8.GetString(frame.ToArray()));
+                outgoing.Writer.TryWrite(reply.Messages);
+                Log("WS", path, 101, name, stopwatch, $"client message: {reply.How}");
+            }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or System.Net.WebSockets.WebSocketException)
+        {
+        }
+        outgoing.Writer.TryComplete();
+        await sending.ConfigureAwait(false);
+        Log("WS", path, 101, name, stopwatch, "disconnected");
+    }
+
+    /// <summary>Streams a recorded SSE session's events with their original timing, then ends the stream.</summary>
+    private async Task ReplaySseAsync(HttpContext context, string path, ApiRequest request, ResponseExample example, Stopwatch stopwatch)
+    {
+        var response = context.Response;
+        response.StatusCode = 200;
+        response.ContentType = "text/event-stream";
+        response.Headers.CacheControl = "no-cache";
+        response.Headers["X-Mock-Match"] = $"{request.Name} / {example.Name}";
+        await response.Body.FlushAsync(context.RequestAborted).ConfigureAwait(false);
+
+        var events = new SessionPlayer(example.Session, SessionReplayOptions).Opening();
+        var sent = 0;
+        try
+        {
+            foreach (var message in events)
+            {
+                if (message.Delay > TimeSpan.Zero)
+                    await Task.Delay(message.Delay, context.RequestAborted).ConfigureAwait(false);
+                var frame = new StringBuilder();
+                // Labels look like "event #id" (as recorded by the SSE client).
+                var label = message.Label ?? "message";
+                var hash = label.IndexOf(" #", StringComparison.Ordinal);
+                var eventName = hash >= 0 ? label[..hash] : label;
+                if (hash >= 0)
+                    frame.Append("id: ").Append(label[(hash + 2)..]).Append('\n');
+                if (eventName.Length > 0 && eventName != "message")
+                    frame.Append("event: ").Append(eventName).Append('\n');
+                foreach (var line in message.Content.Replace("\r\n", "\n").Split('\n'))
+                    frame.Append("data: ").Append(line).Append('\n');
+                frame.Append('\n');
+                await response.WriteAsync(frame.ToString(), context.RequestAborted).ConfigureAwait(false);
+                await response.Body.FlushAsync(context.RequestAborted).ConfigureAwait(false);
+                sent++;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        Log("SSE", path, 200, $"{request.Name} / {example.Name}", stopwatch, $"replayed {sent} of {events.Count} event(s)");
     }
 
     private async Task HandleGrpcAsync(HttpContext context, Stopwatch stopwatch)

@@ -9,6 +9,13 @@ public sealed record MockRoute(ApiRequest Request, string Method, Regex Pattern,
     public int Specificity => Template.Split('/').Count(s => s.Length > 0 && !s.StartsWith('{') && !s.StartsWith(':'));
 }
 
+/// <summary>Route "methods" for replayed streaming sessions.</summary>
+public static class SessionMethods
+{
+    public const string WebSocket = "WS";
+    public const string Sse = "SSE";
+}
+
 public sealed record MockMatch(ApiRequest Request, ResponseExample? Example, IReadOnlyDictionary<string, string> Variables, string Template);
 
 /// <summary>
@@ -32,7 +39,9 @@ public sealed partial class MockRouteTable
     public static MockRouteTable Build(IEnumerable<ApiRequest> requests)
     {
         var routes = new List<MockRoute>();
-        foreach (var request in requests.Where(r => r.Kind is RequestKind.Http or RequestKind.GraphQl or RequestKind.Soap))
+        // Streaming requests become routes once they have a recorded session to replay.
+        foreach (var request in requests.Where(r => r.Kind is RequestKind.Http or RequestKind.GraphQl or RequestKind.Soap
+                                                    || r.Kind is RequestKind.WebSocket or RequestKind.Sse && r.Examples.Any(e => e.Session.Count > 0)))
         {
             var template = PathTemplate(request.Url);
             var parameters = new List<string>();
@@ -45,7 +54,13 @@ public sealed partial class MockRouteTable
                 parameters.Add(name);
                 return "([^/]+)";
             })) + "/?$";
-            var method = request.Kind == RequestKind.Http ? request.Method.ToString().ToUpperInvariant() : "POST";
+            var method = request.Kind switch
+            {
+                RequestKind.Http => request.Method.ToString().ToUpperInvariant(),
+                RequestKind.WebSocket => SessionMethods.WebSocket,
+                RequestKind.Sse => SessionMethods.Sse,
+                _ => "POST"
+            };
             routes.Add(new MockRoute(request, method, new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), parameters, template));
         }
         return new MockRouteTable(routes.OrderByDescending(r => r.Specificity).ThenBy(r => r.Parameters.Count).ToList());
@@ -118,6 +133,10 @@ public sealed partial class MockRouteTable
             && e.MatchHeaders.Where(h => h.IsActive).All(h => headers.TryGetValue(h.Key, out var v) && v == h.Value)
             && (e.MatchBodyContains.Length == 0 || body.Contains(e.MatchBodyContains, StringComparison.Ordinal));
 
+        // Streaming routes only replay examples that carry a recorded session.
+        if (request.Kind is RequestKind.WebSocket or RequestKind.Sse)
+            return request.Examples.Where(e => e.Session.Count > 0 && RuleCount(e) > 0 && Matches(e)).OrderByDescending(RuleCount).FirstOrDefault()
+                   ?? request.Examples.FirstOrDefault(e => e.Session.Count > 0);
         return request.Examples.Where(e => RuleCount(e) > 0 && Matches(e)).OrderByDescending(RuleCount).FirstOrDefault()
                ?? request.Examples.FirstOrDefault(e => RuleCount(e) == 0)
                ?? request.Examples.FirstOrDefault();

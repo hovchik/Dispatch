@@ -214,12 +214,20 @@ public sealed partial class ExampleRow : ObservableObject
         MatchQuery.Load(model.MatchQuery);
         MatchHeaders = new KeyValueListViewModel("Header", "Equals");
         MatchHeaders.Load(model.MatchHeaders);
+        _session = model.Session;
         Headers.Changed += (_, _) => OnPropertyChanged(nameof(Headers));
         MatchQuery.Changed += (_, _) => OnPropertyChanged(nameof(MatchQuery));
         MatchHeaders.Changed += (_, _) => OnPropertyChanged(nameof(MatchHeaders));
     }
 
     public Guid Id { get; }
+
+    /// <summary>A recorded streaming session; not edited here, but kept when the example is saved.</summary>
+    private readonly List<SessionMessage> _session;
+    public bool HasSession => _session.Count > 0;
+    public string SessionSummary => $"Recorded session: {_session.Count(m => m.Direction == MessageDirection.Received)} server message(s), " +
+                                    $"{_session.Count(m => m.Direction == MessageDirection.Sent)} client message(s) over " +
+                                    $"{(_session.Count == 0 ? 0 : _session[^1].AtMs / 1000.0):0.#} s. The mock server replays it on this request's path.";
     [ObservableProperty] private string _name;
     [ObservableProperty] private decimal _statusCode;
     [ObservableProperty] private string _contentType;
@@ -239,7 +247,8 @@ public sealed partial class ExampleRow : ObservableObject
         Headers = Headers.ToItems(),
         MatchQuery = MatchQuery.ToItems(),
         MatchHeaders = MatchHeaders.ToItems(),
-        MatchBodyContains = MatchBodyContains
+        MatchBodyContains = MatchBodyContains,
+        Session = _session.Select(m => new SessionMessage { AtMs = m.AtMs, Direction = m.Direction, Content = m.Content, Label = m.Label }).ToList()
     };
 }
 

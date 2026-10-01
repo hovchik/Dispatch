@@ -93,7 +93,27 @@ public sealed class ResponseExample
     /// <summary>JSON Schema of the body (from OpenAPI); the mock server can generate fresh data from it.</summary>
     public string Schema { get; set; } = string.Empty;
 
+    /// <summary>
+    /// A recorded streaming session (WebSocket, SSE): every message with its time offset. The mock server replays it,
+    /// answering client messages with the segment that followed the matching recorded one.
+    /// </summary>
+    public List<SessionMessage> Session { get; set; } = [];
+
     public ResponseExample Clone() => DeepCopy.Of(this);
+}
+
+/// <summary>One message of a recorded streaming session.</summary>
+public sealed class SessionMessage
+{
+    /// <summary>Milliseconds since the session started.</summary>
+    public long AtMs { get; set; }
+
+    /// <summary>Received = from the server (replayed by the mock); Sent = from the client (what the mock waits for).</summary>
+    public MessageDirection Direction { get; set; }
+    public string Content { get; set; } = string.Empty;
+
+    /// <summary>SSE event name (and id), MQTT topic, ….</summary>
+    public string? Label { get; set; }
 }
 
 /// <summary>The outcome of one assertion or script test.</summary>

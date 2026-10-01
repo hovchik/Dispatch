@@ -700,9 +700,12 @@ public sealed partial class RequestTabViewModel : ObservableObject
     {
         if (Response?.Model is not { HasResponse: true } r)
             return;
+        // A WebSocket / SSE session is saved with its messages and timing, so the mock server can replay it.
+        var session = Kind is RequestKind.WebSocket or RequestKind.Sse ? Application.Mock.SessionRecording.From(r.Messages) : [];
         Examples.AddAndSelect(new ResponseExample
         {
-            Name = $"{r.StatusCode} {r.ReasonPhrase}".Trim(),
+            Name = session.Count > 0 ? $"Session · {session.Count} messages" : $"{r.StatusCode} {r.ReasonPhrase}".Trim(),
+            Session = session,
             StatusCode = r.StatusCode,
             ContentType = r.ContentType ?? "",
             Body = r.Body,

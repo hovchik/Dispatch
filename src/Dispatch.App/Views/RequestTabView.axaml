@@ -875,6 +875,9 @@
                   <DataTemplate x:DataType="ed:ExampleRow">
                     <Grid RowDefinitions="Auto,*,Auto">
                       <WrapPanel ItemSpacing="8" LineSpacing="6" Margin="0,0,0,6">
+                        <Border Classes="card" Padding="8,4" IsVisible="{Binding HasSession}" BorderBrush="#22A06B" BorderThickness="3,0,0,0">
+                          <TextBlock Text="{Binding SessionSummary}" FontSize="12" TextWrapping="Wrap" MaxWidth="700" />
+                        </Border>
                         <TextBox Text="{Binding Name}" Watermark="Name" MinWidth="200" />
                         <TextBlock Text="Status" Classes="label" />
                         <NumericUpDown Value="{Binding StatusCode}" Minimum="0" Maximum="599" Width="130" FormatString="0" />

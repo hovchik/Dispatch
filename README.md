@@ -37,6 +37,10 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
 * **Mock server**: serves the saved examples of a collection over HTTP and gRPC, with latency, jitter, error-rate
   and dropped-connection simulation, CORS and path parameters. Routes are listed before you start, with live hit counts,
   and the request log can be filtered to unmatched requests and simulated faults.
+  **Recorded sessions:** save a WebSocket or SSE session as an example and the mock server replays it with the original
+  timing. On WebSocket, each client message plays the part of the recording that answered the matching recorded
+  message (exact, same JSON apart from ids, or the next part in order), with the client's ids put into the replies.
+  `--session-speed` changes the pace.
 * **Load testing**: virtual users, ramp-up, think time, live requests-per-second chart, p50 / p95 / p99, and
   per-request stats. When a test ends you get a **detailed report**: verdict, insights (long tails, degradation over time,
   throttling), latency distribution, status codes and per-request percentiles, exportable as **HTML, JSON or CSV**.

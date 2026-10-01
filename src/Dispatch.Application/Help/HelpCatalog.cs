@@ -225,9 +225,11 @@ public static class HelpCatalog
                 "Point your app at the base URL in the header, e.g. http://localhost:3000. The Routes tab lists every path with its hit count; the Request log shows what each call was answered with."
             ]),
             new HelpParagraph("You can add latency, jitter, an error rate and dropped connections to test how your client copes. Dynamic mode generates fresh fake data from schemas; stateful mode remembers POST/PUT/PATCH/DELETE like a tiny database."),
-            new HelpExample("Templating in an example body", "{ \"id\": \"{{$guid}}\", \"name\": \"{{body.name}}\", \"agent\": \"{{header.User-Agent}}\" }")
+            new HelpExample("Templating in an example body", "{ \"id\": \"{{$guid}}\", \"name\": \"{{body.name}}\", \"agent\": \"{{header.User-Agent}}\" }"),
+            new HelpParagraph("Recorded sessions: after a WebSocket or SSE session, click Save as example. The example keeps every message with its timing, and the mock server replays it on the request's path. SSE events stream out as recorded. A WebSocket replay sends the server's opening messages on connect; each client message then plays the part of the recording that followed the matching recorded message (an exact match, the same JSON apart from ids, or else the next part in order). Ids the client sends (id, requestId, correlationId, …) are put into the replies, and replies can copy values with {{message.field}}. Session replay speed sets the pace: 1× as recorded, 0 for no delays."),
+            new HelpExample("Replay a recorded ticker twice as fast", "dispatch mock \"My Collection\" --session-speed 2\n# then connect to ws://localhost:3000/feed")
         ],
-        ["mock", "stub", "fake", "example", "latency", "server", "crud", "offline"],
+        ["mock", "stub", "fake", "example", "latency", "server", "crud", "offline", "websocket", "sse", "replay", "record", "session", "stream"],
         "Simple GET", [Collections]),
 
         new(LoadTest, "Tools", "Load testing", "Virtual users, ramp-up and latency percentiles.",

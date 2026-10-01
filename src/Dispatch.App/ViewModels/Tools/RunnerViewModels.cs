@@ -414,6 +414,9 @@ public sealed partial class MockServerViewModel : ObservableObject, ITool
     [ObservableProperty] private bool _stateful;
     [ObservableProperty] private decimal? _seed;
 
+    /// <summary>Replay speed for recorded WebSocket / SSE sessions (1 = as recorded, 0 = no delays).</summary>
+    [ObservableProperty] private decimal _sessionSpeed = 1;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(StopCommand), nameof(CopyUrlCommand), nameof(OpenInBrowserCommand),
         nameof(CopyRouteUrlCommand), nameof(ResetStateCommand))]
@@ -530,7 +533,8 @@ public sealed partial class MockServerViewModel : ObservableObject, ITool
                 Public = Public,
                 DynamicData = DynamicData,
                 Stateful = Stateful,
-                Seed = Seed is { } seed ? (int)seed : null
+                Seed = Seed is { } seed ? (int)seed : null,
+                SessionSpeed = (double)SessionSpeed
             });
             BaseUrl = _server.BaseUrl?.ToString().TrimEnd('/');
             GrpcUrl = _server.GrpcUrl?.ToString().TrimEnd('/');
@@ -590,6 +594,9 @@ public sealed partial class MockServerViewModel : ObservableObject, ITool
         if (route is null)
             return;
         var url = route.IsGrpc ? $"{GrpcUrl ?? BaseUrl}{route.Template}" : BaseUrl + (route.Template == "/" ? "" : route.Template);
+        // Recorded WebSocket sessions are reached over ws://.
+        if (route.Method == Dispatch.Application.Mock.SessionMethods.WebSocket && url.StartsWith("http", StringComparison.Ordinal))
+            url = "ws" + url[4..];
         await _clipboard.SetTextAsync(url);
         Status = $"Copied {url}";
     }
