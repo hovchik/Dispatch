@@ -39,6 +39,16 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
   per-request stats.
 * **Response diff**: compare with the previous response or any two history entries. You get a line diff plus a
   structural JSON diff with ignore paths (`$.timestamp`, `$..id`).
+* **Snapshot tests**: an assertion records the first response and checks later ones against it — structural JSON
+  compare with ignore paths, line diff for text. The CLI records with `--update-snapshots`.
+* **Test flows**: chain requests with control flow — if, repeat, for-each, until (retry with a wait), set-variable,
+  script, delay and stop/fail — in a visual builder, sharing one set of variables. Run headless with `dispatch flow`.
+* **Monitors**: run a collection on an interval or cron schedule and alert via **Slack, a webhook, or email**
+  (every-run / on-failure / on-change, with recovery notices and a response-time ceiling). `dispatch monitor --watch`
+  runs them as a daemon; runs are kept as history.
+* **Security scan**: passive checks (transport, security headers, CORS, banner / stack-trace / secret disclosure) and
+  bounded active probes (injection and reflection, boundary input, missing authentication) for APIs you are
+  authorised to test. `dispatch scan --fail-on high` gates CI; reports export to HTML / JSON.
 
 ## Developer tools
 
@@ -52,6 +62,17 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
   certificates. A JWT decoder shows the claims of tokens found in responses.
 * **Network**: per-request timeout, redirects, TLS verification, proxy, HTTP version, and a cookie jar with a
   manager. A **timeline** shows DNS, connect, TLS, time to first byte and download, plus the raw request.
+* **Capture proxy**: point a browser, app or `HTTP(S)_PROXY` at Dispatch and it records traffic — HTTP, and HTTPS
+  decrypted with an on-the-fly per-host certificate from a local CA you install. Save captures to a collection or
+  export **HAR**. `dispatch capture` records from the CLI.
+* **Fake data**: 100+ Postman-compatible dynamic values — `{{$randomFullName}}`, `{{$randomEmail}}`,
+  `{{$randomCompanyName}}`, `{{$randomInt(1,100)}}`, `{{$randomDate(-30,30)}}` and more, with `{{$` autocomplete.
+* **Documentation**: generate a self-contained **HTML reference** (sidebar, search, examples, code samples; secrets
+  redacted) or Markdown from a collection. Request descriptions are Markdown. `dispatch docs` generates from the CLI.
+* **Rich responses**: a sortable **table** view for JSON arrays (with CSV export), inline image preview, HTML as text,
+  PDF / binary opened externally, **Save to file**, and `pm.visualizer.set(template, data)` custom views.
+* **Smart mocks**: beyond saved examples, the mock server can generate fresh, schema-driven fake data per request and
+  remember **stateful CRUD** (POST / GET / PUT / PATCH / DELETE), with `{{body.x}}`, `{{header.x}}` templating.
 * **Variables**: layered scopes (globals < collection < environment < data row < runtime), `{{$guid}}`,
   `{{$timestamp}}`, `{{$randomInt}}` and other dynamic values. **Secret** variables are encrypted at rest with a key
   kept in the OS keychain (DPAPI / Keychain / Secret Service).
@@ -79,6 +100,12 @@ dotnet run --project src/Dispatch.Cli -- run tests/api.dispatch.json -e staging.
 dotnet run --project src/Dispatch.Cli -- run "My Collection" --data users.csv --bail
 dotnet run --project src/Dispatch.Cli -- mock petstore.yaml --port 4010 --latency 200 --error-rate 5%
 dotnet run --project src/Dispatch.Cli -- load "My Collection" --users 50 --duration 60s --max-p95 300
+dotnet run --project src/Dispatch.Cli -- run tests/api.dispatch.json --update-snapshots
+dotnet run --project src/Dispatch.Cli -- flow "My Collection" --name "Login smoke"
+dotnet run --project src/Dispatch.Cli -- scan petstore.yaml --fail-on high -r cli,html
+dotnet run --project src/Dispatch.Cli -- docs "My Collection" --format html -o api.html
+dotnet run --project src/Dispatch.Cli -- monitor --watch
+dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
 ```
 
 `<collection>` can be any importable file, a URL, a Dispatch folder, or the name of a collection saved in the
