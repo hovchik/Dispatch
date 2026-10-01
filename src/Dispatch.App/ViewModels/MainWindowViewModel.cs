@@ -31,6 +31,7 @@ public sealed record MainServices(
     Dispatch.Application.Security.SecurityScanner Scanner,
     Dispatch.Application.Minimize.RequestMinimizer Minimizer,
     Dispatch.Application.RateLimits.RateLimitProber RateLimits,
+    IHistoryRepository HistoryStore,
     IFlowRepository Flows,
     Dispatch.Application.Flows.FlowRunner FlowRunner,
     IMonitorRepository Monitors,
@@ -304,6 +305,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
             case CollectionAction.LoadTest:
                 Dialogs.ShowTool(new LoadTestViewModel(collection, _services.LoadTester, Dialogs, () => ActiveEnvironment));
                 break;
+            case CollectionAction.Laws:
+            {
+                var tool = new LawsViewModel(collection, _services.HistoryStore, _services.Runner, _services.Tabs.Collections, Dialogs,
+                    () => ActiveEnvironment, () => SafeAsync(Collections.LoadAsync));
+                Dialogs.ShowTool(tool);
+                await tool.LoadHistoryAsync();
+                break;
+            }
             case CollectionAction.Scan:
                 Dialogs.ShowTool(new SecurityScanViewModel(collection, _services.Scanner, Dialogs, () => ActiveEnvironment));
                 break;

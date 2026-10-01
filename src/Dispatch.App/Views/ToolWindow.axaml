@@ -16,6 +16,7 @@
     <DataTemplate DataType="tools:MinimizeViewModel"><tv:MinimizeView /></DataTemplate>
     <DataTemplate DataType="tools:RateLimitViewModel"><tv:RateLimitView /></DataTemplate>
     <DataTemplate DataType="tools:ImpactViewModel"><tv:ImpactView /></DataTemplate>
+    <DataTemplate DataType="tools:LawsViewModel"><tv:LawsView /></DataTemplate>
     <DataTemplate DataType="tools:FlowBuilderViewModel"><tv:FlowBuilderView /></DataTemplate>
     <DataTemplate DataType="tools:FlowManagerViewModel"><tv:FlowManagerView /></DataTemplate>
     <DataTemplate DataType="tools:MonitorManagerViewModel"><tv:MonitorManagerView /></DataTemplate>

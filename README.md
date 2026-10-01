@@ -63,6 +63,26 @@ count. Expected values can use variables extracted from the response. The checks
 app, the collection runner, flows, monitors and `dispatch run`, with how long the message took or what arrived instead.
 Edit them in a request's **Messages** tab.
 
+### API laws (inferred invariants)
+
+**Collection menu → API laws…** learns the rules an API keeps from its traffic: recent history, runs of the collection,
+or a HAR file from the capture proxy or a browser. These are semantic rules, not a schema:
+
+* required fields and types
+* enums, never-negative numbers, and formats (UUID, email, date-time)
+* `createdAt ≤ updatedAt`
+* `count == items.length` and `total == sum(items[*].price)`
+* page sizes within `?limit=`
+* request fields echoed back
+* created resources that read back with the submitted values
+* deleted resources that return 404
+* GETs that repeat, minus volatile fields
+
+Rules that held in all but a few of many responses are reported as **anomalies**, together with the responses that
+broke them, e.g. *status is "paid" or "shipped", but once "shiped"*. Selected laws become assertions or `pm.test`
+checks on the matching saved requests, so a later violation fails the tests. `dispatch laws traffic.har
+--fail-on-anomaly` gates CI, and `dispatch laws <collection> --runs 5 --write` adds the laws as tests.
+
 ### Change impact map
 
 When a response changes shape (a field renamed, removed or retyped), **Tools → Change impact…** compares it with the
@@ -164,6 +184,7 @@ dotnet run --project src/Dispatch.Cli -- docs "My Collection" --format html -o a
 dotnet run --project src/Dispatch.Cli -- minimize "My Collection" --request "Create order" -r cli,html
 dotnet run --project src/Dispatch.Cli -- ratelimit "My Collection" --request Login --expect-limit
 dotnet run --project src/Dispatch.Cli -- impact "My Collection" --request "Get user" --baseline snapshot -r cli,html
+dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
 dotnet run --project src/Dispatch.Cli -- monitor --watch
 dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
 ```

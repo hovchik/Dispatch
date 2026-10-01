@@ -67,6 +67,7 @@ public static class HelpCatalog
     public const string SecurityScan = "security-scan";
     public const string MessageChecks = "message-checks";
     public const string ChangeImpact = "change-impact";
+    public const string ApiLaws = "api-laws";
     public const string Minimize = "minimize";
     public const string RateLimit = "rate-limit";
     public const string Capture = "capture";
@@ -311,6 +312,23 @@ public static class HelpCatalog
         ["impact", "breaking change", "rename", "renamed field", "schema change", "blast radius", "dependency", "json shape", "api change", "regression"],
         null, [Assertions, Extraction, Flows, Cli]),
 
+        new(ApiLaws, "Testing", "API laws", "Learn the rules an API keeps from its traffic, and spot the responses that break them.",
+        [
+            new HelpParagraph("API laws are inferred from real responses rather than a schema. They cover required fields and types, enumerations, never-negative numbers, formats (UUID, email, date-time, URL), date ordering (createdAt ≤ updatedAt), counts and totals that match their items (count == items.length, total == sum of prices), page sizes that respect ?limit=, request fields echoed back, created resources that can be read back, deleted resources that return 404, and GETs that repeat the same body."),
+            new HelpParagraph("A rule that held in all but a few of many responses is an anomaly, with the responses that broke it. For example, a status that is \"shipped\" or \"paid\" 40 times and once \"shiped\". Anomalies are usually bugs."),
+            new HelpSteps(
+            [
+                "Open the collection menu → API laws…. Recent history for the collection's endpoints is analysed right away.",
+                "For more evidence, click Run collection (it sends every request a few times), or import a HAR file from the capture proxy or your browser.",
+                "Review the anomalies first, then the laws. Each law shows how often it was seen and how confident the inference is.",
+                "Select laws and click Add selected as tests. They become assertions or pm.test checks on the matching saved requests, so a later violation fails the request's tests in the app, the runner and CI."
+            ]),
+            new HelpExample("From the command line", "dispatch laws traffic.har --fail-on-anomaly\ndispatch laws \"My Collection\" --runs 5 --write"),
+            new HelpTip("Laws need a few successful responses per endpoint (3 by default), and anomalies need at least 10. More varied traffic gives more reliable laws, so review them before adding.")
+        ],
+        ["laws", "invariants", "properties", "anomaly", "infer", "learn", "property-based", "daikon", "consistency", "rules"],
+        null, [Assertions, Capture, Cli]),
+
         new(Minimize, "Tools", "Minimize a request", "Find the parts of a request its outcome really depends on.",
         [
             new HelpParagraph("Minimize takes a request and its current outcome (a 403, a 500, a failing assertion, or a success) and keeps re-sending it with parts taken away: headers, individual cookies, query parameters, auth, form fields and JSON body members. It ends with the smallest request that still gives the same outcome."),
@@ -399,7 +417,7 @@ public static class HelpCatalog
         new(Cli, "Tools", "Command line (CI)", "Run collections, flows, scans and mocks headlessly.",
         [
             new HelpParagraph("The dispatch command uses the same engine as the app. Point it at a file, a URL, a Dispatch folder or the name of a collection saved in the app. Exit code 0 means everything passed, 1 means failures, 2 a usage error."),
-            new HelpExample("Common commands", "dispatch run \"My Collection\" -e Staging -r cli,junit,html -o reports\ndispatch run api.dispatch.json --data users.csv --bail\ndispatch flow \"My Collection\" --name \"Login smoke\"\ndispatch mock petstore.yaml --port 4010 --latency 200\ndispatch docs \"My Collection\" --format html -o api.html\ndispatch minimize \"My Collection\" --request Search\ndispatch ratelimit \"My Collection\" --request Login --expect-limit\ndispatch impact \"My Collection\" --request \"Get user\"\ndispatch help"),
+            new HelpExample("Common commands", "dispatch run \"My Collection\" -e Staging -r cli,junit,html -o reports\ndispatch run api.dispatch.json --data users.csv --bail\ndispatch flow \"My Collection\" --name \"Login smoke\"\ndispatch mock petstore.yaml --port 4010 --latency 200\ndispatch docs \"My Collection\" --format html -o api.html\ndispatch minimize \"My Collection\" --request Search\ndispatch ratelimit \"My Collection\" --request Login --expect-limit\ndispatch impact \"My Collection\" --request \"Get user\"\ndispatch laws \"My Collection\" --runs 5\ndispatch help"),
             new HelpTip("Export the collection as a git-friendly folder and run it from your repository in CI.")
         ],
         ["cli", "command line", "terminal", "ci", "pipeline", "headless", "github actions", "jenkins", "exit code"],
