@@ -53,6 +53,25 @@
                             CommandParameter="{x:Static vm:CollectionAction.Mock}">
                     <MenuItem.Icon><PathIcon Data="{StaticResource IconServer}" Width="12" Height="12" /></MenuItem.Icon>
                   </MenuItem>
+                  <MenuItem Header="Test flows…" Command="{Binding ActionCommand}"
+                            CommandParameter="{x:Static vm:CollectionAction.Flows}">
+                    <MenuItem.Icon><PathIcon Data="{StaticResource IconFlow}" Width="12" Height="12" /></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="Monitors…" Command="{Binding ActionCommand}"
+                            CommandParameter="{x:Static vm:CollectionAction.Monitors}">
+                    <MenuItem.Icon><PathIcon Data="{StaticResource IconClock}" Width="12" Height="12" /></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="Security scan…" Command="{Binding ActionCommand}"
+                            CommandParameter="{x:Static vm:CollectionAction.Scan}">
+                    <MenuItem.Icon><PathIcon Data="{StaticResource IconShield}" Width="12" Height="12" /></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="Generate API docs">
+                    <MenuItem.Icon><PathIcon Data="{StaticResource IconFile}" Width="12" Height="12" /></MenuItem.Icon>
+                    <MenuItem Header="HTML page (opens in your browser)…" Command="{Binding ActionCommand}"
+                              CommandParameter="{x:Static vm:CollectionAction.DocsHtml}" />
+                    <MenuItem Header="Markdown…" Command="{Binding ActionCommand}"
+                              CommandParameter="{x:Static vm:CollectionAction.DocsMarkdown}" />
+                  </MenuItem>
                   <Separator />
                   <MenuItem Header="Export">
                     <MenuItem.Icon><PathIcon Data="{StaticResource IconExport}" Width="12" Height="12" /></MenuItem.Icon>

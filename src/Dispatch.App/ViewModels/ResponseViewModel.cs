@@ -35,9 +35,28 @@ public sealed partial class ResponseViewModel : ObservableObject
 
     private string? _filteredBody;
 
-    private ResponseViewModel(ApiResponse response, BodyFormat format, string prettyBody, IClipboardService clipboard)
+    private readonly IDialogService? _dialogs;
+
+    private ResponseViewModel(ApiResponse response, BodyFormat format, string prettyBody, IClipboardService clipboard,
+        IDialogService? dialogs = null, JsonTable? table = null)
     {
         _clipboard = clipboard;
+        _dialogs = dialogs;
+        _table = table;
+        HasTable = table is not null;
+        Preview = BodyPreview.Detect(response.ContentType, response.BodyBytes, response.Body);
+        if (Preview == PreviewKind.Image && response.BodyBytes is { } bytes)
+        {
+            try
+            {
+                using var stream = new MemoryStream(bytes);
+                Image = new Avalonia.Media.Imaging.Bitmap(stream);
+            }
+            catch (Exception)
+            {
+                Image = null; // unsupported format (e.g. AVIF): offer to open it externally instead
+            }
+        }
         Model = response;
         _selectedFormat = format;
         _prettyBody = prettyBody;
@@ -64,17 +83,114 @@ public sealed partial class ResponseViewModel : ObservableObject
     public static IReadOnlyList<BodyFormat> Formats { get; } = Enum.GetValues<BodyFormat>();
 
     /// <summary>Formats the body off the UI thread so large payloads don't freeze the window.</summary>
-    public static async Task<ResponseViewModel> CreateAsync(ApiResponse response, IClipboardService clipboard)
+    public static async Task<ResponseViewModel> CreateAsync(ApiResponse response, IClipboardService clipboard, IDialogService? dialogs = null)
     {
         if (!response.HasResponse)
-            return new ResponseViewModel(response, BodyFormat.Text, string.Empty, clipboard);
+            return new ResponseViewModel(response, BodyFormat.Text, string.Empty, clipboard, dialogs);
 
-        var (format, pretty) = await Task.Run(() =>
+        var (format, pretty, table) = await Task.Run(() =>
         {
             var detected = BodyFormatter.Detect(response.ContentType, response.Body);
-            return (detected, BodyFormatter.Pretty(response.Body, detected));
+            var grid = detected == BodyFormat.Json && response.BodyBytes is null ? JsonTable.Build(response.Body) : null;
+            return (detected, BodyFormatter.Pretty(response.Body, detected), grid);
         });
-        return new ResponseViewModel(response, format, pretty, clipboard);
+        return new ResponseViewModel(response, format, pretty, clipboard, dialogs, table);
+    }
+
+    // ---- Table, preview, visualization and saving -----------------------------------------------
+
+    private JsonTable? _table;
+
+    /// <summary>JSON arrays as a sortable grid (the view rebuilds its columns when this changes).</summary>
+    public JsonTable? Table
+    {
+        get => _table;
+        private set
+        {
+            if (SetProperty(ref _table, value))
+                OnPropertyChanged(nameof(TableSummary));
+        }
+    }
+
+    /// <summary>The body holds a JSON array (the Table tab stays visible while a path is being edited).</summary>
+    public bool HasTable { get; }
+    public string TableSummary => TableError ?? _table?.Summary ?? "No array at that path.";
+
+    /// <summary>Optional JSONPath choosing which array the table shows.</summary>
+    [ObservableProperty] private string _tablePath = "";
+    [ObservableProperty] private string? _tableError;
+
+    partial void OnTablePathChanged(string value)
+    {
+        TableError = null;
+        try
+        {
+            Table = JsonTable.Build(Model.Body, value.Trim().Length == 0 ? null : value);
+        }
+        catch (FormatException ex)
+        {
+            TableError = ex.Message;
+            Table = null;
+        }
+        OnPropertyChanged(nameof(TableSummary));
+    }
+
+    public PreviewKind Preview { get; }
+    public Avalonia.Media.Imaging.Bitmap? Image { get; }
+    public bool HasImage => Image is not null;
+    public bool HasPreview => Preview is not PreviewKind.None;
+    public bool IsHtml => Preview == PreviewKind.Html;
+    public string ImageInfo => Image is null ? "" : $"{Image.PixelSize.Width} × {Image.PixelSize.Height} px · {ContentType}";
+    public string HtmlText => IsHtml ? BodyPreview.HtmlToText(Model.Body) : "";
+
+    public string PreviewHint => Preview switch
+    {
+        PreviewKind.Image when Image is null => "This image format can't be shown here. Open it in your viewer.",
+        PreviewKind.Svg => "SVG image: open it in your browser to see it rendered.",
+        PreviewKind.Pdf => "PDF document: open it in your PDF viewer.",
+        PreviewKind.Binary => $"Binary content ({ContentType ?? "unknown type"}). Save it or open it with another app.",
+        PreviewKind.Html => "Text of the page below. Open it in your browser to see it rendered.",
+        _ => ""
+    };
+
+    public bool HasVisualization => !string.IsNullOrEmpty(Model.Visualization);
+    public string? Visualization => Model.Visualization;
+
+    private byte[] BodyContent => Model.BodyBytes ?? System.Text.Encoding.UTF8.GetBytes(ShowPretty ? PrettyBody : Model.Body);
+    private string Extension => BodyPreview.Extension(ContentType, SelectedFormat);
+
+    [RelayCommand]
+    private async Task SaveBodyAsync()
+    {
+        if (_dialogs is null)
+            return;
+        var path = await _dialogs.SaveFileAsync("Save response body", "response" + Extension);
+        if (path is null)
+            return;
+        await File.WriteAllBytesAsync(path, BodyContent);
+        CopyFeedback = "Saved";
+        await Task.Delay(1500);
+        CopyFeedback = null;
+    }
+
+    [RelayCommand]
+    private void OpenExternally() => ShellOpener.OpenTemp("response", Extension, Model.BodyBytes ?? System.Text.Encoding.UTF8.GetBytes(Model.Body));
+
+    [RelayCommand]
+    private void OpenVisualization()
+    {
+        if (Model.Visualization is { } html)
+            ShellOpener.OpenTemp("visualization", ".html", System.Text.Encoding.UTF8.GetBytes(html));
+    }
+
+    [RelayCommand]
+    private async Task SaveTableCsvAsync()
+    {
+        if (_dialogs is null || Table is null)
+            return;
+        var path = await _dialogs.SaveFileAsync("Export table", "response.csv", new FileFilter("CSV", "*.csv"));
+        if (path is not null)
+            await File.WriteAllTextAsync(path, Table.ToCsv());
     }
 
     /// <summary>The user picked another format (e.g. the server sent JSON as text/plain): re-format the body.</summary>

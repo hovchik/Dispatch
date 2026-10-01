@@ -103,7 +103,11 @@ public sealed class DatabaseInitializer(IDbContextFactory<DispatchDbContext> fac
                     existing.Add(reader.GetString(1));
             }
             if (existing.Count == 0)
-                continue; // table is missing entirely; not expected for EnsureCreated databases
+            {
+                // A whole table added by a newer version (e.g. Flows, Monitors). Create it, then continue.
+                await CreateTableAsync(connection, entity, table, ct);
+                continue;
+            }
 
             var storeObject = StoreObjectIdentifier.Table(table, entity.GetSchema());
             foreach (var property in entity.GetProperties())
@@ -122,6 +126,28 @@ public sealed class DatabaseInitializer(IDbContextFactory<DispatchDbContext> fac
                 await alter.ExecuteNonQueryAsync(ct);
             }
         }
+    }
+
+    /// <summary>Creates a table for an entity type added by a newer version, using its mapped columns and primary key.</summary>
+    private static async Task CreateTableAsync(System.Data.Common.DbConnection connection, IEntityType entity, string table, CancellationToken ct)
+    {
+        var storeObject = StoreObjectIdentifier.Table(table, entity.GetSchema());
+        var columns = new List<string>();
+        foreach (var property in entity.GetProperties())
+        {
+            var column = property.GetColumnName(storeObject);
+            if (column is null)
+                continue;
+            var nullability = property.IsNullable ? "NULL" : "NOT NULL";
+            columns.Add($"\"{column}\" {property.GetColumnType()} {nullability}");
+        }
+        var key = entity.FindPrimaryKey();
+        if (key is not null)
+            columns.Add($"PRIMARY KEY ({string.Join(", ", key.Properties.Select(p => $"\"{p.GetColumnName(storeObject)}\""))})");
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"CREATE TABLE IF NOT EXISTS \"{table}\" ({string.Join(", ", columns)})";
+        await command.ExecuteNonQueryAsync(ct);
     }
 
     private static string DefaultLiteral(IProperty property)

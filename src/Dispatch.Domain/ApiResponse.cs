@@ -46,6 +46,12 @@ public sealed class ApiResponse
     public string? ContentType { get; init; }
     public string Body { get; init; } = string.Empty;
     public bool IsBodyTruncated { get; init; }
+
+    /// <summary>The raw bytes of a binary body (images, PDFs, archives, ...), for previews and saving to a file.</summary>
+    public byte[]? BodyBytes { get; init; }
+
+    /// <summary>HTML produced by <c>pm.visualizer.set(template, data)</c> in the test script.</summary>
+    public string? Visualization { get; set; }
     public IReadOnlyList<ResponseHeader> Headers { get; init; } = [];
 
     /// <summary>gRPC trailers and similar end-of-call metadata.</summary>
@@ -75,6 +81,9 @@ public sealed class ApiResponse
 
     /// <summary>The subset of <see cref="VariableUpdates"/> written to the environment (to be persisted by the caller).</summary>
     public IReadOnlyDictionary<string, string> EnvironmentUpdates { get; set; } = new Dictionary<string, string>();
+
+    /// <summary>Snapshots recorded during this send, by assertion index (the caller stores them on the request).</summary>
+    public IReadOnlyDictionary<int, string> SnapshotUpdates { get; set; } = new Dictionary<int, string>();
 
     /// <summary>Set when an OAuth 2.0 token was fetched or refreshed, so the caller can cache it on the request.</summary>
     public AuthSettings? RefreshedAuth { get; set; }

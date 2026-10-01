@@ -50,6 +50,9 @@ public interface IScriptRunner
 
 public sealed record ScriptResult(IReadOnlyList<TestResult> Tests, IReadOnlyList<string> Log, string? Error = null)
 {
+    /// <summary>HTML rendered by <c>pm.visualizer.set(template, data)</c>.</summary>
+    public string? Visualization { get; init; }
+
     public static readonly ScriptResult Empty = new([], []);
 }
 
@@ -94,6 +97,24 @@ public interface ICollectionRepository
     /// <summary>Inserts or updates a request. The request must belong to a collection.</summary>
     Task SaveRequestAsync(ApiRequest request, CancellationToken ct = default);
     Task DeleteRequestAsync(Guid requestId, CancellationToken ct = default);
+}
+
+public interface IFlowRepository
+{
+    Task<IReadOnlyList<TestFlow>> GetAllAsync(CancellationToken ct = default);
+    Task SaveAsync(TestFlow flow, CancellationToken ct = default);
+    Task DeleteAsync(Guid flowId, CancellationToken ct = default);
+}
+
+public interface IMonitorRepository
+{
+    Task<IReadOnlyList<MonitorDefinition>> GetAllAsync(CancellationToken ct = default);
+    Task SaveAsync(MonitorDefinition monitor, CancellationToken ct = default);
+    Task DeleteAsync(Guid monitorId, CancellationToken ct = default);
+
+    /// <summary>Appends a run and returns the most recent runs for a monitor (newest first).</summary>
+    Task AddRunAsync(MonitorRun run, CancellationToken ct = default);
+    Task<IReadOnlyList<MonitorRun>> GetRunsAsync(Guid monitorId, int take, CancellationToken ct = default);
 }
 
 public interface IEnvironmentRepository

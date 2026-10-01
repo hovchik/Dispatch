@@ -1,0 +1,170 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:flows="using:Dispatch.Application.Flows"
+             xmlns:domain="using:Dispatch.Domain"
+             xmlns:conv="using:Dispatch.App.Converters"
+             x:Class="Dispatch.App.Views.Tools.FlowBuilderView"
+             x:DataType="tools:FlowBuilderViewModel">
+  <UserControl.Resources>
+    <conv:EnumLabelConverter x:Key="EnumLabel" />
+    <DataTemplate x:Key="FlowStepTemplate" x:DataType="tools:FlowStepViewModel">
+      <Border Classes="message" Margin="2" Background="{DynamicResource SurfaceAltBrush}" CornerRadius="6" Padding="8">
+        <StackPanel Spacing="6">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+            <CheckBox IsChecked="{Binding Enabled}" MinWidth="0" VerticalAlignment="Center" ToolTip.Tip="Enabled" />
+            <Border Grid.Column="1" CornerRadius="4" Padding="6,1" Margin="4,0" VerticalAlignment="Center" Background="{DynamicResource SurfaceBrush}">
+              <TextBlock Text="{Binding TypeLabel}" FontSize="11" FontWeight="SemiBold" />
+            </Border>
+            <TextBox Grid.Column="2" Text="{Binding Name}" Watermark="Label (optional)" FontSize="12" MinHeight="26" Margin="4,0" />
+            <Button Grid.Column="3" Classes="icon" Command="{Binding MoveUpCommand}" ToolTip.Tip="Move up"><PathIcon Data="{StaticResource IconChevronUp}" Width="10" Height="10" /></Button>
+            <Button Grid.Column="4" Classes="icon" Command="{Binding MoveDownCommand}" ToolTip.Tip="Move down"><PathIcon Data="{StaticResource IconChevronDown}" Width="10" Height="10" /></Button>
+            <Button Grid.Column="5" Classes="icon" Command="{Binding RemoveCommand}" ToolTip.Tip="Remove"><PathIcon Data="{StaticResource IconTrash}" Width="12" Height="12" /></Button>
+          </Grid>
+
+          <!-- Request -->
+          <ComboBox IsVisible="{Binding IsRequest}" ItemsSource="{Binding RequestChoices}" SelectedItem="{Binding SelectedRequest}"
+                    HorizontalAlignment="Stretch" FontSize="12" PlaceholderText="Choose a request" />
+
+          <!-- Set variable -->
+          <Grid IsVisible="{Binding IsSetVariable}" ColumnDefinitions="*,Auto,2*,Auto" ColumnSpacing="6">
+            <TextBox Text="{Binding Variable}" Watermark="variable" FontSize="12" MinHeight="26" />
+            <TextBlock Grid.Column="1" Text="=" VerticalAlignment="Center" />
+            <TextBox Grid.Column="2" Text="{Binding Value}" Watermark="value (can use {}{{vars}})" FontSize="12" MinHeight="26" />
+            <ComboBox Grid.Column="3" ItemsSource="{Binding Scopes}" SelectedItem="{Binding Scope}" FontSize="12" />
+          </Grid>
+
+          <!-- Script -->
+          <TextBox IsVisible="{Binding IsScript}" Text="{Binding Value}" AcceptsReturn="True" FontFamily="{StaticResource MonoFont}"
+                   Watermark="pm.variables.set('x', 1)" MinHeight="54" FontSize="12" />
+
+          <!-- Delay / Until wait -->
+          <StackPanel IsVisible="{Binding ShowDelay}" Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Wait (ms)" VerticalAlignment="Center" Classes="label" />
+            <NumericUpDown Value="{Binding Milliseconds}" Minimum="0" Maximum="600000" Width="130" FormatString="0" />
+          </StackPanel>
+
+          <!-- Repeat -->
+          <StackPanel IsVisible="{Binding IsRepeat}" Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Times" VerticalAlignment="Center" Classes="label" />
+            <NumericUpDown Value="{Binding Count}" Minimum="0" Maximum="100000" Width="120" FormatString="0" />
+            <TextBlock Text="({{$index}} is set each pass)" Classes="muted" FontSize="11" VerticalAlignment="Center" />
+          </StackPanel>
+
+          <!-- For each -->
+          <Grid IsVisible="{Binding IsForEach}" ColumnDefinitions="*,2*" ColumnSpacing="6">
+            <TextBox Text="{Binding Variable}" Watermark="item variable ($item)" FontSize="12" MinHeight="26" />
+            <TextBox Grid.Column="1" Text="{Binding Value}" Watermark="JSON array or {}{{var}}" FontSize="12" MinHeight="26" />
+          </Grid>
+
+          <!-- Until attempts -->
+          <StackPanel IsVisible="{Binding IsUntil}" Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="Max attempts" VerticalAlignment="Center" Classes="label" />
+            <NumericUpDown Value="{Binding MaxAttempts}" Minimum="1" Maximum="10000" Width="120" FormatString="0" />
+          </StackPanel>
+
+          <!-- Condition (If / Until / Stop) -->
+          <Grid IsVisible="{Binding HasCondition}" ColumnDefinitions="*,Auto,*" ColumnSpacing="6">
+            <TextBox Text="{Binding ConditionLeft}" Watermark="{}{{value}}" FontSize="12" MinHeight="26" FontFamily="{StaticResource MonoFont}" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Comparisons}" SelectedItem="{Binding ConditionComparison}" FontSize="12"
+                      ItemTemplate="{StaticResource EnumLabel}" />
+            <TextBox Grid.Column="2" Text="{Binding ConditionRight}" Watermark="expected" FontSize="12" MinHeight="26" FontFamily="{StaticResource MonoFont}" />
+          </Grid>
+
+          <!-- Stop options -->
+          <StackPanel IsVisible="{Binding IsStop}" Spacing="4">
+            <CheckBox Content="Fail the flow" IsChecked="{Binding Fail}" />
+            <TextBox Text="{Binding Value}" Watermark="message (optional)" FontSize="12" MinHeight="26" />
+          </StackPanel>
+
+          <CheckBox IsVisible="{Binding ShowContinueOnError}" Content="Continue if this step fails" IsChecked="{Binding ContinueOnError}" FontSize="12" />
+
+          <!-- Children (containers) -->
+          <Border IsVisible="{Binding IsContainer}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="2,0,0,0"
+                  Margin="8,0,0,0" Padding="8,2,0,0">
+            <StackPanel>
+              <ItemsControl ItemsSource="{Binding Children}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="tools:FlowStepViewModel">
+                    <ContentControl Content="{Binding}" ContentTemplate="{DynamicResource FlowStepTemplate}" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,2">
+                <TextBlock Text="＋" Classes="muted" VerticalAlignment="Center" />
+                <Button Content="Request" FontSize="11" Padding="6,1" Command="{Binding AddChildCommand}" CommandParameter="Request" />
+                <Button Content="If" FontSize="11" Padding="6,1" Command="{Binding AddChildCommand}" CommandParameter="If" />
+                <Button Content="Set var" FontSize="11" Padding="6,1" Command="{Binding AddChildCommand}" CommandParameter="SetVariable" />
+                <Button Content="Delay" FontSize="11" Padding="6,1" Command="{Binding AddChildCommand}" CommandParameter="Delay" />
+                <Button Content="Script" FontSize="11" Padding="6,1" Command="{Binding AddChildCommand}" CommandParameter="Script" />
+                <Button Content="Stop" FontSize="11" Padding="6,1" Command="{Binding AddChildCommand}" CommandParameter="Stop" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+  </UserControl.Resources>
+  <Grid RowDefinitions="Auto,*,Auto,180" Margin="16">
+    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,0,0,10">
+      <TextBlock Text="Flow" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0" />
+      <TextBox Grid.Column="1" Text="{Binding Name}" MinWidth="240" HorizontalAlignment="Left" />
+      <Button Grid.Column="2" Content="Save" Command="{Binding SaveCommand}" Margin="8,0,0,0" Padding="12,4"
+              Classes.accent="{Binding IsDirty}" />
+      <Button Grid.Column="3" Command="{Binding RunCommand}" Margin="6,0,0,0" Padding="12,4" Classes="accent">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" />
+          <TextBlock Text="Run" />
+        </StackPanel>
+      </Button>
+      <Button Grid.Column="4" Content="Stop" Command="{Binding StopCommand}" Margin="6,0,0,0" Padding="12,4" />
+    </Grid>
+
+    <Border Grid.Row="1" Classes="card" Padding="6">
+      <ScrollViewer>
+        <StackPanel>
+          <ItemsControl ItemsSource="{Binding Steps}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="tools:FlowStepViewModel">
+                <ContentControl Content="{Binding}" ContentTemplate="{DynamicResource FlowStepTemplate}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel Orientation="Horizontal" Spacing="6" Margin="4,8,0,0">
+            <TextBlock Text="Add step:" Classes="muted" VerticalAlignment="Center" FontSize="12" />
+            <ItemsControl ItemsSource="{Binding StepTypes}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="domain:FlowStepType">
+                  <Button Content="{Binding Converter={StaticResource EnumLabel}}" FontSize="11" Padding="7,2" Margin="2"
+                          Command="{Binding $parent[ItemsControl].((tools:FlowBuilderViewModel)DataContext).AddStepCommand}"
+                          CommandParameter="{Binding}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+
+    <TextBlock Grid.Row="2" Text="{Binding Status}" TextWrapping="Wrap" Margin="2,10,0,6" />
+    <Border Grid.Row="3" Classes="card" Padding="0">
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Log}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="flows:FlowEvent">
+              <Grid ColumnDefinitions="Auto,*" Margin="8,1">
+                <TextBlock Text="{Binding Ok, Converter={x:Static conv:PassTextConverter.Instance}}"
+                           Foreground="{Binding Ok, Converter={x:Static conv:PassBrushConverter.Instance}}" FontWeight="Bold"
+                           Margin="{Binding Depth, Converter={x:Static tools:DepthIndentConverter.Instance}}" />
+                <TextBlock Grid.Column="1" FontSize="12.5" Margin="6,0,0,0">
+                  <Run Text="{Binding StepName}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Detail}" Foreground="{DynamicResource MutedTextBrush}" />
+                </TextBlock>
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</UserControl>

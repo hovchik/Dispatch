@@ -1,0 +1,116 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:domain="using:Dispatch.Domain"
+             xmlns:conv="using:Dispatch.App.Converters"
+             x:Class="Dispatch.App.Views.Tools.MonitorEditorView"
+             x:DataType="tools:MonitorEditorViewModel">
+  <UserControl.Resources><conv:EnumLabelConverter x:Key="EnumLabel" /></UserControl.Resources>
+  <Grid ColumnDefinitions="*,300" Margin="16">
+    <ScrollViewer Margin="0,0,14,0">
+      <StackPanel Spacing="10">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox Text="{Binding Name}" Watermark="Monitor name" FontSize="15" FontWeight="SemiBold" />
+          <CheckBox Grid.Column="1" Content="Enabled" IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="10,0,0,0" />
+        </Grid>
+
+        <TextBlock Classes="section" Text="SCHEDULE" />
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <ComboBox ItemsSource="{Binding ScheduleKinds}" SelectedItem="{Binding ScheduleKind}" ItemTemplate="{StaticResource EnumLabel}" MinWidth="130" />
+          <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsInterval}">
+            <TextBlock Text="Every" VerticalAlignment="Center" />
+            <NumericUpDown Value="{Binding IntervalMinutes}" Minimum="1" Maximum="10080" Width="120" FormatString="0" />
+            <TextBlock Text="minute(s)" VerticalAlignment="Center" />
+          </StackPanel>
+          <TextBox Text="{Binding Cron}" Watermark="*/5 * * * *" FontFamily="{StaticResource MonoFont}" MinWidth="180" IsVisible="{Binding IsCron}" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="Fail if average response exceeds" VerticalAlignment="Center" Classes="muted" FontSize="12" />
+          <NumericUpDown Value="{Binding MaxAverageMs}" Minimum="0" Maximum="600000" Width="130" FormatString="0" />
+          <TextBlock Text="ms (0 = no limit)" VerticalAlignment="Center" Classes="muted" FontSize="12" />
+        </StackPanel>
+
+        <TextBlock Classes="section" Text="REQUESTS" />
+        <Border Classes="card" Padding="6" MaxHeight="150">
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Requests}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="tools:SelectableRequest">
+                  <CheckBox IsChecked="{Binding IsSelected}" Content="{Binding Name}" FontSize="12" Margin="2,0" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Border>
+
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Classes="section" Text="ALERTS" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Content="+ Add target" FontSize="12" Padding="8,2" Command="{Binding AddAlertCommand}" />
+        </Grid>
+        <ItemsControl ItemsSource="{Binding Alerts}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="tools:AlertTargetViewModel">
+              <Border Classes="card" Padding="8" Margin="0,0,0,6">
+                <StackPanel Spacing="6">
+                  <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                    <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="1" ItemsSource="{x:Static tools:AlertTargetViewModel.Channels}" SelectedItem="{Binding Channel}"
+                              ItemTemplate="{StaticResource EnumLabel}" Margin="6,0" />
+                    <ComboBox Grid.Column="2" ItemsSource="{x:Static tools:AlertTargetViewModel.Triggers}" SelectedItem="{Binding Trigger}"
+                              ItemTemplate="{StaticResource EnumLabel}" HorizontalAlignment="Left" MinWidth="150" />
+                    <Button Grid.Column="3" Classes="icon"
+                            Command="{Binding $parent[ItemsControl].((tools:MonitorEditorViewModel)DataContext).RemoveAlertCommand}" CommandParameter="{Binding}">
+                      <PathIcon Data="{StaticResource IconTrash}" Width="12" Height="12" />
+                    </Button>
+                  </Grid>
+                  <TextBox Text="{Binding Target}" Watermark="{Binding TargetWatermark}" FontSize="12" />
+                  <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="6" IsVisible="{Binding IsEmail}">
+                    <TextBox Text="{Binding SmtpHost}" Watermark="smtp host" FontSize="12" />
+                    <NumericUpDown Grid.Column="1" Value="{Binding SmtpPort}" Minimum="1" Maximum="65535" Width="100" FormatString="0" />
+                    <TextBox Grid.Column="2" Text="{Binding FromAddress}" Watermark="from@example.com" FontSize="12" />
+                  </Grid>
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="6" IsVisible="{Binding IsEmail}">
+                    <TextBox Text="{Binding SmtpUser}" Watermark="smtp user" FontSize="12" />
+                    <TextBox Grid.Column="1" Text="{Binding SmtpPassword}" Watermark="smtp password" PasswordChar="•" FontSize="12" />
+                  </Grid>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+
+    <DockPanel Grid.Column="1">
+      <StackPanel DockPanel.Dock="Top" Spacing="8">
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+          <Button Content="Save" Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding SaveCommand}" />
+          <Button Grid.Column="1" Content="Run now" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding RunNowCommand}" />
+        </Grid>
+        <TextBlock Text="{Binding Status}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+        <TextBlock Classes="section" Text="RECENT RUNS" Margin="0,6,0,0" />
+      </StackPanel>
+      <Border Classes="card" Padding="0">
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding History}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="domain:MonitorRun">
+                <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="8,5">
+                  <Grid ColumnDefinitions="18,*,Auto">
+                    <TextBlock Text="{Binding Passed, Converter={x:Static conv:PassTextConverter.Instance}}" FontWeight="Bold"
+                               Foreground="{Binding Passed, Converter={x:Static conv:PassBrushConverter.Instance}}" />
+                    <StackPanel Grid.Column="1" Margin="4,0">
+                      <TextBlock Text="{Binding StartedAt, StringFormat='{}{0:MM-dd HH:mm:ss}'}" FontSize="12" />
+                      <TextBlock Text="{Binding Summary}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding AverageMs, StringFormat='{}{0:0} ms'}" Classes="muted" FontSize="11" VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </DockPanel>
+  </Grid>
+</UserControl>

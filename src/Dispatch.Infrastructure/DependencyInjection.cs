@@ -27,6 +27,8 @@ public static class DependencyInjection
         services.AddSingleton<ICollectionRepository, CollectionRepository>();
         services.AddSingleton<IEnvironmentRepository, EnvironmentRepository>();
         services.AddSingleton<IHistoryRepository, HistoryRepository>();
+        services.AddSingleton<IFlowRepository, FlowRepository>();
+        services.AddSingleton<IMonitorRepository, MonitorRepository>();
         services.AddSingleton<ISettingsRepository, SettingsRepository>();
 
         services.AddDispatchEngine();
@@ -71,6 +73,12 @@ public static class DependencyInjection
         services.AddSingleton<IRequestSender, RequestSender>();
         services.AddSingleton<Dispatch.Application.Running.CollectionRunner>();
         services.AddSingleton<Dispatch.Application.Load.LoadTester>();
+        services.AddSingleton<Dispatch.Application.Security.SecurityScanner>();
+        services.AddSingleton<Dispatch.Application.Flows.FlowRunner>();
+        services.AddSingleton<Dispatch.Application.Monitoring.IAlertSender, Monitoring.AlertSender>();
+        services.AddSingleton<Dispatch.Application.Monitoring.MonitorService>();
+        services.AddSingleton<Capture.CertificateAuthority>();
+        services.AddTransient<Capture.CaptureProxy>();
         return services;
     }
 }

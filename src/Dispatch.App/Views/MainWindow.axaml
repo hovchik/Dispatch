@@ -92,6 +92,12 @@
               <TextBlock Text="Cookies" />
             </StackPanel>
           </Button>
+          <Button Classes="tool" Command="{Binding OpenCaptureCommand}" ToolTip.Tip="Record proxied HTTP/HTTPS traffic into a collection">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconCapture}" />
+              <TextBlock Text="Capture" />
+            </StackPanel>
+          </Button>
         </StackPanel>
 
         <Button Grid.Column="2" HorizontalAlignment="Center" MinWidth="240" Margin="12,0" Padding="10,5"

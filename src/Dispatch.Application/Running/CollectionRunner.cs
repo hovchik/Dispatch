@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Dispatch.Application.Requests;
+using Dispatch.Application.Testing;
 using Dispatch.Application.Variables;
 using Dispatch.Domain;
 
@@ -20,6 +21,7 @@ public sealed class RunOptions
     public int DelayMs { get; init; }
     public bool StopOnFailure { get; init; }
     public bool RecordHistory { get; init; }
+    public SnapshotMode Snapshots { get; init; } = SnapshotMode.RecordMissing;
 }
 
 public sealed record RequestRunResult(int Iteration, ApiRequest Request, ApiResponse Response)
@@ -43,6 +45,9 @@ public sealed class RunReport
     public Dictionary<string, string> EnvironmentUpdates { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> GlobalUpdates { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Snapshots recorded or updated during the run: request id → assertion index → snapshot.</summary>
+    public Dictionary<Guid, Dictionary<int, string>> SnapshotUpdates { get; } = [];
+
     public int TotalRequests => Results.Count;
     public int FailedRequests => Results.Count(r => !r.Passed);
     public int TotalTests => Results.Sum(r => r.Response.TestResults.Count);
@@ -65,6 +70,8 @@ public sealed class CollectionRunner(IRequestSender sender)
         var report = new RunReport { Name = options.Name, StartedAt = DateTimeOffset.Now };
         var stopwatch = Stopwatch.StartNew();
         var variables = VariableContext.For(options.Environment, options.CollectionVariables, globals: options.Globals);
+        // A working copy, so recorded snapshots feed later iterations without touching the caller's requests.
+        var requests = options.Requests.Select(r => r.Clone()).ToList();
         var iterations = options.Data.Count > 0 ? options.Data.Count : Math.Max(1, options.Iterations);
 
         for (var iteration = 0; iteration < iterations && !cancellationToken.IsCancellationRequested; iteration++)
@@ -76,7 +83,7 @@ public sealed class CollectionRunner(IRequestSender sender)
                     variables.Data[k] = v;
             report.Iterations = iteration + 1;
 
-            foreach (var request in options.Requests)
+            foreach (var request in requests)
             {
                 if (cancellationToken.IsCancellationRequested)
                     break;
@@ -88,12 +95,24 @@ public sealed class CollectionRunner(IRequestSender sender)
                     {
                         Variables = variables,
                         CollectionSpec = options.CollectionSpec,
-                        RecordHistory = options.RecordHistory
+                        RecordHistory = options.RecordHistory,
+                        Snapshots = options.Snapshots
                     }, cancellationToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
                     break;
+                }
+
+                if (response.SnapshotUpdates.Count > 0)
+                {
+                    if (!report.SnapshotUpdates.TryGetValue(request.Id, out var stored))
+                        report.SnapshotUpdates[request.Id] = stored = [];
+                    foreach (var (index, snapshot) in response.SnapshotUpdates)
+                        stored[index] = snapshot;
+                    // Later iterations compare against what was just recorded (on the run's working copy).
+                    foreach (var (index, snapshot) in response.SnapshotUpdates)
+                        request.Assertions[index].Expected = snapshot;
                 }
 
                 var result = new RequestRunResult(iteration, request, response);

@@ -97,6 +97,7 @@ public sealed class SoapExecutor(HttpProtocolExecutor http) : IProtocolExecutor
             ContentType = response.ContentType,
             Body = response.Body,
             IsBodyTruncated = response.IsBodyTruncated,
+            BodyBytes = response.BodyBytes,
             Headers = response.Headers,
             Timings = response.Timings,
             RawRequest = response.RawRequest,

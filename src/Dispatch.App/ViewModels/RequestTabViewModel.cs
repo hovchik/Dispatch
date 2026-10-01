@@ -504,7 +504,8 @@ public sealed partial class RequestTabViewModel : ObservableObject
 
             if (Response is not null)
                 PreviousResponse = Response;
-            Response = await ResponseViewModel.CreateAsync(response, _services.Clipboard);
+            Response = await ResponseViewModel.CreateAsync(response, _services.Clipboard, _services.Dialogs);
+            Assertions.ApplySnapshots(response.SnapshotUpdates);
             Assertions.ShowResults(response.TestResults);
             if (response.RefreshedAuth is { } refreshed)
                 Auth.CacheToken(refreshed);
@@ -690,11 +691,33 @@ public sealed partial class RequestTabViewModel : ObservableObject
             case "schema":
                 Assertions.AddModel(new Assertion { Source = ValueSource.Contract, Operator = AssertionOperator.IsValid });
                 break;
+            case "snapshot":
+                Assertions.AddModel(new Assertion
+                {
+                    Source = ValueSource.Snapshot,
+                    Operator = AssertionOperator.IsValid,
+                    Expected = Response is { HasResponse: true } last ? Application.Testing.Snapshots.Capture(last.Model) : ""
+                });
+                break;
         }
     }
 
     [RelayCommand]
     private void Close() => _host.CloseTab(this);
+
+    /// <summary>Opens this request's documentation (as it would appear in the collection docs) in the browser.</summary>
+    [RelayCommand]
+    private void PreviewDocs()
+    {
+        var request = ToModel();
+        var collection = _host.FindCollection(CollectionId);
+        var page = new RequestCollection
+        {
+            Name = collection?.Name ?? "Draft",
+            Requests = [request]
+        };
+        ShellOpener.OpenTemp(request.Name, ".html", System.Text.Encoding.UTF8.GetBytes(Application.Docs.DocsGenerator.Html(page)));
+    }
 
     [RelayCommand]
     private void BeginRename()

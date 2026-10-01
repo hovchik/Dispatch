@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Dispatch.Application.Abstractions;
+using Dispatch.Application.Formatting;
 using Dispatch.Application.Variables;
 using Dispatch.Domain;
 using Jint;
@@ -31,6 +32,7 @@ public sealed class JintScriptRunner : IScriptRunner
     {
         var tests = new List<TestResult>();
         var log = new List<string>();
+        string? visualization = null;
 
         using var engine = new Engine(options => options
             .TimeoutInterval(Timeout)
@@ -59,13 +61,15 @@ public sealed class JintScriptRunner : IScriptRunner
         engine.SetValue("__log", new Action<string, string>((level, text) =>
             log.Add(level == "log" ? text : $"[{level}] {text}")));
         engine.SetValue("__btoa", new Func<string, string>(s => Convert.ToBase64String(Encoding.Latin1.GetBytes(s))));
+        engine.SetValue("__visualize", new Action<string, string>((template, dataJson) =>
+            visualization = Template.Page(request.Name, Template.Render(template, JsonNode.Parse(dataJson)))));
         engine.SetValue("__atob", new Func<string, string>(s => Encoding.Latin1.GetString(Convert.FromBase64String(s))));
         engine.Execute("""
             var __host = {
               envGet: __envGet, envSet: __envSet, envUnset: __envUnset, varGet: __varGet, varSet: __varSet, varUnset: __varUnset,
               globalGet: __globalGet, globalSet: __globalSet, dataGet: __dataGet, resolve: __resolve,
               variablesJson: __variablesJson, iteration: __iteration, requestJson: __requestJson, responseJson: __responseJson,
-              test: __test, log: __log, btoa: __btoa, atob: __atob
+              test: __test, log: __log, btoa: __btoa, atob: __atob, visualize: __visualize
             };
             """);
 
@@ -75,7 +79,7 @@ public sealed class JintScriptRunner : IScriptRunner
             engine.Execute(script);
             if (applyRequestChanges)
                 ApplyRequestChanges(request, engine.Invoke("__exportRequest").AsString());
-            return new ScriptResult(tests, log);
+            return new ScriptResult(tests, log) { Visualization = visualization };
         }
         catch (JavaScriptException ex)
         {

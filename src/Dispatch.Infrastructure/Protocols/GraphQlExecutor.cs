@@ -93,6 +93,7 @@ public sealed partial class GraphQlExecutor(HttpProtocolExecutor http, WebSocket
         ContentType = r.ContentType,
         Body = r.Body,
         IsBodyTruncated = r.IsBodyTruncated,
+        BodyBytes = r.BodyBytes,
         Headers = r.Headers,
         Timings = r.Timings,
         RawRequest = r.RawRequest,

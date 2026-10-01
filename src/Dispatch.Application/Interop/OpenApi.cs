@@ -126,13 +126,15 @@ public static class OpenApi
                     var (contentType, body) = swagger2
                         ? ("application/json", resolved?["schema"] is { } s ? Json(ExampleNode(root, Resolve(root, s), 0)) : "")
                         : ResponseExample(root, resolved);
+                    var schema = swagger2 ? resolved?["schema"] : ResponseSchema(resolved);
                     if (body.Length > 0)
                         request.Examples.Add(new ResponseExample
                         {
                             Name = resolved?["description"]?.ToString() is { Length: > 0 } d ? $"{code} {d}" : code,
                             StatusCode = status,
                             ContentType = contentType,
-                            Body = body
+                            Body = body,
+                            Schema = schema is null ? "" : Mock.SchemaFaker.Inline(root, schema)?.ToJsonString() ?? ""
                         });
                 }
 
@@ -217,6 +219,14 @@ public static class OpenApi
         var example = media?["example"] ?? FirstExample(media?["examples"], root)
                       ?? ExampleNode(root, Resolve(root, media?["schema"]), 0);
         return (mediaType, example is JsonValue v && v.TryGetValue<string>(out var s) && !mediaType.Contains("json") ? s : Json(example));
+    }
+
+    private static JsonNode? ResponseSchema(JsonNode? response)
+    {
+        if (response?["content"] is not JsonObject content || content.Count == 0)
+            return null;
+        var media = content.FirstOrDefault(c => c.Key.Contains("json")).Value ?? content.First().Value;
+        return media?["schema"];
     }
 
     private static AuthSettings ImportSecurity(JsonArray security, JsonObject schemes, bool swagger2, RequestCollection collection)

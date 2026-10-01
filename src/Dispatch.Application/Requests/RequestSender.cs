@@ -23,6 +23,9 @@ public sealed class SendOptions
     public bool Interactive { get; init; }
     public bool RecordHistory { get; init; } = true;
     public bool RunScripts { get; init; } = true;
+
+    /// <summary>Whether snapshot assertions record missing snapshots, overwrite them, or only compare.</summary>
+    public SnapshotMode Snapshots { get; init; } = SnapshotMode.RecordMissing;
 }
 
 public interface IRequestSender
@@ -35,6 +38,9 @@ public interface IRequestSender
     /// test script, history. Never throws for request / network errors.
     /// </summary>
     Task<ApiResponse> SendAsync(ApiRequest request, SendOptions options, CancellationToken cancellationToken);
+
+    /// <summary>Runs only a request's pre-request script against <paramref name="variables"/> (for flow Script steps). No HTTP call.</summary>
+    Task<ApiResponse> SendWithScriptOnlyAsync(ApiRequest request, VariableContext variables, CancellationToken cancellationToken);
 }
 
 /// <summary>Variables that live for the app session: runtime values from extraction/scripts, and globals.</summary>
@@ -106,6 +112,16 @@ public sealed class RequestSender : IRequestSender
 
     public Task<ApiResponse> SendAsync(ApiRequest request, ApiEnvironment? environment, CancellationToken cancellationToken) =>
         SendAsync(request, new SendOptions { Environment = environment }, cancellationToken);
+
+    public async Task<ApiResponse> SendWithScriptOnlyAsync(ApiRequest request, VariableContext variables, CancellationToken cancellationToken)
+    {
+        var log = new List<string>();
+        if (_scripts is null || string.IsNullOrWhiteSpace(request.PreRequestScript))
+            return new ApiResponse { ScriptLog = log };
+        var working = request.Clone();
+        var pre = await _scripts.RunPreRequestAsync(working.PreRequestScript, working, variables, cancellationToken).ConfigureAwait(false);
+        return new ApiResponse { Error = pre.Error, ScriptLog = pre.Log };
+    }
 
     public async Task<ApiResponse> SendAsync(ApiRequest request, SendOptions options, CancellationToken cancellationToken)
     {
@@ -179,6 +195,9 @@ public sealed class RequestSender : IRequestSender
             variables.Set(name, value, scope);
         tests.AddRange(extractFailures);
 
+        if (response.HasResponse)
+            response.SnapshotUpdates = RecordSnapshots(resolved, response, options.Snapshots);
+
         tests.AddRange(await _assertions.EvaluateAsync(resolved, response, variables.Resolve, options.CollectionSpec,
             cancellationToken).ConfigureAwait(false));
 
@@ -189,6 +208,7 @@ public sealed class RequestSender : IRequestSender
                 .ConfigureAwait(false);
             tests.AddRange(post.Tests);
             log.AddRange(post.Log);
+            response.Visualization = post.Visualization;
             if (post.Error is not null)
                 tests.Add(new TestResult("Test script", false, post.Error));
         }
@@ -197,6 +217,28 @@ public sealed class RequestSender : IRequestSender
             await RecordHistoryAsync(request, response).ConfigureAwait(false);
 
         return Finish(response, variables, tests, log, options);
+    }
+
+    /// <summary>Stores the current body on snapshot assertions that need (re)recording; returns what changed.</summary>
+    private static Dictionary<int, string> RecordSnapshots(ApiRequest resolved, ApiResponse response, SnapshotMode mode)
+    {
+        var updates = new Dictionary<int, string>();
+        if (mode == SnapshotMode.Verify)
+            return updates;
+        for (var i = 0; i < resolved.Assertions.Count; i++)
+        {
+            var assertion = resolved.Assertions[i];
+            if (!assertion.Enabled || assertion.Source != ValueSource.Snapshot)
+                continue;
+            if (mode == SnapshotMode.RecordMissing && assertion.Expected.Length > 0)
+                continue;
+            var snapshot = Snapshots.Capture(response);
+            if (snapshot == assertion.Expected)
+                continue;
+            assertion.Expected = snapshot;
+            updates[i] = snapshot;
+        }
+        return updates;
     }
 
     private ApiResponse Finish(ApiResponse response, VariableContext variables, List<TestResult> tests, List<string> log,

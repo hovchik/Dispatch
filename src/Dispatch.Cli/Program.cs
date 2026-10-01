@@ -23,7 +23,13 @@ public static class Program
           dispatch export <collection> [options]  Export a saved collection
           dispatch list                           List saved collections and environments
           dispatch mock <collection> [options]    Serve a collection's examples as a mock server
+                                                  (--dynamic: fresh fake data from schemas, --stateful: CRUD memory)
           dispatch load <collection> [options]    Load test a collection
+          dispatch docs <collection> [options]    Generate API documentation (--format html|md, --out <file>)
+          dispatch scan <collection> [options]    Security-test a collection you are authorised to test
+          dispatch flow <collection> [--name n]   Run saved test flow(s) of a collection
+          dispatch monitor [--once|--watch] [...]  Run scheduled monitors and send alerts
+          dispatch capture [--port 8899] [...]     Record proxied traffic to a HAR or Dispatch collection
           dispatch version
 
         <collection> is a file (Dispatch, Postman, Insomnia, HAR, OpenAPI, .http), a Dispatch folder, a URL,
@@ -43,6 +49,7 @@ public static class Program
           -r, --reporter <list>        cli, junit, html, json (default cli)
           -o, --out <dir>              Where report files go (default ./dispatch-reports)
               --save-env               Write variables set during the run back to a saved environment
+              --update-snapshots       Record the current responses as the new snapshots (and save them)
               --no-color               Plain console output
               --db <path>              Dispatch database (default: the desktop app's)
 
@@ -77,6 +84,11 @@ public static class Program
                 "list" or "ls" => await ListAsync(rest),
                 "mock" => await MockCommand.ExecuteAsync(rest, cancel.Token),
                 "load" => await LoadCommand.ExecuteAsync(rest, cancel.Token),
+                "docs" => await DocsAsync(rest),
+                "scan" => await ScanCommand.ExecuteAsync(rest, cancel.Token),
+                "flow" => await FlowCommand.ExecuteAsync(rest, cancel.Token),
+                "monitor" => await MonitorCommand.ExecuteAsync(rest, cancel.Token),
+                "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),
                 "version" or "--version" => Version(),
                 _ => throw new UsageException($"Unknown command '{command}'. Run 'dispatch --help'.")
             };
@@ -177,6 +189,38 @@ public static class Program
             default:
                 throw new UsageException($"Unknown format '{format}'. Use dispatch, folder, postman or http.");
         }
+    }
+
+    private static async Task<int> DocsAsync(string[] args)
+    {
+        var parsed = Arguments.Parse(args, new HashSet<string>(["no-examples", "no-code", "no-tests"]),
+            new Dictionary<string, string> { ["o"] = "out", ["f"] = "format" });
+        if (parsed.Positionals.Count != 1)
+            throw new UsageException("Usage: dispatch docs <collection> [--format html|md] [--out <file>|-] [--no-examples] [--no-code] [--no-tests]");
+        await using var services = BuildServices(parsed.Option("db"));
+        var (collection, _) = await new Workspace(services).LoadCollectionAsync(parsed.Positionals[0], parsed.Option("collection"));
+        var format = (parsed.Option("format") ?? "html").ToLowerInvariant();
+        var options = new Dispatch.Application.Docs.DocsOptions
+        {
+            IncludeExamples = !parsed.Flag("no-examples"),
+            IncludeCodeSamples = !parsed.Flag("no-code"),
+            IncludeTests = !parsed.Flag("no-tests")
+        };
+        var content = format switch
+        {
+            "html" => Dispatch.Application.Docs.DocsGenerator.Html(collection, options),
+            "md" or "markdown" => Dispatch.Application.Docs.DocsGenerator.MarkdownText(collection, options),
+            _ => throw new UsageException($"Unknown format '{format}'. Use html or md.")
+        };
+        var path = parsed.Option("out") ?? DispatchFormat.Slug(collection.Name) + (format == "html" ? ".html" : ".md");
+        if (path == "-")
+        {
+            Console.WriteLine(content);
+            return ExitOk;
+        }
+        await File.WriteAllTextAsync(path, content);
+        Console.WriteLine($"Wrote documentation for {collection.Requests.Count} endpoint(s) to {Path.GetFullPath(path)}");
+        return ExitOk;
     }
 
     private static async Task<int> ListAsync(string[] args)

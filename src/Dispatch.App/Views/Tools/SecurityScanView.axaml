@@ -1,0 +1,104 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:sec="using:Dispatch.Application.Security"
+             x:Class="Dispatch.App.Views.Tools.SecurityScanView"
+             x:DataType="tools:SecurityScanViewModel">
+  <Grid ColumnDefinitions="300,*" Margin="18">
+    <DockPanel Margin="0,0,16,0">
+      <TextBlock DockPanel.Dock="Top" Text="Security scan" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,4" />
+      <TextBlock DockPanel.Dock="Top" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,10"
+                 Text="Only scan APIs you own or are authorised to test." />
+      <StackPanel DockPanel.Dock="Top" Spacing="8">
+        <TextBlock Classes="section" Text="CHECKS" />
+        <CheckBox Content="Passive checks (headers, transport, disclosure, CORS)" IsChecked="{Binding Passive}" />
+        <CheckBox Content="Active probes (send extra crafted requests)" IsChecked="{Binding Active}" />
+        <StackPanel Margin="18,0,0,0" Spacing="6" IsEnabled="{Binding Active}">
+          <CheckBox Content="Injection &amp; reflection" IsChecked="{Binding CheckInjection}" />
+          <CheckBox Content="Authentication enforcement" IsChecked="{Binding CheckAuth}" />
+          <CheckBox Content="Boundary / malformed input" IsChecked="{Binding CheckBoundaries}" />
+        </StackPanel>
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,6,0,0">
+          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding ScanCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconShield}" Width="12" Height="12" />
+              <TextBlock Text="Scan" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StopCommand}">
+            <TextBlock Text="Stop" />
+          </Button>
+        </Grid>
+        <DropDownButton Content="Export report" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+          <DropDownButton.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+              <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+            </MenuFlyout>
+          </DropDownButton.Flyout>
+        </DropDownButton>
+      </StackPanel>
+    </DockPanel>
+
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Border CornerRadius="8" Padding="12,6" Background="#33CF222E">
+          <StackPanel>
+            <TextBlock Text="{Binding HighCount}" FontSize="22" FontWeight="Bold" Foreground="#CF222E" />
+            <TextBlock Text="High" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="#339A6700">
+          <StackPanel>
+            <TextBlock Text="{Binding MediumCount}" FontSize="22" FontWeight="Bold" Foreground="#9A6700" />
+            <TextBlock Text="Medium" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="#330969DA">
+          <StackPanel>
+            <TextBlock Text="{Binding LowCount}" FontSize="22" FontWeight="Bold" Foreground="#0969DA" />
+            <TextBlock Text="Low" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding InfoCount}" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="Info" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+      <TextBlock Grid.Row="1" Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" Margin="0,10,0,8" />
+      <Border Grid.Row="2" Classes="card" Padding="0">
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Findings}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="sec:ScanFinding">
+                <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="12,8">
+                  <StackPanel Spacing="3">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Border CornerRadius="4" Padding="6,1" VerticalAlignment="Center"
+                              Background="{Binding Severity, Converter={x:Static tools:ScanSeverityBrush.Instance}}">
+                        <TextBlock Text="{Binding SeverityText}" FontSize="11" FontWeight="Bold" Foreground="White" />
+                      </Border>
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <TextBlock FontSize="12" Classes="muted">
+                      <Run Text="{Binding CategoryText}" /><Run Text=" · " /><Run Text="{Binding RequestName}" FontWeight="SemiBold" />
+                    </TextBlock>
+                    <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="13" />
+                    <SelectableTextBlock Text="{Binding Evidence}" FontFamily="{StaticResource MonoFont}" FontSize="11" Classes="muted"
+                                         TextWrapping="Wrap" IsVisible="{Binding Evidence, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <TextBlock FontSize="12" Foreground="#22A06B" TextWrapping="Wrap"
+                               IsVisible="{Binding Remediation, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                      <Run Text="Fix:" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Remediation}" />
+                    </TextBlock>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

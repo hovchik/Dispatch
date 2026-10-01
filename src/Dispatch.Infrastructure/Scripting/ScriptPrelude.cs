@@ -282,6 +282,12 @@ internal static class ScriptPrelude
               }
             }
           };
+          pm.visualizer = {
+            set: function (template, data) {
+              __host.visualize(String(template), JSON.stringify(data === undefined ? {} : data));
+            },
+            clear: function () {}
+          };
           pm.test.skip = function (name) { __host.test(String(name) + ' (skipped)', true, ''); };
 
           function log(level) {

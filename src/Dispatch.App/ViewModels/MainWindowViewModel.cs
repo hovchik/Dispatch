@@ -27,6 +27,13 @@ public sealed record MainServices(
     Importer Importer,
     CollectionRunner Runner,
     LoadTester LoadTester,
+    Dispatch.Application.Security.SecurityScanner Scanner,
+    IFlowRepository Flows,
+    Dispatch.Application.Flows.FlowRunner FlowRunner,
+    IMonitorRepository Monitors,
+    Dispatch.Application.Monitoring.MonitorService MonitorService,
+    Dispatch.Infrastructure.Capture.CertificateAuthority CaptureAuthority,
+    Func<Dispatch.Infrastructure.Capture.CaptureProxy> CaptureProxyFactory,
     GrpcSchemaProvider GrpcSchemas,
     Infrastructure.Auth.SystemBrowserInteraction OAuth);
 
@@ -224,6 +231,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
     private void OpenCookies() => Dialogs.ShowTool(new CookiesViewModel(_services.Cookies));
 
     [RelayCommand]
+    private void OpenCapture() => Dialogs.ShowTool(new CaptureViewModel(_services.CaptureProxyFactory(), _services.CaptureAuthority,
+        Dialogs, _services.Tabs.Collections, Collections.LoadAsync));
+
+    [RelayCommand]
     private void OpenRunner() => OpenCollectionTool(CollectionAction.Run);
 
     [RelayCommand]
@@ -263,11 +274,35 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
             case CollectionAction.LoadTest:
                 Dialogs.ShowTool(new LoadTestViewModel(collection, _services.LoadTester, () => ActiveEnvironment));
                 break;
+            case CollectionAction.Scan:
+                Dialogs.ShowTool(new SecurityScanViewModel(collection, _services.Scanner, Dialogs, () => ActiveEnvironment));
+                break;
+            case CollectionAction.Flows:
+                Dialogs.ShowTool(new FlowManagerViewModel(collection, _services.Flows, _services.FlowRunner, Dialogs, () => ActiveEnvironment));
+                break;
+            case CollectionAction.Monitors:
+                Dialogs.ShowTool(new MonitorManagerViewModel(collection, _services.Monitors, _services.MonitorService, Dialogs, () => ActiveEnvironment));
+                break;
             case CollectionAction.Mock:
                 Dialogs.ShowTool(new MockServerViewModel(collection, _services.GrpcSchemas, _services.Tabs.Clipboard));
                 break;
             case CollectionAction.Settings:
                 Dialogs.ShowTool(new CollectionSettingsViewModel(collection, _services.Tabs.Collections, Dialogs, Collections.LoadAsync));
+                break;
+            case CollectionAction.DocsHtml or CollectionAction.DocsMarkdown:
+                await SafeAsync(async () =>
+                {
+                    var html = action == CollectionAction.DocsHtml;
+                    var slug = DispatchFormat.Slug(collection.Name);
+                    var path = await Dialogs.SaveFileAsync("Save API documentation", slug + (html ? "-docs.html" : "-docs.md"),
+                        html ? new FileFilter("HTML page", "*.html") : new FileFilter("Markdown", "*.md"));
+                    if (path is null)
+                        return;
+                    await File.WriteAllTextAsync(path, html ? Application.Docs.DocsGenerator.Html(collection) : Application.Docs.DocsGenerator.MarkdownText(collection));
+                    if (html)
+                        ShellOpener.Open(path);
+                    ShowInfo($"Documentation for {collection.Requests.Count} endpoint(s) saved to {path}");
+                });
                 break;
             case CollectionAction.ExportFolder:
                 await SafeAsync(async () =>
@@ -310,7 +345,29 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
         yield return new PaletteItem("Run collection…", "Collection runner", OpenRunner);
         yield return new PaletteItem("Mock server…", "Serve saved examples", OpenMockServer);
         yield return new PaletteItem("Load test…", "Virtual users, latency percentiles", OpenLoadTest);
+        yield return new PaletteItem("Monitors…", "Scheduled runs with Slack / webhook / email alerts", () =>
+        {
+            var node = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId) ?? Collections.Items.FirstOrDefault();
+            if (node is not null)
+                _ = RunCollectionActionAsync(node, CollectionAction.Monitors);
+        });
+        yield return new PaletteItem("Test flows…", "Chain requests with conditions, loops and waits", () =>
+        {
+            var node = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId) ?? Collections.Items.FirstOrDefault();
+            if (node is not null)
+                _ = RunCollectionActionAsync(node, CollectionAction.Flows);
+        });
+        yield return new PaletteItem("Security scan…", "Passive checks and active probes", () =>
+        {
+            var node = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId) ?? Collections.Items.FirstOrDefault();
+            if (node is not null)
+                _ = RunCollectionActionAsync(node, CollectionAction.Scan);
+        });
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
+        yield return new PaletteItem("Capture proxy…", "Record browser / app traffic into a collection", OpenCapture);
+        foreach (var collection in Collections.Items)
+            yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
+                () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));
         yield return new PaletteItem("Toggle theme", "Light / dark", ToggleTheme);
         if (SelectedTab is { } tab)
         {

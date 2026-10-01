@@ -205,6 +205,97 @@ public sealed class HistoryRepository(IDbContextFactory<DispatchDbContext> facto
     }
 }
 
+public sealed class FlowRepository(IDbContextFactory<DispatchDbContext> factory) : IFlowRepository
+{
+    public async Task<IReadOnlyList<TestFlow>> GetAllAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Flows.AsNoTracking().OrderBy(f => f.SortOrder).ThenBy(f => f.Name).ToListAsync(ct);
+    }
+
+    public async Task SaveAsync(TestFlow flow, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        flow.UpdatedAt = DateTimeOffset.UtcNow;
+        if (await db.Flows.AnyAsync(f => f.Id == flow.Id, ct))
+            db.Flows.Update(flow);
+        else
+        {
+            flow.SortOrder = (await db.Flows.MaxAsync(f => (int?)f.SortOrder, ct) ?? -1) + 1;
+            db.Flows.Add(flow);
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteAsync(Guid flowId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await db.Flows.Where(f => f.Id == flowId).ExecuteDeleteAsync(ct);
+    }
+}
+
+public sealed class MonitorRepository(IDbContextFactory<DispatchDbContext> factory, ISecretProtector? secrets = null) : IMonitorRepository
+{
+    public const int MaxRunsPerMonitor = 200;
+
+    public async Task<IReadOnlyList<MonitorDefinition>> GetAllAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var monitors = await db.Monitors.AsNoTracking().OrderBy(m => m.Name).ToListAsync(ct);
+        if (secrets is not null)
+            foreach (var m in monitors)
+                foreach (var alert in m.Alerts)
+                    alert.SmtpPassword = Unprotect(alert.SmtpPassword);
+        return monitors;
+    }
+
+    public async Task SaveAsync(MonitorDefinition monitor, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var stored = monitor.Clone();
+        if (secrets is not null)
+            foreach (var alert in stored.Alerts.Where(a => a.SmtpPassword.Length > 0))
+                alert.SmtpPassword = secrets.Protect(alert.SmtpPassword);
+        if (await db.Monitors.AnyAsync(m => m.Id == monitor.Id, ct))
+            db.Monitors.Update(stored);
+        else
+            db.Monitors.Add(stored);
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteAsync(Guid monitorId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await db.MonitorRuns.Where(r => r.MonitorId == monitorId).ExecuteDeleteAsync(ct);
+        await db.Monitors.Where(m => m.Id == monitorId).ExecuteDeleteAsync(ct);
+    }
+
+    public async Task AddRunAsync(MonitorRun run, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        db.MonitorRuns.Add(run);
+        await db.SaveChangesAsync(ct);
+        var stale = db.MonitorRuns.Where(r => r.MonitorId == run.MonitorId)
+            .OrderByDescending(r => r.StartedAt).Skip(MaxRunsPerMonitor).Select(r => r.Id);
+        await db.MonitorRuns.Where(r => stale.Contains(r.Id)).ExecuteDeleteAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<MonitorRun>> GetRunsAsync(Guid monitorId, int take, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.MonitorRuns.AsNoTracking().Where(r => r.MonitorId == monitorId)
+            .OrderByDescending(r => r.StartedAt).Take(take).ToListAsync(ct);
+    }
+
+    private string Unprotect(string value)
+    {
+        if (secrets is null || value.Length == 0)
+            return value;
+        try { return secrets.Unprotect(value); }
+        catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException or FormatException) { return ""; }
+    }
+}
+
 public sealed class SettingsRepository(IDbContextFactory<DispatchDbContext> factory) : ISettingsRepository
 {
     public async Task<string?> GetAsync(string key, CancellationToken ct = default)
