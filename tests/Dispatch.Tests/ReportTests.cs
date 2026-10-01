@@ -90,6 +90,54 @@ public class LoadReportTests
     }
 }
 
+public class LoadTesterThreadingTests
+{
+    /// <summary>Fails every request synchronously, like an invalid URL or an unresolved {{variable}}.</summary>
+    private sealed class InstantFailureSender : Dispatch.Application.Requests.IRequestSender
+    {
+        public int Calls;
+
+        public Task<ApiResponse> SendAsync(ApiRequest request, ApiEnvironment? environment, CancellationToken cancellationToken) =>
+            Fail();
+
+        public Task<ApiResponse> SendAsync(ApiRequest request, Dispatch.Application.Requests.SendOptions options, CancellationToken cancellationToken) =>
+            Fail();
+
+        public Task<ApiResponse> SendWithScriptOnlyAsync(ApiRequest request, Dispatch.Application.Variables.VariableContext variables,
+            CancellationToken cancellationToken) => Fail();
+
+        private Task<ApiResponse> Fail()
+        {
+            Interlocked.Increment(ref Calls);
+            return Task.FromResult(ApiResponse.Failed("'{{baseUrl}}/x' is not a valid URL", TimeSpan.Zero));
+        }
+    }
+
+    [Fact]
+    public async Task Synchronously_failing_requests_do_not_block_the_caller_or_spin()
+    {
+        var sender = new InstantFailureSender();
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        var run = new LoadTester(sender).RunAsync(new LoadOptions
+        {
+            Requests = [new ApiRequest { Name = "bad", Url = "{{baseUrl}}/x" }],
+            VirtualUsers = 3,
+            Duration = TimeSpan.FromSeconds(1)
+        });
+
+        // Before the fix, RunAsync only returned once the whole test had run (freezing the UI thread that called it).
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(500), $"RunAsync held the caller for {stopwatch.Elapsed}");
+        var report = await run;
+
+        Assert.True(report.TotalRequests > 0);
+        Assert.Equal(report.TotalRequests, report.Errors);
+        // Instant failures back off (~10 per user per second) instead of spinning millions of times.
+        Assert.InRange(sender.Calls, 3, 60);
+        Assert.Contains("not a valid URL", Assert.Single(report.SampleErrors));
+    }
+}
+
 public class RunSummaryTests
 {
     [Fact]

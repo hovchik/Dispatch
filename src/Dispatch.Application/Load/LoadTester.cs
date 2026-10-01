@@ -96,6 +96,8 @@ public sealed class LoadReport
 public sealed class LoadTester(IRequestSender sender)
 {
     private const int MaxErrorSamples = 20;
+    private static readonly TimeSpan InstantFailure = TimeSpan.FromMilliseconds(1);
+    private static readonly TimeSpan InstantFailureBackoff = TimeSpan.FromMilliseconds(100);
 
     private static readonly double[] BucketBounds = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
 
@@ -140,7 +142,10 @@ public sealed class LoadTester(IRequestSender sender)
             }
         }, CancellationToken.None);
 
-        var tasks = Enumerable.Range(0, users).Select(async user =>
+        // Each virtual user runs on the thread pool. Started inline, a user whose requests complete synchronously (an
+        // invalid URL, an unresolved {{variable}}) would never yield and would hold the caller's thread, the UI thread
+        // in the app, for the whole test.
+        var tasks = Enumerable.Range(0, users).Select(user => Task.Run(async () =>
         {
             var delay = options.RampUp > TimeSpan.Zero ? options.RampUp * user / users : TimeSpan.Zero;
             try
@@ -203,11 +208,15 @@ public sealed class LoadTester(IRequestSender sender)
                             }
                         }
 
-                        if (options.ThinkTimeMs > 0)
+                        // A request that fails without reaching the network fails the same way every time; pause instead
+                        // of spinning a core and filling the report with millions of identical errors.
+                        var pause = options.ThinkTimeMs > 0 ? options.ThinkTimeMs
+                            : !response.HasResponse && response.Elapsed < InstantFailure ? (int)InstantFailureBackoff.TotalMilliseconds : 0;
+                        if (pause > 0)
                         {
                             try
                             {
-                                await Task.Delay(options.ThinkTimeMs, stop.Token).ConfigureAwait(false);
+                                await Task.Delay(pause, stop.Token).ConfigureAwait(false);
                             }
                             catch (OperationCanceledException)
                             {
@@ -221,7 +230,7 @@ public sealed class LoadTester(IRequestSender sender)
             {
                 Interlocked.Decrement(ref active);
             }
-        }).ToList();
+        }, CancellationToken.None)).ToList();
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
         clock.Stop();
