@@ -583,3 +583,13 @@ public sealed class DepthIndentConverter : Avalonia.Data.Converters.IValueConver
         new Avalonia.Thickness(value is int d ? Math.Clamp(d, 0, 10) * 14 : 0, 0, 0, 0);
     public object? ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) => null;
 }
+
+
+/// <summary>Monitor enabled → green/grey status dot.</summary>
+public sealed class EnabledBrush : Avalonia.Data.Converters.IValueConverter
+{
+    public static readonly EnabledBrush Instance = new();
+    public object Convert(object? value, Type t, object? p, System.Globalization.CultureInfo c) =>
+        new Avalonia.Media.SolidColorBrush(value is true ? Avalonia.Media.Color.Parse("#22A06B") : Avalonia.Media.Color.Parse("#8B949E"));
+    public object? ConvertBack(object? value, Type t, object? p, System.Globalization.CultureInfo c) => null;
+}

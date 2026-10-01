@@ -30,6 +30,8 @@ public sealed record MainServices(
     Dispatch.Application.Security.SecurityScanner Scanner,
     IFlowRepository Flows,
     Dispatch.Application.Flows.FlowRunner FlowRunner,
+    IMonitorRepository Monitors,
+    Dispatch.Application.Monitoring.MonitorService MonitorService,
     GrpcSchemaProvider GrpcSchemas,
     Infrastructure.Auth.SystemBrowserInteraction OAuth);
 
@@ -272,6 +274,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
             case CollectionAction.Flows:
                 Dialogs.ShowTool(new FlowManagerViewModel(collection, _services.Flows, _services.FlowRunner, Dialogs, () => ActiveEnvironment));
                 break;
+            case CollectionAction.Monitors:
+                Dialogs.ShowTool(new MonitorManagerViewModel(collection, _services.Monitors, _services.MonitorService, Dialogs, () => ActiveEnvironment));
+                break;
             case CollectionAction.Mock:
                 Dialogs.ShowTool(new MockServerViewModel(collection, _services.GrpcSchemas, _services.Tabs.Clipboard));
                 break;
@@ -334,6 +339,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
         yield return new PaletteItem("Run collection…", "Collection runner", OpenRunner);
         yield return new PaletteItem("Mock server…", "Serve saved examples", OpenMockServer);
         yield return new PaletteItem("Load test…", "Virtual users, latency percentiles", OpenLoadTest);
+        yield return new PaletteItem("Monitors…", "Scheduled runs with Slack / webhook / email alerts", () =>
+        {
+            var node = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId) ?? Collections.Items.FirstOrDefault();
+            if (node is not null)
+                _ = RunCollectionActionAsync(node, CollectionAction.Monitors);
+        });
         yield return new PaletteItem("Test flows…", "Chain requests with conditions, loops and waits", () =>
         {
             var node = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId) ?? Collections.Items.FirstOrDefault();

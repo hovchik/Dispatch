@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:domain="using:Dispatch.Domain"
+             x:Class="Dispatch.App.Views.Tools.MonitorManagerView"
+             x:DataType="tools:MonitorManagerViewModel">
+  <DockPanel Margin="18">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+      <StackPanel>
+        <TextBlock Text="Monitors" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Text="{Binding Hint}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+      </StackPanel>
+      <Button Grid.Column="1" Content="New monitor" Classes="accent" Command="{Binding NewCommand}" VerticalAlignment="Center" Padding="12,5" />
+    </Grid>
+    <Border Classes="card" Padding="0">
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Monitors}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="domain:MonitorDefinition">
+              <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="12,8">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                  <Ellipse Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,10,0"
+                           Fill="{Binding Enabled, Converter={x:Static tools:EnabledBrush.Instance}}" />
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                    <TextBlock Classes="muted" FontSize="11" Text="{Binding Alerts.Count, StringFormat='{}{0} alert target(s)'}" />
+                  </StackPanel>
+                  <Button Grid.Column="2" Content="Edit" Padding="10,3"
+                          Command="{Binding $parent[ItemsControl].((tools:MonitorManagerViewModel)DataContext).OpenCommand}" CommandParameter="{Binding}" />
+                  <Button Grid.Column="3" Classes="icon" Margin="6,0,0,0"
+                          Command="{Binding $parent[ItemsControl].((tools:MonitorManagerViewModel)DataContext).DeleteCommand}" CommandParameter="{Binding}">
+                    <PathIcon Data="{StaticResource IconTrash}" Width="12" Height="12" />
+                  </Button>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+  </DockPanel>
+</UserControl>

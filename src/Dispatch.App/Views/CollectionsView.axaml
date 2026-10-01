@@ -57,6 +57,10 @@
                             CommandParameter="{x:Static vm:CollectionAction.Flows}">
                     <MenuItem.Icon><PathIcon Data="{StaticResource IconFlow}" Width="12" Height="12" /></MenuItem.Icon>
                   </MenuItem>
+                  <MenuItem Header="Monitors…" Command="{Binding ActionCommand}"
+                            CommandParameter="{x:Static vm:CollectionAction.Monitors}">
+                    <MenuItem.Icon><PathIcon Data="{StaticResource IconClock}" Width="12" Height="12" /></MenuItem.Icon>
+                  </MenuItem>
                   <MenuItem Header="Security scan…" Command="{Binding ActionCommand}"
                             CommandParameter="{x:Static vm:CollectionAction.Scan}">
                     <MenuItem.Icon><PathIcon Data="{StaticResource IconShield}" Width="12" Height="12" /></MenuItem.Icon>

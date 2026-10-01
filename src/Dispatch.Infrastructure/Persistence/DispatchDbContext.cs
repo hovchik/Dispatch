@@ -22,6 +22,8 @@ public sealed class DispatchDbContext(DbContextOptions<DispatchDbContext> option
     public DbSet<HistoryEntry> History => Set<HistoryEntry>();
     public DbSet<SettingEntry> Settings => Set<SettingEntry>();
     public DbSet<TestFlow> Flows => Set<TestFlow>();
+    public DbSet<MonitorDefinition> Monitors => Set<MonitorDefinition>();
+    public DbSet<MonitorRun> MonitorRuns => Set<MonitorRun>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -89,6 +91,23 @@ public sealed class DispatchDbContext(DbContextOptions<DispatchDbContext> option
             b.Property(f => f.Name).IsRequired().HasMaxLength(200);
             b.Property(f => f.Steps).HasJsonConversion();
             b.HasIndex(f => f.CollectionId);
+        });
+
+        modelBuilder.Entity<MonitorDefinition>(b =>
+        {
+            b.ToTable("Monitors");
+            b.HasKey(m => m.Id);
+            b.Property(m => m.Name).IsRequired().HasMaxLength(200);
+            b.Property(m => m.ScheduleKind).HasConversion<string>().HasMaxLength(20);
+            b.Property(m => m.RequestNames).HasJsonConversion();
+            b.Property(m => m.Alerts).HasJsonConversion();
+        });
+
+        modelBuilder.Entity<MonitorRun>(b =>
+        {
+            b.ToTable("MonitorRuns");
+            b.HasKey(r => r.Id);
+            b.HasIndex(r => new { r.MonitorId, r.StartedAt });
         });
 
         modelBuilder.Entity<SettingEntry>(b =>

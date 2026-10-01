@@ -106,6 +106,17 @@ public interface IFlowRepository
     Task DeleteAsync(Guid flowId, CancellationToken ct = default);
 }
 
+public interface IMonitorRepository
+{
+    Task<IReadOnlyList<MonitorDefinition>> GetAllAsync(CancellationToken ct = default);
+    Task SaveAsync(MonitorDefinition monitor, CancellationToken ct = default);
+    Task DeleteAsync(Guid monitorId, CancellationToken ct = default);
+
+    /// <summary>Appends a run and returns the most recent runs for a monitor (newest first).</summary>
+    Task AddRunAsync(MonitorRun run, CancellationToken ct = default);
+    Task<IReadOnlyList<MonitorRun>> GetRunsAsync(Guid monitorId, int take, CancellationToken ct = default);
+}
+
 public interface IEnvironmentRepository
 {
     Task<IReadOnlyList<ApiEnvironment>> GetAllAsync(CancellationToken ct = default);

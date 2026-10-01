@@ -49,6 +49,7 @@
       <StreamGeometry x:Key="IconImport">M11,3 H13 V13 L16.5,9.5 L18,11 L12,17 L6,11 L7.5,9.5 L11,13 Z M4,19 H20 V21 H4 Z</StreamGeometry>
       <StreamGeometry x:Key="IconPlay">M7,4 L20,12 L7,20 Z</StreamGeometry>
       <StreamGeometry x:Key="IconStop">M6,6 H18 V18 H6 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconClock">M12,2 A10,10 0 1 0 12,22 A10,10 0 1 0 12,2 Z M12,5 V12 L17,15 L15.5,17.2 L10,13.5 V5 Z</StreamGeometry>
       <StreamGeometry x:Key="IconFlow">M4,4 H10 V8 H4 Z M14,4 H20 V8 H14 Z M9,16 H15 V20 H9 Z M7,8 V12 H17 V8 M12,12 V16</StreamGeometry>
       <StreamGeometry x:Key="IconChevronUp">M12,8 L19,15 L17.6,16.4 L12,10.8 L6.4,16.4 L5,15 Z</StreamGeometry>
       <StreamGeometry x:Key="IconChevronDown">M5,9 L6.4,7.6 L12,13.2 L17.6,7.6 L19,9 L12,16 Z</StreamGeometry>
