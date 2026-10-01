@@ -20,6 +20,7 @@
     <KeyBinding Gesture="Ctrl+K" Command="{Binding OpenPaletteCommand}" />
     <KeyBinding Gesture="Ctrl+Shift+P" Command="{Binding OpenPaletteCommand}" />
     <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenImportCommand}" />
+    <KeyBinding Gesture="F1" Command="{Binding ShowHelpCommand}" />
   </Window.KeyBindings>
 
   <Panel>
@@ -28,7 +29,7 @@
     <!-- Top bar -->
     <Border Grid.Row="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource DividerBrush}"
             BorderThickness="0,0,0,1" Padding="14,8">
-      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
           <Image Source="/Assets/dispatch-logo.png" Width="24" Height="24"
                  RenderOptions.BitmapInterpolationMode="HighQuality" />
@@ -122,6 +123,18 @@
         <Button Grid.Column="4" Classes="icon" Margin="8,0,0,0" Command="{Binding ToggleThemeCommand}"
                 ToolTip.Tip="Toggle light / dark theme">
           <PathIcon Data="{StaticResource IconMoon}" />
+        </Button>
+
+        <Button Grid.Column="5" Classes="icon" Margin="2,0,0,0" ToolTip.Tip="Help, examples and getting started (F1)">
+          <PathIcon Data="{StaticResource IconHelp}" />
+          <Button.Flyout>
+            <MenuFlyout Placement="BottomEdgeAlignedRight">
+              <MenuItem Header="User guide" InputGesture="F1" Command="{Binding ShowHelpCommand}" />
+              <MenuItem Header="Getting started" Command="{Binding ShowWelcomeCommand}" />
+              <MenuItem Header="Load example collection" Command="{Binding LoadSamplesCommand}" />
+              <MenuItem Header="Keyboard shortcuts" Command="{Binding ShowHelpCommand}" CommandParameter="shortcuts" />
+            </MenuFlyout>
+          </Button.Flyout>
         </Button>
       </Grid>
     </Border>
@@ -268,14 +281,96 @@
               <TextBlock Text="No open requests" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" />
               <TextBlock Classes="muted" HorizontalAlignment="Center"
                          Text="Open one from a collection or history, or start a new one." />
-              <Button Classes="accent" Content="New request" Command="{Binding NewTabCommand}"
-                      HorizontalAlignment="Center" Padding="16,8" />
+              <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                <Button Classes="accent" Content="New request" Command="{Binding NewTabCommand}" Padding="16,8" />
+                <Button Content="Try an example" Command="{Binding LoadSamplesCommand}" Padding="16,8"
+                        ToolTip.Tip="Adds a collection of ready-made requests that show each feature" />
+              </StackPanel>
+              <TextBlock Classes="muted" FontSize="12" HorizontalAlignment="Center" Margin="0,8,0,0"
+                         Text="F1 opens the user guide · Ctrl+K searches requests and commands" />
             </StackPanel>
           </Panel>
         </Border>
       </Grid>
     </Grid>
   </Grid>
+
+  <!-- Welcome card (first launch, or Help → Getting started) -->
+  <Border Background="#66000000" IsVisible="{Binding IsWelcomeOpen}">
+    <Border Classes="card" Width="600" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="28,24"
+            BoxShadow="0 12 40 0 #60000000">
+      <StackPanel Spacing="16">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Image Source="/Assets/dispatch-logo.png" Width="40" Height="40" Margin="0,0,14,0"
+                 RenderOptions.BitmapInterpolationMode="HighQuality" />
+          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+            <TextBlock Text="Welcome to Dispatch" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Send API requests over HTTP, GraphQL, gRPC, WebSocket and more, and test the responses." />
+          </StackPanel>
+          <Button Grid.Column="2" Classes="icon" VerticalAlignment="Top" Command="{Binding DismissWelcomeCommand}" ToolTip.Tip="Close">
+            <PathIcon Data="{StaticResource IconClose}" />
+          </Button>
+        </Grid>
+
+        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4,0,0">
+          <Grid.Styles>
+            <Style Selector="Border.step">
+              <Setter Property="Width" Value="24" />
+              <Setter Property="Height" Value="24" />
+              <Setter Property="CornerRadius" Value="12" />
+              <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+              <Setter Property="Margin" Value="0,0,12,14" />
+              <Setter Property="VerticalAlignment" Value="Top" />
+            </Style>
+            <Style Selector="Border.step TextBlock">
+              <Setter Property="Foreground" Value="White" />
+              <Setter Property="FontWeight" Value="Bold" />
+              <Setter Property="FontSize" Value="12" />
+              <Setter Property="HorizontalAlignment" Value="Center" />
+              <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+            <Style Selector="StackPanel.stepText">
+              <Setter Property="Margin" Value="0,2,0,14" />
+              <Setter Property="Spacing" Value="2" />
+            </Style>
+          </Grid.Styles>
+          <Border Classes="step"><TextBlock Text="1" /></Border>
+          <StackPanel Grid.Column="1" Classes="stepText">
+            <TextBlock Text="Send a request" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="Type a URL in the address bar and press Send or Ctrl+Enter. The response opens on the right." />
+          </StackPanel>
+          <Border Grid.Row="1" Classes="step"><TextBlock Text="2" /></Border>
+          <StackPanel Grid.Row="1" Grid.Column="1" Classes="stepText">
+            <TextBlock Text="Save it to a collection" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="Ctrl+S keeps the request in the Collections sidebar. Import (Ctrl+O) brings in Postman, OpenAPI or cURL." />
+          </StackPanel>
+          <Border Grid.Row="2" Classes="step"><TextBlock Text="3" /></Border>
+          <StackPanel Grid.Row="2" Grid.Column="1" Classes="stepText">
+            <TextBlock Text="Reuse values with variables" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="Write {{baseUrl}} in a request and define it in an environment, then switch environments at the top right." />
+          </StackPanel>
+          <Border Grid.Row="3" Classes="step"><TextBlock Text="4" /></Border>
+          <StackPanel Grid.Row="3" Grid.Column="1" Classes="stepText">
+            <TextBlock Text="Test the response" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="Add assertions in the Tests tab, then run a whole collection with the Runner or the dispatch CLI." />
+          </StackPanel>
+        </Grid>
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Classes="accent" Padding="14,7" Command="{Binding WelcomeLoadSamplesCommand}"
+                  ToolTip.Tip="Adds a collection of ready-made requests and opens the first one">
+            <TextBlock Text="Explore the examples" />
+          </Button>
+          <Button Padding="14,7" Content="Read the guide" Command="{Binding WelcomeShowHelpCommand}" />
+          <Button Padding="14,7" Content="Start from scratch" Command="{Binding DismissWelcomeCommand}" />
+        </StackPanel>
+
+        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                   Text="Help is always one key away: F1 opens the guide, Ctrl+K searches requests and commands. The ? button at the top right brings this screen back." />
+      </StackPanel>
+    </Border>
+  </Border>
 
   <!-- Command palette (Ctrl+K) -->
   <Border Background="#66000000" IsVisible="{Binding Palette.IsOpen}" PointerPressed="OnPaletteBackdropPressed">

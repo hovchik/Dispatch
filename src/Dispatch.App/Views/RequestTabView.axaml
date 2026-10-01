@@ -452,6 +452,7 @@
                           ItemTemplate="{StaticResource EnumLabel}" />
                 <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0"
                            Text="Credentials are applied when you send. Values can use {{variables}}; keep secrets in environment variables marked secret." />
+                <Button Classes="link" Content="Learn more" Command="{Binding $parent[UserControl].((vm:RequestTabViewModel)DataContext).ShowHelpCommand}" CommandParameter="auth" HorizontalAlignment="Left" Padding="0" />
               </StackPanel>
 
               <Panel Grid.Column="1" MaxWidth="620" HorizontalAlignment="Left">
@@ -551,7 +552,10 @@
           </TabItem.Header>
           <Grid RowDefinitions="Auto,*,6,*" Margin="0,8,0,0">
             <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Text="ASSERTIONS · checked after every send, and by the runner and CLI" Classes="section" VerticalAlignment="Center" />
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="ASSERTIONS · checked after every send, and by the runner and CLI" Classes="section" VerticalAlignment="Center" />
+                <Button Classes="link" Content="Learn more" Command="{Binding $parent[UserControl].((vm:RequestTabViewModel)DataContext).ShowHelpCommand}" CommandParameter="assertions" />
+              </StackPanel>
               <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
                 <Button Content="+ Status" Padding="8,2" FontSize="12" Command="{Binding AddAssertionFromResponseCommand}" CommandParameter="status"
                         ToolTip.Tip="Expect the status of the last response" />
@@ -606,7 +610,10 @@
             <GridSplitter Grid.Row="2" Background="Transparent" ResizeDirection="Rows" />
             <DockPanel Grid.Row="3">
               <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,4,0,4">
-                <TextBlock Text="TEST SCRIPT · JavaScript with Postman's pm API (pm.test, pm.expect, pm.response, pm.environment)" Classes="section" VerticalAlignment="Center" />
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <TextBlock Text="TEST SCRIPT · JavaScript with Postman's pm API (pm.test, pm.expect, pm.response, pm.environment)" Classes="section" VerticalAlignment="Center" />
+                  <Button Classes="link" Content="Learn more" Command="{Binding $parent[UserControl].((vm:RequestTabViewModel)DataContext).ShowHelpCommand}" CommandParameter="scripts" />
+                </StackPanel>
                 <Button Grid.Column="1" Content="Snippets ▾" Padding="8,2" FontSize="12">
                   <Button.Flyout>
                     <MenuFlyout>
@@ -635,10 +642,11 @@
             </StackPanel>
           </TabItem.Header>
           <DockPanel Margin="0,8,0,0">
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">
               <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
                          Text="Copy values from the response into variables, e.g. a login token used by later requests as {{token}}." />
-              <Button Grid.Column="1" Content="Add" Classes="accent" Padding="10,2" FontSize="12" Command="{Binding Extractions.AddCommand}" />
+              <Button Classes="link" Content="Learn more" Command="{Binding $parent[UserControl].((vm:RequestTabViewModel)DataContext).ShowHelpCommand}" CommandParameter="extraction" Grid.Column="1" Margin="0,0,8,0" />
+              <Button Grid.Column="2" Content="Add" Classes="accent" Padding="10,2" FontSize="12" Command="{Binding Extractions.AddCommand}" />
             </Grid>
             <Border Classes="card" ClipToBounds="True">
               <ScrollViewer>
@@ -670,10 +678,11 @@
 
         <TabItem Header="Docs">
           <DockPanel Margin="0,8,0,0">
-            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">
               <TextBlock Classes="muted" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"
                          Text="Describe this endpoint in Markdown. It goes into generated API docs (collection menu → Generate API docs) and exports." />
-              <Button Grid.Column="1" Padding="10,3" Command="{Binding PreviewDocsCommand}" ToolTip.Tip="Render this request's documentation in your browser">
+              <Button Classes="link" Content="Learn more" Command="{Binding $parent[UserControl].((vm:RequestTabViewModel)DataContext).ShowHelpCommand}" CommandParameter="docs" Grid.Column="1" Margin="0,0,8,0" />
+              <Button Grid.Column="2" Padding="10,3" Command="{Binding PreviewDocsCommand}" ToolTip.Tip="Render this request's documentation in your browser">
                 <TextBlock Text="Preview" FontSize="12" />
               </Button>
             </Grid>
@@ -685,8 +694,11 @@
 
         <TabItem Header="Pre-request">
           <DockPanel Margin="0,8,0,0">
-            <TextBlock DockPanel.Dock="Top" Classes="muted" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"
-                       Text="Runs before sending. Change variables (pm.variables.set), headers (pm.request.headers.upsert) or the body (pm.request.body.raw)." />
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+              <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
+                         Text="Runs before sending. Change variables (pm.variables.set), headers (pm.request.headers.upsert) or the body (pm.request.body.raw)." />
+              <Button Classes="link" Content="Learn more" Command="{Binding $parent[UserControl].((vm:RequestTabViewModel)DataContext).ShowHelpCommand}" CommandParameter="scripts" Grid.Column="1" />
+            </Grid>
             <views:CodeEditor Text="{Binding PreRequestScript}" Format="JavaScript" />
           </DockPanel>
         </TabItem>
@@ -876,6 +888,11 @@
           <TextBlock Text="Response" FontWeight="SemiBold" HorizontalAlignment="Center" />
           <TextBlock Classes="muted" HorizontalAlignment="Center"
                      Text="Pick a protocol, enter an address and click Send (Ctrl+Enter)." />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
+            <TextBlock Classes="muted" FontSize="12" Text="New here?" VerticalAlignment="Center" />
+            <Button Classes="link" Content="Read the getting-started guide" Command="{Binding ShowHelpCommand}" CommandParameter="getting-started" />
+            <TextBlock Classes="muted" FontSize="12" Text="(F1)" VerticalAlignment="Center" />
+          </StackPanel>
         </StackPanel>
 
         <!-- Visibility is bound on a wrapper: an element's own bindings use the DataContext it sets. -->

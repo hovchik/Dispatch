@@ -174,6 +174,7 @@ public sealed partial class FlowBuilderViewModel : ObservableObject, ITool
     }
 
     public string Title => $"Flow · {Name}";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.Flows;
     public double Width => 1080;
     public double Height => 760;
 
@@ -356,6 +357,7 @@ public sealed partial class FlowManagerViewModel : ObservableObject, ITool
     }
 
     public string Title => $"Flows · {_collection.Name}";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.Flows;
     public double Width => 560;
     public double Height => 520;
 

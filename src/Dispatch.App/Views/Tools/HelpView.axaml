@@ -1,0 +1,157 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:help="using:Dispatch.Application.Help"
+             x:Class="Dispatch.App.Views.Tools.HelpView"
+             x:DataType="tools:HelpViewModel">
+  <UserControl.Styles>
+    <!-- Keep the summary readable on the accent-coloured selected row. -->
+    <Style Selector="ListBoxItem:selected TextBlock.muted">
+      <Setter Property="Foreground" Value="#E6FFFFFF" />
+    </Style>
+  </UserControl.Styles>
+  <Grid ColumnDefinitions="270,1,*">
+    <!-- Topic list -->
+    <DockPanel Background="{DynamicResource AppBackgroundBrush}">
+      <TextBox DockPanel.Dock="Top" Margin="12,12,12,8" Text="{Binding Query}" Watermark="Search help, e.g. token, csv, mock" />
+      <StackPanel DockPanel.Dock="Bottom" Margin="12" Spacing="6">
+        <Button HorizontalAlignment="Stretch" Command="{Binding LoadSamplesCommand}"
+                ToolTip.Tip="Adds a collection of ready-to-send requests that show tests, variables, chaining, scripts and auth">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconFolder}" Width="12" Height="12" />
+            <TextBlock Text="Load example collection" />
+          </StackPanel>
+        </Button>
+        <Button HorizontalAlignment="Stretch" Content="Show welcome screen" Command="{Binding ShowWelcomeCommand}" />
+      </StackPanel>
+      <Panel>
+        <TextBlock Classes="muted" Margin="16" TextWrapping="Wrap" IsVisible="{Binding !HasResults}"
+                   Text="No topics match. Try a shorter word." />
+        <ListBox Classes="plain" ItemsSource="{Binding Topics}" SelectedItem="{Binding SelectedItem}" Margin="6,0">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="tools:HelpTopicItem">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding Heading}" Classes="section" IsVisible="{Binding HasHeading}" Margin="0,8,0,4" />
+                <TextBlock Text="{Binding Topic.Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Topic.Summary}" Classes="muted" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Panel>
+    </DockPanel>
+
+    <Border Grid.Column="1" Background="{DynamicResource DividerBrush}" />
+
+    <!-- Article -->
+    <DockPanel Grid.Column="2">
+      <Border DockPanel.Dock="Bottom" Padding="20,8" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0"
+              IsVisible="{Binding Feedback, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Text="{Binding Feedback}" Classes="muted" FontSize="12" />
+      </Border>
+      <ScrollViewer>
+        <StackPanel Margin="28,22,28,28" Spacing="14" MaxWidth="760" HorizontalAlignment="Left"
+                    DataContext="{Binding Selected}" x:DataType="help:HelpTopic"
+                    IsVisible="{Binding Converter={x:Static ObjectConverters.IsNotNull}}">
+          <StackPanel Spacing="4">
+            <TextBlock Text="{Binding Category}" Classes="section" />
+            <TextBlock Text="{Binding Title}" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding Summary}" Classes="muted" FontSize="14" TextWrapping="Wrap" />
+          </StackPanel>
+
+          <Button Classes="accent" HorizontalAlignment="Left" Padding="12,6"
+                  Command="{Binding $parent[UserControl].((tools:HelpViewModel)DataContext).TryItCommand}"
+                  IsVisible="{Binding $parent[UserControl].((tools:HelpViewModel)DataContext).HasTryIt}"
+                  ToolTip.Tip="Opens a ready-made request from the example collection in a new tab">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" />
+              <TextBlock Text="{Binding TryIt, StringFormat='Try it: {0}'}" />
+            </StackPanel>
+          </Button>
+
+          <ItemsControl ItemsSource="{Binding Blocks}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="14" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.DataTemplates>
+              <DataTemplate DataType="help:HelpParagraph">
+                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" LineHeight="20" />
+              </DataTemplate>
+
+              <DataTemplate DataType="help:HelpSteps">
+                <ItemsControl ItemsSource="{Binding Numbered}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="8" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="help:HelpStep">
+                      <Grid ColumnDefinitions="Auto,*">
+                        <Border Width="22" Height="22" CornerRadius="11" Background="{StaticResource AccentBrush}"
+                                VerticalAlignment="Top" Margin="0,0,10,0">
+                          <TextBlock Text="{Binding Number}" Foreground="White" FontSize="11" FontWeight="Bold"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <SelectableTextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" LineHeight="20"
+                                             VerticalAlignment="Center" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </DataTemplate>
+
+              <DataTemplate DataType="help:HelpExample">
+                <Border Classes="card" Background="{DynamicResource SurfaceAltBrush}" Padding="0">
+                  <DockPanel>
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="12,6,6,0">
+                      <TextBlock Text="{Binding Caption}" Classes="section" VerticalAlignment="Center" TextWrapping="Wrap" />
+                      <Button Grid.Column="1" Classes="icon" ToolTip.Tip="Copy"
+                              Command="{Binding $parent[UserControl].((tools:HelpViewModel)DataContext).CopyCommand}"
+                              CommandParameter="{Binding Code}">
+                        <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
+                      </Button>
+                    </Grid>
+                    <SelectableTextBlock Text="{Binding Code}" FontFamily="{StaticResource MonoFont}" FontSize="12.5"
+                                         TextWrapping="Wrap" Margin="12,4,12,12" />
+                  </DockPanel>
+                </Border>
+              </DataTemplate>
+
+              <DataTemplate DataType="help:HelpTip">
+                <Border CornerRadius="6" Padding="12,10" BorderThickness="3,0,0,0"
+                        BorderBrush="{StaticResource AccentBrush}" Background="{DynamicResource SurfaceAltBrush}">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <TextBlock Text="Tip" FontWeight="Bold" Margin="0,0,10,0" Foreground="{StaticResource AccentBrush}" />
+                    <SelectableTextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" LineHeight="20" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.DataTemplates>
+          </ItemsControl>
+
+          <StackPanel Spacing="6" Margin="0,8,0,0"
+                      IsVisible="{Binding $parent[UserControl].((tools:HelpViewModel)DataContext).HasRelated}">
+            <TextBlock Text="SEE ALSO" Classes="section" />
+            <ItemsControl ItemsSource="{Binding $parent[UserControl].((tools:HelpViewModel)DataContext).RelatedTopics}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="help:HelpTopic">
+                  <Button Content="{Binding Title}" Margin="0,0,6,6" Padding="10,4"
+                          Command="{Binding $parent[UserControl].((tools:HelpViewModel)DataContext).OpenCommand}"
+                          CommandParameter="{Binding}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
+  </Grid>
+</UserControl>

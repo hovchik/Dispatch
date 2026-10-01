@@ -152,4 +152,7 @@ public static class SettingKeys
     public const string Theme = "theme";
     public const string Cookies = "cookies";
     public const string Globals = "globals";
+
+    /// <summary>Set once the user has closed the first-run welcome card.</summary>
+    public const string WelcomeDismissed = "welcomeDismissed";
 }

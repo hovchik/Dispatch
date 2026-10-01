@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Dispatch.App.Services;
 using Dispatch.App.ViewModels.Tools;
 using Dispatch.Application.Abstractions;
+using Dispatch.Application.Help;
 using Dispatch.Application.Interop;
 using Dispatch.Application.Load;
 using Dispatch.Application.Requests;
@@ -37,9 +38,10 @@ public sealed record MainServices(
     GrpcSchemaProvider GrpcSchemas,
     Infrastructure.Auth.SystemBrowserInteraction OAuth);
 
-public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
+public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IHelpActions
 {
     private readonly MainServices _services;
+    private HelpViewModel? _help;
 
     public MainWindowViewModel(MainServices services, CollectionsViewModel collections, HistoryViewModel history,
         EnvironmentsViewModel environments)
@@ -77,6 +79,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
     [ObservableProperty] private bool _isDarkTheme = true;
     [ObservableProperty] private string? _errorMessage;
     [ObservableProperty] private string? _infoMessage;
+
+    /// <summary>The getting-started card shown over the workspace on first launch (and from Help).</summary>
+    [ObservableProperty] private bool _isWelcomeOpen;
 
     public bool HasTabs => Tabs.Count > 0;
     private IDialogService Dialogs => _services.Tabs.Dialogs;
@@ -154,6 +159,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
             _services.Cookies.Import(await _services.Settings.GetAsync(SettingKeys.Cookies));
 
             await Task.WhenAll(Collections.LoadAsync(), History.LoadAsync(), Environments.LoadAsync());
+            IsWelcomeOpen = await _services.Settings.GetAsync(SettingKeys.WelcomeDismissed) is null;
         });
 
         if (Tabs.Count == 0)
@@ -335,6 +341,66 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
         }
     }
 
+    // ---- Help & onboarding -------------------------------------------------------------------
+
+    /// <summary>Opens the guide at a topic (or the last one viewed); reuses the Help window when it is open.</summary>
+    [RelayCommand]
+    public void ShowHelp(string? topicId)
+    {
+        _help ??= new HelpViewModel(this, _services.Tabs.Clipboard, topicId);
+        _help.Show(topicId);
+        Dialogs.ShowTool(_help);
+    }
+
+    [RelayCommand]
+    public void ShowWelcome() => IsWelcomeOpen = true;
+
+    [RelayCommand]
+    private async Task DismissWelcomeAsync()
+    {
+        IsWelcomeOpen = false;
+        await SafeAsync(() => _services.Settings.SetAsync(SettingKeys.WelcomeDismissed, "true"));
+    }
+
+    [RelayCommand]
+    private async Task WelcomeLoadSamplesAsync()
+    {
+        await DismissWelcomeAsync();
+        await OpenSampleAsync("Simple GET");
+    }
+
+    [RelayCommand]
+    private async Task WelcomeShowHelpAsync()
+    {
+        await DismissWelcomeAsync();
+        ShowHelp(HelpCatalog.GettingStarted);
+    }
+
+    [RelayCommand]
+    public Task LoadSamplesAsync() => SafeAsync(async () => await EnsureSamplesAsync());
+
+    public Task OpenSampleAsync(string requestName) => SafeAsync(async () =>
+    {
+        var node = await EnsureSamplesAsync();
+        if (node.Model.Requests.FirstOrDefault(r => r.Name == requestName) is { } request)
+            OpenRequest(request.Clone());
+    });
+
+    /// <summary>Returns the example collection, adding it to the database the first time.</summary>
+    private async Task<CollectionNodeViewModel> EnsureSamplesAsync()
+    {
+        var node = Collections.Items.FirstOrDefault(c => c.Name == SampleCollection.Name);
+        if (node is null)
+        {
+            await _services.Tabs.Collections.AddAsync(SampleCollection.Create());
+            await Collections.LoadAsync();
+            node = Collections.Items.First(c => c.Name == SampleCollection.Name);
+            ShowInfo($"Added \"{SampleCollection.Name}\" to Collections. Open a request, press Send, then read its Docs tab.", 8);
+        }
+        node.IsExpanded = true;
+        return node;
+    }
+
     // ---- Command palette -----------------------------------------------------------------------
 
     private IEnumerable<PaletteItem> PaletteItems()
@@ -369,6 +435,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
             yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
                 () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));
         yield return new PaletteItem("Toggle theme", "Light / dark", ToggleTheme);
+        yield return new PaletteItem("Help", "User guide (F1)", () => ShowHelp(null));
+        yield return new PaletteItem("Load example collection", "Ready-made requests that show each feature", () => _ = LoadSamplesAsync());
+        yield return new PaletteItem("Show welcome screen", "Getting started", ShowWelcome);
+        foreach (var topic in HelpCatalog.All)
+            yield return new PaletteItem($"Help: {topic.Title}", topic.Summary, () => ShowHelp(topic.Id));
         if (SelectedTab is { } tab)
         {
             yield return new PaletteItem("Generate code for this request", "cURL, Python, C#, Go, JS, grpcurl…", () => tab.ShowCodeCommand.Execute(null));

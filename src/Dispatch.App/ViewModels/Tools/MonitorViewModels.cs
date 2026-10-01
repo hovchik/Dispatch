@@ -59,6 +59,7 @@ public sealed partial class MonitorEditorViewModel : ObservableObject, ITool
     }
 
     public string Title => $"Monitor · {Name}";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.Monitors;
     public double Width => 820;
     public double Height => 720;
 
@@ -187,6 +188,7 @@ public sealed partial class MonitorManagerViewModel : ObservableObject, ITool
     }
 
     public string Title => $"Monitors · {_collection.Name}";
+    public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.Monitors;
     public double Width => 560;
     public double Height => 520;
 

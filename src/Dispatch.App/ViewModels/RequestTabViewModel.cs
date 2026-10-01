@@ -23,6 +23,7 @@ public interface ITabHost
     void ReportError(string message);
     void ShowCode(ApiRequest request, ApiRequest resolved);
     void ShowDiff(string title, ResponseViewModel left, ResponseViewModel right);
+    void ShowHelp(string? topicId);
 }
 
 public sealed partial class MessageItemViewModel(StreamMessage message)
@@ -740,6 +741,9 @@ public sealed partial class RequestTabViewModel : ObservableObject
     private void CancelRename() => IsRenaming = false;
 
     /// <summary>Snippets for inserting common test code (script tab menu).</summary>
+    [RelayCommand]
+    private void ShowHelp(string? topicId) => _host.ShowHelp(topicId);
+
     [RelayCommand]
     private void InsertSnippet(string? snippet)
     {

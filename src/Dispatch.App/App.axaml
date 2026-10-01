@@ -13,6 +13,7 @@
       <Color x:Key="SystemAccentColorDark2">#CC4E22</Color>
       <Color x:Key="SystemAccentColorLight1">#FF8559</Color>
       <Color x:Key="SystemAccentColorLight2">#FF9E7A</Color>
+      <SolidColorBrush x:Key="AccentBrush" Color="#FF6C37" />
 
       <FontFamily x:Key="MonoFont">Cascadia Code, Consolas, JetBrains Mono, Menlo, monospace</FontFamily>
 
@@ -65,6 +66,7 @@
       <StreamGeometry x:Key="IconExport">M11,17 H13 V7 L16.5,10.5 L18,9 L12,3 L6,9 L7.5,10.5 L11,7 Z M4,19 H20 V21 H4 Z</StreamGeometry>
       <StreamGeometry x:Key="IconKey">M7,9 A5,5 0 1 1 11.6,12 L21,12 V15 H19 V17 H16 V15 H11.6 A5,5 0 0 1 7,9 Z M7,7 A2,2 0 1 0 7.01,7 Z</StreamGeometry>
       <StreamGeometry x:Key="IconFile">M6,2 H14 L20,8 V22 H6 Z M13,3.5 V9 H18.5 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconHelp">M12,2 A10,10 0 1 0 12,22 A10,10 0 1 0 12,2 Z M11,16 H13 V18 H11 Z M12,6 A4,4 0 0 0 8,10 H10 A2,2 0 1 1 12,12 H11 V15 H13 V13.9 A4,4 0 0 0 12,6 Z</StreamGeometry>
       <StreamGeometry x:Key="IconRefresh">M12,4 A8,8 0 0 1 19.7,10 H17.6 A6,6 0 1 0 18,14 H20.1 A8,8 0 1 1 12,4 Z M20,4 V10 H14 Z</StreamGeometry>
     </ResourceDictionary>
   </Application.Resources>
@@ -255,6 +257,25 @@
     <Style Selector="Button.tool PathIcon">
       <Setter Property="Width" Value="13" />
       <Setter Property="Height" Value="13" />
+    </Style>
+
+    <!-- Inline "Learn more" links that open a help topic. -->
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.link:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    </Style>
+    <Style Selector="Button.link:pointerover TextBlock">
+      <Setter Property="TextDecorations" Value="Underline" />
     </Style>
 
     <!-- Stream message log -->
