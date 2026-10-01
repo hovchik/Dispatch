@@ -444,3 +444,132 @@ public sealed partial class CommandPaletteViewModel : ObservableObject
     [RelayCommand]
     private void Close() => IsOpen = false;
 }
+
+/// <summary>Runs a security scan against a collection and shows findings as they arrive.</summary>
+public sealed partial class SecurityScanViewModel : ObservableObject, ITool
+{
+    private readonly RequestCollection _collection;
+    private readonly Dispatch.Application.Security.SecurityScanner _scanner;
+    private readonly IDialogService _dialogs;
+    private readonly Func<ApiEnvironment?> _environment;
+    private CancellationTokenSource? _cts;
+    private Dispatch.Application.Security.ScanReport? _report;
+
+    public SecurityScanViewModel(RequestCollection collection, Dispatch.Application.Security.SecurityScanner scanner,
+        IDialogService dialogs, Func<ApiEnvironment?> environment)
+    {
+        _collection = collection;
+        _scanner = scanner;
+        _dialogs = dialogs;
+        _environment = environment;
+    }
+
+    public string Title => $"Security scan · {_collection.Name}";
+    public double Width => 1000;
+    public double Height => 720;
+
+    public ObservableCollection<Dispatch.Application.Security.ScanFinding> Findings { get; } = [];
+
+    [ObservableProperty] private bool _passive = true;
+    [ObservableProperty] private bool _active = true;
+    [ObservableProperty] private bool _checkInjection = true;
+    [ObservableProperty] private bool _checkAuth = true;
+    [ObservableProperty] private bool _checkBoundaries = true;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ScanCommand), nameof(StopCommand), nameof(ExportCommand))]
+    private bool _isRunning;
+
+    [ObservableProperty] private string _status = "Scan APIs you are authorised to test. Passive checks read normal responses; active probes send extra crafted requests.";
+    [ObservableProperty] private int _highCount;
+    [ObservableProperty] private int _mediumCount;
+    [ObservableProperty] private int _lowCount;
+    [ObservableProperty] private int _infoCount;
+
+    [RelayCommand(CanExecute = nameof(CanScan))]
+    private async Task ScanAsync()
+    {
+        Findings.Clear();
+        HighCount = MediumCount = LowCount = InfoCount = 0;
+        IsRunning = true;
+        _cts = new CancellationTokenSource();
+        Status = "Scanning…";
+        var options = new Dispatch.Application.Security.ScanOptions
+        {
+            Passive = Passive,
+            Active = Active,
+            CheckInjection = CheckInjection,
+            CheckAuth = CheckAuth,
+            CheckBoundaries = CheckBoundaries
+        };
+        var progress = new Progress<Dispatch.Application.Security.ScanFinding>(f =>
+        {
+            Findings.Add(f);
+            switch (f.Severity)
+            {
+                case Dispatch.Application.Security.ScanSeverity.High: HighCount++; break;
+                case Dispatch.Application.Security.ScanSeverity.Medium: MediumCount++; break;
+                case Dispatch.Application.Security.ScanSeverity.Low: LowCount++; break;
+                default: InfoCount++; break;
+            }
+        });
+        try
+        {
+            _report = await _scanner.ScanAsync(_collection.Requests.ToList(), options, _environment(), _collection.Variables, progress, _cts.Token);
+            Status = $"{_report.RequestsScanned} request(s) scanned, {_report.ProbesSent} probe(s) sent in {_report.Duration.TotalSeconds:0.0} s · " +
+                     $"{Findings.Count} finding(s)" + (Findings.Count == 0 ? ". Automated scanning is not exhaustive." : "");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Status = $"Scan error: {ex.Message}";
+        }
+        finally
+        {
+            IsRunning = false;
+            _cts.Dispose();
+            _cts = null;
+        }
+    }
+
+    private bool CanScan() => !IsRunning;
+
+    [RelayCommand(CanExecute = nameof(IsRunning))]
+    private void Stop() => _cts?.Cancel();
+
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task ExportAsync(string? format)
+    {
+        if (_report is null)
+            return;
+        var (ext, content, filter) = format == "json"
+            ? (".json", Dispatch.Application.Security.ScanReportWriter.Json(_report), new FileFilter("JSON", "*.json"))
+            : (".html", Dispatch.Application.Security.ScanReportWriter.Html(_report, _collection.Name), new FileFilter("HTML", "*.html"));
+        var path = await _dialogs.SaveFileAsync("Save scan report", Application.Interop.DispatchFormat.Slug(_collection.Name) + "-scan" + ext, filter);
+        if (path is not null)
+        {
+            await File.WriteAllTextAsync(path, content);
+            Status = $"Report saved to {path}";
+        }
+    }
+
+    private bool CanExport() => !IsRunning && _report is not null;
+
+    public void OnClosed() => _cts?.Cancel();
+}
+
+/// <summary>Severity → badge colour for the scan view.</summary>
+public sealed class ScanSeverityBrush : Avalonia.Data.Converters.IValueConverter
+{
+    public static readonly ScanSeverityBrush Instance = new();
+
+    public object Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) =>
+        new Avalonia.Media.SolidColorBrush(value switch
+        {
+            Dispatch.Application.Security.ScanSeverity.High => Avalonia.Media.Color.Parse("#CF222E"),
+            Dispatch.Application.Security.ScanSeverity.Medium => Avalonia.Media.Color.Parse("#9A6700"),
+            Dispatch.Application.Security.ScanSeverity.Low => Avalonia.Media.Color.Parse("#0969DA"),
+            _ => Avalonia.Media.Color.Parse("#6E7781")
+        });
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture) => null;
+}

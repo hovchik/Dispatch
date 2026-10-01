@@ -23,7 +23,8 @@ public enum CollectionAction
     ExportHttp,
     Settings,
     DocsHtml,
-    DocsMarkdown
+    DocsMarkdown,
+    Scan
 }
 
 public sealed partial class CollectionsViewModel(ICollectionRepository repository) : ObservableObject

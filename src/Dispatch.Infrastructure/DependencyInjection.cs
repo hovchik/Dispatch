@@ -71,6 +71,7 @@ public static class DependencyInjection
         services.AddSingleton<IRequestSender, RequestSender>();
         services.AddSingleton<Dispatch.Application.Running.CollectionRunner>();
         services.AddSingleton<Dispatch.Application.Load.LoadTester>();
+        services.AddSingleton<Dispatch.Application.Security.SecurityScanner>();
         return services;
     }
 }

@@ -27,6 +27,7 @@ public sealed record MainServices(
     Importer Importer,
     CollectionRunner Runner,
     LoadTester LoadTester,
+    Dispatch.Application.Security.SecurityScanner Scanner,
     GrpcSchemaProvider GrpcSchemas,
     Infrastructure.Auth.SystemBrowserInteraction OAuth);
 
@@ -263,6 +264,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
             case CollectionAction.LoadTest:
                 Dialogs.ShowTool(new LoadTestViewModel(collection, _services.LoadTester, () => ActiveEnvironment));
                 break;
+            case CollectionAction.Scan:
+                Dialogs.ShowTool(new SecurityScanViewModel(collection, _services.Scanner, Dialogs, () => ActiveEnvironment));
+                break;
             case CollectionAction.Mock:
                 Dialogs.ShowTool(new MockServerViewModel(collection, _services.GrpcSchemas, _services.Tabs.Clipboard));
                 break;
@@ -325,6 +329,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost
         yield return new PaletteItem("Run collection…", "Collection runner", OpenRunner);
         yield return new PaletteItem("Mock server…", "Serve saved examples", OpenMockServer);
         yield return new PaletteItem("Load test…", "Virtual users, latency percentiles", OpenLoadTest);
+        yield return new PaletteItem("Security scan…", "Passive checks and active probes", () =>
+        {
+            var node = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId) ?? Collections.Items.FirstOrDefault();
+            if (node is not null)
+                _ = RunCollectionActionAsync(node, CollectionAction.Scan);
+        });
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
         foreach (var collection in Collections.Items)
             yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",

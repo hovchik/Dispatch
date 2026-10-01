@@ -26,6 +26,7 @@ public static class Program
                                                   (--dynamic: fresh fake data from schemas, --stateful: CRUD memory)
           dispatch load <collection> [options]    Load test a collection
           dispatch docs <collection> [options]    Generate API documentation (--format html|md, --out <file>)
+          dispatch scan <collection> [options]    Security-test a collection you are authorised to test
           dispatch version
 
         <collection> is a file (Dispatch, Postman, Insomnia, HAR, OpenAPI, .http), a Dispatch folder, a URL,
@@ -81,6 +82,7 @@ public static class Program
                 "mock" => await MockCommand.ExecuteAsync(rest, cancel.Token),
                 "load" => await LoadCommand.ExecuteAsync(rest, cancel.Token),
                 "docs" => await DocsAsync(rest),
+                "scan" => await ScanCommand.ExecuteAsync(rest, cancel.Token),
                 "version" or "--version" => Version(),
                 _ => throw new UsageException($"Unknown command '{command}'. Run 'dispatch --help'.")
             };

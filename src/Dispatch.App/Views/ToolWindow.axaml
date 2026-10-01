@@ -12,6 +12,7 @@
     <DataTemplate DataType="tools:RunnerViewModel"><tv:RunnerView /></DataTemplate>
     <DataTemplate DataType="tools:MockServerViewModel"><tv:MockServerView /></DataTemplate>
     <DataTemplate DataType="tools:LoadTestViewModel"><tv:LoadTestView /></DataTemplate>
+    <DataTemplate DataType="tools:SecurityScanViewModel"><tv:SecurityScanView /></DataTemplate>
     <DataTemplate DataType="tools:CookiesViewModel"><tv:CookiesView /></DataTemplate>
     <DataTemplate DataType="tools:DiffViewModel"><tv:DiffView /></DataTemplate>
     <DataTemplate DataType="tools:CodeSnippetViewModel"><tv:CodeSnippetView /></DataTemplate>
