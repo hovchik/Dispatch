@@ -238,7 +238,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
     [RelayCommand]
     private void OpenCapture() => Dialogs.ShowTool(new CaptureViewModel(_services.CaptureProxyFactory(), _services.CaptureAuthority,
-        Dialogs, _services.Tabs.Collections, Collections.LoadAsync));
+        Dialogs, _services.Tabs.Clipboard, _services.Tabs.Collections, Collections.LoadAsync));
 
     [RelayCommand]
     private void OpenRunner() => OpenCollectionTool(CollectionAction.Run);
@@ -278,7 +278,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
                     Environments.ApplyUpdatesAsync));
                 break;
             case CollectionAction.LoadTest:
-                Dialogs.ShowTool(new LoadTestViewModel(collection, _services.LoadTester, () => ActiveEnvironment));
+                Dialogs.ShowTool(new LoadTestViewModel(collection, _services.LoadTester, Dialogs, () => ActiveEnvironment));
                 break;
             case CollectionAction.Scan:
                 Dialogs.ShowTool(new SecurityScanViewModel(collection, _services.Scanner, Dialogs, () => ActiveEnvironment));

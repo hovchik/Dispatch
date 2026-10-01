@@ -6,86 +6,446 @@
              xmlns:conv="using:Dispatch.App.Converters"
              x:Class="Dispatch.App.Views.Tools.CaptureView"
              x:DataType="tools:CaptureViewModel">
+  <UserControl.Styles>
+    <Style Selector="Grid.th TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+    </Style>
+    <Style Selector="Grid.row TextBlock">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.fieldLabel">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,0,0,3" />
+    </Style>
+    <Style Selector="Border.running">
+      <Setter Property="Background" Value="#2622A06B" />
+    </Style>
+    <Style Selector="Border.stopped">
+      <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+    </Style>
+  </UserControl.Styles>
+
   <Grid RowDefinitions="Auto,Auto,*" Margin="16">
-    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto" Margin="0,0,0,10" ColumnSpacing="8">
-      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-        <TextBlock Text="Port" Classes="label" VerticalAlignment="Center" />
-        <NumericUpDown Value="{Binding Port}" Minimum="0" Maximum="65535" Width="110" FormatString="0" />
-      </StackPanel>
-      <TextBox Grid.Column="1" Text="{Binding HostFilter}" Watermark="host filter (optional)" MinWidth="170" VerticalAlignment="Center" />
-      <CheckBox Grid.Column="2" Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}" VerticalAlignment="Center" />
-      <Button Grid.Column="3" Content="Export CA…" Command="{Binding ExportCaCommand}" VerticalAlignment="Center" Padding="10,4"
-              ToolTip.Tip="Save the CA certificate and trust it so HTTPS clients don't warn" />
-      <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="6">
-        <Button Classes="accent" Command="{Binding StartCommand}" Padding="12,4">
+    <!-- Header: title, state, proxy address, start / stop -->
+    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="12" Margin="0,0,0,10">
+      <TextBlock Text="Capture proxy" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Border Grid.Column="1" Classes="pill" Classes.running="{Binding IsRunning}" Classes.stopped="{Binding !IsRunning}">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Ellipse Width="8" Height="8" Fill="#22A06B" VerticalAlignment="Center" IsVisible="{Binding IsRunning}" />
+          <Ellipse Width="8" Height="8" Fill="#8B949E" VerticalAlignment="Center" IsVisible="{Binding !IsRunning}" />
+          <TextBlock Text="{Binding StateText}" FontSize="12" FontWeight="SemiBold" />
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="2" Classes="card" Padding="10,4" HorizontalAlignment="Left" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="Proxy" Classes="muted" FontSize="12" VerticalAlignment="Center" />
+          <SelectableTextBlock Text="{Binding ProxyAddress}" FontFamily="{StaticResource MonoFont}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <Button Classes="icon" Command="{Binding CopyAddressCommand}" ToolTip.Tip="Copy proxy address" Padding="4">
+            <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
+          </Button>
+        </StackPanel>
+      </Border>
+      <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8">
+        <Button Classes="accent" Command="{Binding StartCommand}" Padding="16,6">
           <StackPanel Orientation="Horizontal" Spacing="6"><PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" /><TextBlock Text="Start" /></StackPanel>
         </Button>
-        <Button Command="{Binding StopCommand}" Padding="12,4">
+        <Button Command="{Binding StopCommand}" Padding="16,6">
           <StackPanel Orientation="Horizontal" Spacing="6"><PathIcon Data="{StaticResource IconStop}" Width="11" Height="11" /><TextBlock Text="Stop" /></StackPanel>
         </Button>
       </StackPanel>
-      <Button Grid.Column="6" Content="Clear" Command="{Binding ClearCommand}" VerticalAlignment="Center" Padding="10,4" />
-      <DropDownButton Grid.Column="7" Content="Save" VerticalAlignment="Center">
-        <DropDownButton.Flyout>
-          <MenuFlyout>
-            <MenuItem Header="Save as collection" Command="{Binding SaveToCollectionCommand}" />
-            <MenuItem Header="Export HAR…" Command="{Binding ExportHarCommand}" />
-          </MenuFlyout>
-        </DropDownButton.Flyout>
-      </DropDownButton>
     </Grid>
 
-    <Border Grid.Row="1" Background="{DynamicResource SurfaceAltBrush}" CornerRadius="6" Padding="10,6" Margin="0,0,0,10">
-      <StackPanel Orientation="Horizontal" Spacing="8">
-        <Ellipse Width="9" Height="9" Fill="#22A06B" IsVisible="{Binding IsRunning}" VerticalAlignment="Center" />
-        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="12.5" />
-      </StackPanel>
+    <Border Grid.Row="1" Background="{DynamicResource SurfaceAltBrush}" CornerRadius="6" Padding="10,7" Margin="0,0,0,12">
+      <SelectableTextBlock Text="{Binding Status}" TextWrapping="Wrap" FontSize="12.5" />
     </Border>
 
-    <Grid Grid.Row="2" ColumnDefinitions="*,2.2*" ColumnSpacing="12">
-      <Border Classes="card" Padding="0">
-        <ListBox ItemsSource="{Binding Exchanges}" SelectedItem="{Binding Selected}" Background="Transparent">
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="cap:CapturedExchange">
-              <Grid ColumnDefinitions="Auto,46,*,Auto" Margin="2">
-                <TextBlock Text="🔒" FontSize="10" IsVisible="{Binding Secure}" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="{Binding Method}" Classes="method" FontSize="11" VerticalAlignment="Center" />
-                <StackPanel Grid.Column="2" Margin="4,0">
-                  <TextBlock Text="{Binding Path}" FontSize="12.5" TextTrimming="CharacterEllipsis" />
-                  <TextBlock Text="{Binding Host}" Classes="muted" FontSize="10.5" TextTrimming="CharacterEllipsis" />
-                </StackPanel>
-                <TextBlock Grid.Column="3" Text="{Binding StatusCode}" FontWeight="SemiBold" VerticalAlignment="Center"
-                           Foreground="{Binding StatusCode, Converter={x:Static conv:StatusBrushConverter.Instance}}" />
-              </Grid>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-      </Border>
+    <Grid Grid.Row="2" ColumnDefinitions="290,*" ColumnSpacing="16">
+      <!-- Settings -->
+      <ScrollViewer>
+        <StackPanel Spacing="10" Margin="0,0,6,0">
+          <Border Background="#26D97706" CornerRadius="6" Padding="10,6" IsVisible="{Binding IsRunning}">
+            <TextBlock Classes="hint" Text="Stop the proxy to change these settings." />
+          </Border>
 
-      <Border Grid.Column="1" Classes="card" Padding="0">
-        <ScrollViewer>
-          <StackPanel Margin="12" Spacing="8" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <SelectableTextBlock Text="{Binding Selected.Url}" FontFamily="{StaticResource MonoFont}" FontSize="12.5" TextWrapping="Wrap" FontWeight="SemiBold" />
-            <TextBlock FontSize="12" Classes="muted">
-              <Run Text="{Binding Selected.Method}" /><Run Text=" → " /><Run Text="{Binding Selected.StatusCode}" /><Run Text=" " /><Run Text="{Binding Selected.ReasonPhrase}" />
-              <Run Text="  ·  " /><Run Text="{Binding Selected.ElapsedMs, StringFormat='{}{0:0} ms'}" />
-            </TextBlock>
-            <TextBlock Text="REQUEST HEADERS" Classes="section" />
-            <ItemsControl ItemsSource="{Binding Selected.RequestHeaders}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="domain:KeyValueItem">
-                  <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="11.5"><Run Text="{Binding Key}" FontWeight="SemiBold" /><Run Text=": " /><Run Text="{Binding Value}" /></TextBlock>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <TextBlock Text="REQUEST BODY" Classes="section" IsVisible="{Binding Selected.RequestBody, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-            <SelectableTextBlock Text="{Binding Selected.RequestBody}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap"
-                                 IsVisible="{Binding Selected.RequestBody, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-            <TextBlock Text="RESPONSE BODY" Classes="section" />
-            <SelectableTextBlock Text="{Binding Selected.ResponseBody}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap" />
-          </StackPanel>
-        </ScrollViewer>
-      </Border>
+          <Border Classes="panel" IsEnabled="{Binding !IsRunning}">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="panelTitle" Text="Connection" Margin="0" />
+              <StackPanel>
+                <TextBlock Classes="fieldLabel" Text="Port" />
+                <NumericUpDown Value="{Binding Port}" Minimum="0" Maximum="65535" FormatString="0" HorizontalAlignment="Stretch" />
+                <TextBlock Classes="hint" Text="0 picks a free port." Margin="0,3,0,0" />
+              </StackPanel>
+              <StackPanel>
+                <CheckBox IsChecked="{Binding AllowRemote}">
+                  <TextBlock Text="Allow other devices (phones, VMs)" TextWrapping="Wrap" />
+                </CheckBox>
+                <TextBlock Classes="hint" Text="Listens on all network interfaces instead of only this computer." />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="panel" IsEnabled="{Binding !IsRunning}">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="panelTitle" Text="Recording" Margin="0" />
+              <StackPanel>
+                <TextBlock Classes="fieldLabel" Text="Only hosts containing" />
+                <TextBox Text="{Binding HostFilter}" Watermark="e.g. api.example.com (blank = all)" />
+              </StackPanel>
+              <StackPanel>
+                <TextBlock Classes="fieldLabel" Text="Max body size to keep (KB)" />
+                <NumericUpDown Value="{Binding MaxBodyKb}" Minimum="1" Maximum="102400" Increment="256" FormatString="0" HorizontalAlignment="Stretch" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="panel">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="panelTitle" Text="HTTPS" Margin="0" />
+              <StackPanel IsEnabled="{Binding !IsRunning}">
+                <CheckBox IsChecked="{Binding DecryptHttps}" Content="Decrypt HTTPS traffic" />
+                <TextBlock Classes="hint" Text="Dispatch signs a certificate per host with its local CA. Off: HTTPS is passed through and not recorded." />
+              </StackPanel>
+              <Button Command="{Binding ExportCaCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Data="{StaticResource IconKey}" Width="12" Height="12" />
+                  <TextBlock Text="Export CA certificate…" />
+                </StackPanel>
+              </Button>
+              <TextBlock Classes="hint" Text="Add the exported certificate to your OS or browser trust store once, so clients accept the decrypted connection." />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="panel">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="panelTitle" Text="Connect a client" Margin="0" />
+              <TextBlock Classes="hint" Text="Browser or OS: set the HTTP and HTTPS proxy to" />
+              <Grid ColumnDefinitions="*,Auto">
+                <SelectableTextBlock Text="{Binding ProxyAddress}" FontFamily="{StaticResource MonoFont}" FontSize="12" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="icon" Command="{Binding CopyAddressCommand}" ToolTip.Tip="Copy" Padding="4">
+                  <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
+                </Button>
+              </Grid>
+              <TextBlock Classes="hint" Text="Terminal (curl, scripts, SDKs):" />
+              <Grid ColumnDefinitions="*,Auto">
+                <SelectableTextBlock Text="{Binding ProxyEnvironment}" FontFamily="{StaticResource MonoFont}" FontSize="11" TextWrapping="Wrap" />
+                <Button Grid.Column="1" Classes="icon" Command="{Binding CopyEnvironmentCommand}" ToolTip.Tip="Copy" Padding="4" VerticalAlignment="Top">
+                  <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
+                </Button>
+              </Grid>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+
+      <TabControl Grid.Column="1" SelectedIndex="{Binding SelectedTab}" Padding="0,8,0,0">
+        <!-- Traffic -->
+        <TabItem Header="Traffic">
+          <Grid RowDefinitions="Auto,*">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,8">
+              <TextBox Text="{Binding Search}" Watermark="Filter by URL, method or status code" />
+              <ToggleButton Grid.Column="1" IsChecked="{Binding ErrorsOnly}" Content="Errors only" VerticalAlignment="Stretch" />
+              <TextBlock Grid.Column="2" Text="{Binding CountText}" Classes="muted" FontSize="12" VerticalAlignment="Center" Margin="4,0" />
+              <Button Grid.Column="3" Command="{Binding ClearCommand}" ToolTip.Tip="Remove all captured traffic">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Data="{StaticResource IconTrash}" Width="12" Height="12" />
+                  <TextBlock Text="Clear" />
+                </StackPanel>
+              </Button>
+              <DropDownButton Grid.Column="4" Content="Save">
+                <DropDownButton.Flyout>
+                  <MenuFlyout>
+                    <MenuItem Header="Save shown requests as a collection" Command="{Binding SaveToCollectionCommand}" />
+                    <MenuItem Header="Export HAR…" Command="{Binding ExportHarCommand}" />
+                  </MenuFlyout>
+                </DropDownButton.Flyout>
+              </DropDownButton>
+            </Grid>
+
+            <Grid Grid.Row="1" ColumnDefinitions="*,1.35*" ColumnSpacing="12">
+              <Border Classes="card" Padding="0">
+                <Panel>
+                  <StackPanel IsVisible="{Binding !HasTraffic}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6" Margin="20" MaxWidth="260">
+                    <PathIcon Data="{StaticResource IconCapture}" Width="30" Height="30" Foreground="{DynamicResource MutedTextBrush}" />
+                    <TextBlock Text="No traffic captured" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    <TextBlock Classes="hint" TextAlignment="Center" Text="Click Start, then send requests through the proxy address shown above." />
+                  </StackPanel>
+                  <ListBox ItemsSource="{Binding Visible}" SelectedItem="{Binding Selected}" Background="Transparent">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate x:DataType="cap:CapturedExchange">
+                        <Grid ColumnDefinitions="52,*,Auto" ColumnSpacing="6">
+                          <TextBlock Text="{Binding Method}" Classes="method" Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+                          <StackPanel Grid.Column="1">
+                            <TextBlock Text="{Binding Path}" FontSize="12.5" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Url}" />
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                              <PathIcon Data="{StaticResource IconLock}" Width="9" Height="9" Foreground="#22A06B" IsVisible="{Binding Secure}" VerticalAlignment="Center"
+                                        ToolTip.Tip="HTTPS" />
+                              <TextBlock Text="{Binding Host}" Classes="muted" FontSize="10.5" TextTrimming="CharacterEllipsis" />
+                              <TextBlock Text="{Binding ElapsedMs, StringFormat='· {0:0} ms'}" Classes="muted" FontSize="10.5" />
+                            </StackPanel>
+                          </StackPanel>
+                          <TextBlock Grid.Column="2" Text="{Binding StatusCode}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                     Foreground="{Binding StatusCode, Converter={x:Static conv:StatusBrushConverter.Instance}}" />
+                        </Grid>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                </Panel>
+              </Border>
+
+              <Border Grid.Column="1" Classes="card" Padding="0">
+                <Panel>
+                  <TextBlock Classes="hint" Text="Select a request to inspect its headers and bodies." HorizontalAlignment="Center" VerticalAlignment="Center"
+                             IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNull}}" />
+                  <DockPanel IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="12,10,12,4">
+                    <StackPanel DockPanel.Dock="Top" Spacing="4">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{Binding Selected.Method}" Classes="method" FontSize="12"
+                                   Foreground="{Binding Selected.Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+                        <SelectableTextBlock Grid.Column="1" Text="{Binding Selected.Url}" FontFamily="{StaticResource MonoFont}" FontSize="12.5" TextWrapping="Wrap" />
+                        <Button Grid.Column="2" Classes="icon" Command="{Binding CopyUrlCommand}" CommandParameter="{Binding Selected}" ToolTip.Tip="Copy URL" Padding="4">
+                          <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
+                        </Button>
+                      </Grid>
+                      <TextBlock FontSize="12">
+                        <Run Text="{Binding Selected.StatusCode}" FontWeight="Bold" Foreground="{Binding Selected.StatusCode, Converter={x:Static conv:StatusBrushConverter.Instance}}" /><Run Text=" " /><Run Text="{Binding Selected.ReasonPhrase}" />
+                        <Run Text="  ·  " Foreground="{DynamicResource MutedTextBrush}" /><Run Text="{Binding Selected.ElapsedMs, StringFormat='{}{0:0} ms'}" Foreground="{DynamicResource MutedTextBrush}" />
+                        <Run Text="  ·  " Foreground="{DynamicResource MutedTextBrush}" /><Run Text="{Binding Selected.ResponseSize, Converter={x:Static tools:BytesConverter.Instance}}" Foreground="{DynamicResource MutedTextBrush}" />
+                        <Run Text="  ·  " Foreground="{DynamicResource MutedTextBrush}" /><Run Text="{Binding Selected.Timestamp, StringFormat='{}{0:HH:mm:ss}'}" Foreground="{DynamicResource MutedTextBrush}" />
+                      </TextBlock>
+                      <SelectableTextBlock Text="{Binding Selected.Error}" Foreground="#EF4444" FontSize="12" TextWrapping="Wrap"
+                                           IsVisible="{Binding Selected.Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                    <TabControl Classes="compact" Margin="0,6,0,0">
+                      <TabItem Header="Response">
+                        <ScrollViewer>
+                          <StackPanel Spacing="8" Margin="0,6,0,8">
+                            <TextBlock Text="HEADERS" Classes="section" />
+                            <ItemsControl ItemsSource="{Binding Selected.ResponseHeaders}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="domain:KeyValueItem">
+                                  <SelectableTextBlock FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap"><Run Text="{Binding Key}" FontWeight="SemiBold" /><Run Text=": " /><Run Text="{Binding Value}" /></SelectableTextBlock>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="BODY" Classes="section" />
+                            <Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="6" Padding="8">
+                              <SelectableTextBlock Text="{Binding Selected.ResponseBody}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap" />
+                            </Border>
+                          </StackPanel>
+                        </ScrollViewer>
+                      </TabItem>
+                      <TabItem Header="Request">
+                        <ScrollViewer>
+                          <StackPanel Spacing="8" Margin="0,6,0,8">
+                            <TextBlock Text="HEADERS" Classes="section" />
+                            <ItemsControl ItemsSource="{Binding Selected.RequestHeaders}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="domain:KeyValueItem">
+                                  <SelectableTextBlock FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap"><Run Text="{Binding Key}" FontWeight="SemiBold" /><Run Text=": " /><Run Text="{Binding Value}" /></SelectableTextBlock>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="BODY" Classes="section" />
+                            <TextBlock Classes="hint" Text="(empty)" IsVisible="{Binding Selected.RequestBody, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                            <Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="6" Padding="8"
+                                    IsVisible="{Binding Selected.RequestBody, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                              <SelectableTextBlock Text="{Binding Selected.RequestBody}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap" />
+                            </Border>
+                          </StackPanel>
+                        </ScrollViewer>
+                      </TabItem>
+                    </TabControl>
+                  </DockPanel>
+                </Panel>
+              </Border>
+            </Grid>
+          </Grid>
+        </TabItem>
+
+        <!-- Report -->
+        <TabItem Header="Report">
+          <Panel>
+            <StackPanel IsVisible="{Binding !HasReport}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6" MaxWidth="360">
+              <PathIcon Data="{StaticResource IconChart}" Width="32" Height="32" Foreground="{DynamicResource MutedTextBrush}" />
+              <TextBlock Text="No report yet" FontWeight="SemiBold" HorizontalAlignment="Center" />
+              <TextBlock Classes="hint" TextAlignment="Center"
+                         Text="Capture some traffic and the report fills in: errors, hosts, endpoints, status codes, content types and the slowest calls. It updates live while this tab is open." />
+            </StackPanel>
+            <ScrollViewer IsVisible="{Binding HasReport}">
+              <StackPanel Spacing="14" Margin="0,0,10,10">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
+                  <Border Classes="pill" Background="{Binding VerdictBrush}">
+                    <TextBlock Text="{Binding Verdict}" Foreground="White" FontWeight="Bold" FontSize="12" />
+                  </Border>
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="Traffic report" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding ReportSubtitle}" Classes="muted" FontSize="11.5" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="2" Command="{Binding RefreshReportCommand}" ToolTip.Tip="Recalculate" VerticalAlignment="Center">
+                    <PathIcon Data="{StaticResource IconRefresh}" Width="12" Height="12" />
+                  </Button>
+                  <Button Grid.Column="3" Command="{Binding OpenReportCommand}" VerticalAlignment="Center" ToolTip.Tip="Open the HTML report in your browser">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Data="{StaticResource IconExport}" Width="12" Height="12" />
+                      <TextBlock Text="Open in browser" />
+                    </StackPanel>
+                  </Button>
+                  <DropDownButton Grid.Column="4" Content="Export" VerticalAlignment="Center">
+                    <DropDownButton.Flyout>
+                      <MenuFlyout>
+                        <MenuItem Header="HTML report…" Command="{Binding ExportReportCommand}" CommandParameter="html" />
+                        <MenuItem Header="JSON…" Command="{Binding ExportReportCommand}" CommandParameter="json" />
+                        <MenuItem Header="HAR (raw traffic)…" Command="{Binding ExportHarCommand}" />
+                      </MenuFlyout>
+                    </DropDownButton.Flyout>
+                  </DropDownButton>
+                </Grid>
+
+                <ItemsControl ItemsSource="{Binding ReportStats}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><UniformGrid Columns="3" ColumnSpacing="8" RowSpacing="8" /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                </ItemsControl>
+
+                <StackPanel>
+                  <TextBlock Classes="section" Text="INSIGHTS" Margin="0,0,0,6" />
+                  <ItemsControl ItemsSource="{Binding Insights}" />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="12">
+                  <Border Classes="panel">
+                    <StackPanel><TextBlock Classes="panelTitle" Text="Status" /><ItemsControl ItemsSource="{Binding StatusBars}" /></StackPanel>
+                  </Border>
+                  <Border Grid.Column="1" Classes="panel">
+                    <StackPanel><TextBlock Classes="panelTitle" Text="Methods" /><ItemsControl ItemsSource="{Binding MethodBars}" /></StackPanel>
+                  </Border>
+                  <Border Grid.Row="1" Classes="panel">
+                    <StackPanel><TextBlock Classes="panelTitle" Text="Top hosts" /><ItemsControl ItemsSource="{Binding HostBars}" /></StackPanel>
+                  </Border>
+                  <Border Grid.Row="1" Grid.Column="1" Classes="panel">
+                    <StackPanel><TextBlock Classes="panelTitle" Text="Content types" /><ItemsControl ItemsSource="{Binding ContentTypeBars}" /></StackPanel>
+                  </Border>
+                </Grid>
+
+                <Border Classes="panel">
+                  <StackPanel Spacing="2">
+                    <TextBlock Classes="panelTitle" Text="Hosts" />
+                    <Grid Classes="th" ColumnDefinitions="*,70,60,60,64,64,80" ColumnSpacing="4" Margin="0,0,0,4">
+                      <TextBlock Text="HOST" />
+                      <TextBlock Grid.Column="1" Text="REQUESTS" TextAlignment="Right" />
+                      <TextBlock Grid.Column="2" Text="ERRORS" TextAlignment="Right" />
+                      <TextBlock Grid.Column="3" Text="HTTPS" TextAlignment="Right" />
+                      <TextBlock Grid.Column="4" Text="AVG MS" TextAlignment="Right" />
+                      <TextBlock Grid.Column="5" Text="P95 MS" TextAlignment="Right" />
+                      <TextBlock Grid.Column="6" Text="RECEIVED" TextAlignment="Right" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Hosts}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="cap:CaptureHostStats">
+                          <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,5">
+                            <Grid Classes="row" ColumnDefinitions="*,70,60,60,64,64,80" ColumnSpacing="4">
+                              <TextBlock Text="{Binding Host}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Host}" />
+                              <TextBlock Grid.Column="1" Text="{Binding Requests}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="2" Text="{Binding Errors}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="3" Text="{Binding Secure}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="4" Text="{Binding Latency.Mean, StringFormat='{}{0:0}'}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="5" Text="{Binding Latency.P95, StringFormat='{}{0:0}'}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="6" Text="{Binding Bytes, Converter={x:Static tools:BytesConverter.Instance}}" TextAlignment="Right" />
+                            </Grid>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+
+                <Border Classes="panel">
+                  <StackPanel Spacing="2">
+                    <TextBlock Classes="panelTitle" Text="Endpoints (most called first)" />
+                    <Grid Classes="th" ColumnDefinitions="56,*,56,56,64,64" ColumnSpacing="4" Margin="0,0,0,4">
+                      <TextBlock Text="METHOD" />
+                      <TextBlock Grid.Column="1" Text="ENDPOINT" />
+                      <TextBlock Grid.Column="2" Text="CALLS" TextAlignment="Right" />
+                      <TextBlock Grid.Column="3" Text="ERRORS" TextAlignment="Right" />
+                      <TextBlock Grid.Column="4" Text="AVG MS" TextAlignment="Right" />
+                      <TextBlock Grid.Column="5" Text="MAX MS" TextAlignment="Right" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Endpoints}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="cap:CaptureEndpointStats">
+                          <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,5">
+                            <Grid Classes="row" ColumnDefinitions="56,*,56,56,64,64" ColumnSpacing="4">
+                              <TextBlock Text="{Binding Method}" Classes="method" Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+                              <StackPanel Grid.Column="1">
+                                <TextBlock Text="{Binding Path}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Display}" />
+                                <TextBlock Text="{Binding Host}" Classes="muted" FontSize="10.5" />
+                              </StackPanel>
+                              <TextBlock Grid.Column="2" Text="{Binding Requests}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="3" Text="{Binding Errors}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="4" Text="{Binding Latency.Mean, StringFormat='{}{0:0}'}" TextAlignment="Right" />
+                              <TextBlock Grid.Column="5" Text="{Binding Latency.Max, StringFormat='{}{0:0}'}" TextAlignment="Right" />
+                            </Grid>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+
+                <Border Classes="panel">
+                  <StackPanel>
+                    <TextBlock Classes="panelTitle" Text="Slowest calls" />
+                    <ItemsControl ItemsSource="{Binding Slowest}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="cap:CapturedExchange">
+                          <Grid ColumnDefinitions="56,*,48,72" ColumnSpacing="6" Margin="0,3">
+                            <TextBlock Text="{Binding Method}" Classes="method" Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+                            <TextBlock Grid.Column="1" Text="{Binding Url}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Url}" />
+                            <TextBlock Grid.Column="2" Text="{Binding StatusCode}" FontWeight="SemiBold" TextAlignment="Right"
+                                       Foreground="{Binding StatusCode, Converter={x:Static conv:StatusBrushConverter.Instance}}" />
+                            <TextBlock Grid.Column="3" Text="{Binding ElapsedMs, StringFormat='{}{0:0} ms'}" FontWeight="SemiBold" TextAlignment="Right" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+
+                <Border Classes="panel" IsVisible="{Binding HasFailures}">
+                  <StackPanel>
+                    <TextBlock Classes="panelTitle" Text="Failed requests" />
+                    <ItemsControl ItemsSource="{Binding Failed}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="cap:CapturedExchange">
+                          <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,5">
+                            <Grid ColumnDefinitions="64,56,*,Auto" ColumnSpacing="6">
+                              <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss}'}" Classes="muted" FontSize="12" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" />
+                              <TextBlock Grid.Column="1" Text="{Binding Method}" Classes="method" Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+                              <StackPanel Grid.Column="2">
+                                <TextBlock Text="{Binding Url}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Url}" />
+                                <TextBlock Text="{Binding Error}" Foreground="#EF4444" FontSize="11" TextWrapping="Wrap"
+                                           IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                              </StackPanel>
+                              <TextBlock Grid.Column="3" FontWeight="SemiBold" VerticalAlignment="Center"
+                                         Foreground="{Binding StatusCode, Converter={x:Static conv:StatusBrushConverter.Instance}}">
+                                <Run Text="{Binding StatusCode}" /><Run Text=" " /><Run Text="{Binding ReasonPhrase}" />
+                              </TextBlock>
+                            </Grid>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </ScrollViewer>
+          </Panel>
+        </TabItem>
+      </TabControl>
     </Grid>
   </Grid>
 </UserControl>

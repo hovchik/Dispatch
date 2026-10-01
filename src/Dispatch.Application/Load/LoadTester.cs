@@ -42,6 +42,9 @@ public sealed record LoadRequestStats(string Name, int Count, int Errors, Latenc
 /// <summary>One second of the run, for the live chart.</summary>
 public sealed record LoadSecond(int Second, int Requests, int Errors, double P95, int ActiveUsers);
 
+/// <summary>A latency histogram bucket: responses that took at most <see cref="UpperMs"/> (and more than the previous bucket).</summary>
+public sealed record LatencyBucket(string Label, double UpperMs, int Count);
+
 public sealed class LoadSnapshot
 {
     public TimeSpan Elapsed { get; init; }
@@ -55,7 +58,17 @@ public sealed class LoadSnapshot
 
 public sealed class LoadReport
 {
+    public DateTimeOffset StartedAt { get; init; } = DateTimeOffset.Now;
     public TimeSpan Duration { get; init; }
+
+    /// <summary>The run was cancelled before its planned duration.</summary>
+    public bool Stopped { get; init; }
+    public TimeSpan PlannedDuration { get; init; }
+    public TimeSpan RampUp { get; init; }
+    public int ThinkTimeMs { get; init; }
+    public long TotalBytes { get; init; }
+    public IReadOnlyList<LatencyBucket> Histogram { get; init; } = [];
+    public double PeakRequestsPerSecond => Timeline.Count == 0 ? 0 : Timeline.Max(t => t.Requests);
     public int VirtualUsers { get; init; }
     public int TotalRequests { get; init; }
     public int Errors { get; init; }
@@ -84,8 +97,11 @@ public sealed class LoadTester(IRequestSender sender)
 {
     private const int MaxErrorSamples = 20;
 
-    private sealed class Sample(string request, double ms, string status, bool error, int second)
+    private static readonly double[] BucketBounds = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
+
+    private sealed class Sample(string request, double ms, string status, bool error, int second, long bytes = 0)
     {
+        public long Bytes { get; } = bytes;
         public string Request { get; } = request;
         public double Ms { get; } = ms;
         public string Status { get; } = status;
@@ -105,6 +121,7 @@ public sealed class LoadTester(IRequestSender sender)
         var gate = new Lock();
         var active = 0;
         var clock = Stopwatch.StartNew();
+        var startedAt = DateTimeOffset.Now;
 
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         if (options.IterationsPerUser == 0)
@@ -171,7 +188,8 @@ public sealed class LoadTester(IRequestSender sender)
                         var status = response.HasResponse ? response.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture) : "error";
                         lock (gate)
                         {
-                            samples.Add(new Sample(request.Name, response.Elapsed.TotalMilliseconds, status, error, (int)clock.Elapsed.TotalSeconds));
+                            samples.Add(new Sample(request.Name, response.Elapsed.TotalMilliseconds, status, error, (int)clock.Elapsed.TotalSeconds,
+                                response.SizeBytes));
                             if (error)
                             {
                                 var message = $"{request.Name}: {DescribeError(response, failedChecks)}";
@@ -215,7 +233,14 @@ public sealed class LoadTester(IRequestSender sender)
             all = samples.ToList();
         return new LoadReport
         {
+            StartedAt = startedAt,
             Duration = clock.Elapsed,
+            Stopped = cancellationToken.IsCancellationRequested,
+            PlannedDuration = options.Duration + options.RampUp,
+            RampUp = options.RampUp,
+            ThinkTimeMs = options.ThinkTimeMs,
+            TotalBytes = all.Sum(s => s.Bytes),
+            Histogram = Histogram(all),
             VirtualUsers = users,
             TotalRequests = all.Count,
             Errors = all.Count(s => s.Error),
@@ -253,6 +278,20 @@ public sealed class LoadTester(IRequestSender sender)
         if (failedChecks && response.TestResults.FirstOrDefault(t => !t.Passed) is { } failed)
             return $"{failed.Name}: {failed.Message}";
         return $"{response.StatusCode} {response.ReasonPhrase}".Trim();
+    }
+
+    private static IReadOnlyList<LatencyBucket> Histogram(List<Sample> samples)
+    {
+        var buckets = new List<LatencyBucket>();
+        var lower = 0.0;
+        foreach (var bound in BucketBounds)
+        {
+            var count = samples.Count(s => s.Ms <= bound && (lower == 0 || s.Ms > lower));
+            buckets.Add(new LatencyBucket(bound >= 1000 ? $"≤ {bound / 1000:0.#} s" : $"≤ {bound:0} ms", bound, count));
+            lower = bound;
+        }
+        buckets.Add(new LatencyBucket($"> {lower / 1000:0.#} s", double.PositiveInfinity, samples.Count(s => s.Ms > lower)));
+        return buckets;
     }
 
     private static IReadOnlyList<LoadSecond> Timeline(List<Sample> samples, int activeUsers) =>

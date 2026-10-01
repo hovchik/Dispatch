@@ -32,11 +32,14 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
 * **Scripts**: Postman-compatible `pm` API (`pm.test`, `pm.expect`, `pm.environment.set`, ...) for pre-request and
   test scripts, run on an embedded JavaScript engine.
 * **Collection runner**: pick and order requests, run iterations, drive runs from a **CSV / JSON data file**,
-  stop on failure, and export **HTML, JUnit XML or JSON reports**.
+  stop on failure. A **report tab** shows the pass rate, insights (flaky / always-failing requests), per-request results,
+  every failure and the slowest calls; export **HTML, JUnit XML or JSON reports**.
 * **Mock server**: serves the saved examples of a collection over HTTP and gRPC, with latency, jitter, error-rate
-  and dropped-connection simulation, CORS and path parameters.
+  and dropped-connection simulation, CORS and path parameters. Routes are listed before you start, with live hit counts,
+  and the request log can be filtered to unmatched requests and simulated faults.
 * **Load testing**: virtual users, ramp-up, think time, live requests-per-second chart, p50 / p95 / p99, and
-  per-request stats.
+  per-request stats. When a test ends you get a **detailed report**: verdict, insights (long tails, degradation over time,
+  throttling), latency distribution, status codes and per-request percentiles, exportable as **HTML, JSON or CSV**.
 * **Response diff**: compare with the previous response or any two history entries. You get a line diff plus a
   structural JSON diff with ignore paths (`$.timestamp`, `$..id`).
 * **Snapshot tests**: an assertion records the first response and checks later ones against it — structural JSON
@@ -63,8 +66,9 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
 * **Network**: per-request timeout, redirects, TLS verification, proxy, HTTP version, and a cookie jar with a
   manager. A **timeline** shows DNS, connect, TLS, time to first byte and download, plus the raw request.
 * **Capture proxy**: point a browser, app or `HTTP(S)_PROXY` at Dispatch and it records traffic — HTTP, and HTTPS
-  decrypted with an on-the-fly per-host certificate from a local CA you install. Save captures to a collection or
-  export **HAR**. `dispatch capture` records from the CLI.
+  decrypted with an on-the-fly per-host certificate from a local CA you install. Filter traffic, save it to a collection
+  or export **HAR**, and get a **traffic report** (hosts, endpoints, status codes, content types, slowest and failed calls)
+  as HTML or JSON. `dispatch capture` records from the CLI.
 * **Fake data**: 100+ Postman-compatible dynamic values — `{{$randomFullName}}`, `{{$randomEmail}}`,
   `{{$randomCompanyName}}`, `{{$randomInt(1,100)}}`, `{{$randomDate(-30,30)}}` and more, with `{{$` autocomplete.
 * **Documentation**: generate a self-contained **HTML reference** (sidebar, search, examples, code samples; secrets

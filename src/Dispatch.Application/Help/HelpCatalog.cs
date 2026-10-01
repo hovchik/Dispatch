@@ -201,7 +201,8 @@ public static class HelpCatalog
                 "Tick and reorder the requests to run.",
                 "Set iterations, a delay between requests, and whether to stop at the first failure.",
                 "Optionally choose a CSV or JSON data file: each row is one iteration and its columns become variables.",
-                "Click Run, then export an HTML, JUnit XML or JSON report."
+                "Click Run. When it finishes, the Report tab shows the pass rate, insights (flaky or always-failing requests), per-request results, every failure and the slowest calls.",
+                "Open the report in your browser, or export it as HTML, JUnit XML or JSON."
             ]),
             new HelpExample("users.csv: each column is a {{variable}}", "email,password,expectedStatus\nalice@example.com,secret1,200\nbob@example.com,wrong,401"),
             new HelpTip("The same run works headless: dispatch run \"My Collection\" --data users.csv -r junit,html.")
@@ -216,7 +217,7 @@ public static class HelpCatalog
             [
                 "Save at least one example on a request.",
                 "Open Mock in the toolbar (or the collection's menu → Mock server…) and click Start.",
-                "Point your app at the shown address, e.g. http://localhost:3000."
+                "Point your app at the base URL in the header, e.g. http://localhost:3000. The Routes tab lists every path with its hit count; the Request log shows what each call was answered with."
             ]),
             new HelpParagraph("You can add latency, jitter, an error rate and dropped connections to test how your client copes. Dynamic mode generates fresh fake data from schemas; stateful mode remembers POST/PUT/PATCH/DELETE like a tiny database."),
             new HelpExample("Templating in an example body", "{ \"id\": \"{{$guid}}\", \"name\": \"{{body.name}}\", \"agent\": \"{{header.User-Agent}}\" }")
@@ -231,12 +232,13 @@ public static class HelpCatalog
             [
                 "Open Load test in the toolbar.",
                 "Choose virtual users, duration, ramp-up and think time.",
-                "Start, watch the chart, and compare per-request statistics at the end."
+                "Start and watch the Live tab.",
+                "When the test ends (or you stop it), the Report tab shows a verdict, insights, the latency distribution, status codes and per-request percentiles. Open it in your browser or export HTML, JSON or CSV."
             ]),
             new HelpTip("Only load test systems you own or are allowed to test. Start small (5–10 users) and increase."),
             new HelpExample("From CI, failing if p95 is above 300 ms", "dispatch load \"My Collection\" --users 50 --duration 60s --max-p95 300")
         ],
-        ["load", "performance", "stress", "virtual users", "rps", "latency", "p95", "percentile", "benchmark"],
+        ["load", "performance", "stress", "virtual users", "rps", "latency", "p95", "percentile", "benchmark", "report"],
         null, [Runner, Cli]),
 
         new(Flows, "Testing", "Test flows", "Chain requests with conditions, loops and retries.",
@@ -276,14 +278,15 @@ public static class HelpCatalog
             new HelpParagraph("Capture starts a local proxy. Point a browser, a mobile app or HTTP(S)_PROXY at it and every exchange is recorded. Save the captures to a collection or export a HAR file."),
             new HelpSteps(
             [
-                "Open Capture in the toolbar and click Start.",
-                "For HTTPS, install the local certificate authority shown in the window (only on machines you control).",
-                "Set the proxy in your browser or app to the shown address, e.g. 127.0.0.1:8899.",
-                "Select the exchanges you want and save them to a collection."
+                "Open Capture in the toolbar, review the settings on the left (port, other devices, host filter, HTTPS) and click Start.",
+                "For HTTPS, export the CA certificate and trust it (only on machines you control).",
+                "Set the proxy in your browser or app to the address in the header, e.g. 127.0.0.1:8899.",
+                "Filter the traffic, then save the shown requests to a collection or export HAR.",
+                "The Report tab summarises the session: errors, hosts, endpoints, status codes, content types and the slowest calls."
             ]),
             new HelpExample("Capture traffic from a terminal command", "HTTPS_PROXY=http://127.0.0.1:8899 curl https://example.com")
         ],
-        ["capture", "proxy", "record", "har", "traffic", "intercept", "sniff", "browser"],
+        ["capture", "proxy", "record", "har", "traffic", "intercept", "sniff", "browser", "report"],
         null, [ImportExport]),
 
         new(ImportExport, "Basics", "Import & export", "Bring in Postman, OpenAPI, Insomnia, HAR, WSDL, .proto, .http or cURL.",
