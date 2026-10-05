@@ -34,7 +34,13 @@ public sealed class App : Avalonia.Application
                 e.Handled = true;
             };
 
-            window.Opened += async (_, _) => await viewModel.InitializeAsync();
+            window.Opened += async (_, _) =>
+            {
+                await viewModel.InitializeAsync();
+                // Started with a file (Explorer "Open with", the installer's file association): preview its import.
+                if (desktop.Args is [var path, ..] && (File.Exists(path) || Directory.Exists(path)))
+                    viewModel.OpenImport(path);
+            };
             desktop.Exit += (_, _) => _services.Dispose();
             desktop.MainWindow = window;
         }

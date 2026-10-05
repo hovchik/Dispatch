@@ -251,12 +251,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     private void OpenPalette() => Palette.Open();
 
     [RelayCommand]
-    private void OpenImport() => Dialogs.ShowTool(new ImportViewModel(_services.Importer, _services.Tabs.Collections,
+    private void OpenImport() => Dialogs.ShowTool(CreateImport());
+
+    /// <summary>Opens the import preview for a file or folder, e.g. one double-clicked in Explorer.</summary>
+    public void OpenImport(string path)
+    {
+        var import = CreateImport();
+        Dialogs.ShowTool(import);
+        _ = import.PreviewPathAsync(path);
+    }
+
+    private ImportViewModel CreateImport() => new(_services.Importer, _services.Tabs.Collections,
         _services.Environments, Dialogs, async () =>
         {
             await Collections.LoadAsync();
             await Environments.LoadAsync();
-        }));
+        });
 
     [RelayCommand]
     private void OpenCookies() => Dialogs.ShowTool(new CookiesViewModel(_services.Cookies));

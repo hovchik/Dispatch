@@ -41,7 +41,7 @@ public static class Program
                                                   (--host h, --window 5s, --kinds NullField,EmptyArray,…, --duration 10m)
           dispatch version
 
-        <collection> is a file (Dispatch, Postman, Insomnia, HAR, OpenAPI, .http), a Dispatch folder, a URL,
+        <collection> is a file (Dispatch, Postman, Insomnia, Thunder Client, Hoppscotch, Bruno, HAR, OpenAPI, .http), a Dispatch or Bruno folder, a URL,
         or the name of a collection saved in the app.
 
         Run options:

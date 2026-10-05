@@ -63,7 +63,7 @@
             </SplitButton.Flyout>
           </SplitButton>
           <Button Classes="tool" Margin="8,0,0,0" Command="{Binding OpenImportCommand}"
-                  ToolTip.Tip="Import Postman, OpenAPI, Insomnia, HAR, WSDL, .proto, .http or cURL (Ctrl+O)">
+                  ToolTip.Tip="Import Postman, OpenAPI, Insomnia, Thunder Client, Hoppscotch, Bruno, HAR, WSDL, .proto, .http or cURL (Ctrl+O)">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <PathIcon Data="{StaticResource IconImport}" />
               <TextBlock Text="Import" />

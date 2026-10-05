@@ -114,6 +114,14 @@ public sealed class Workspace(IServiceProvider services)
     public async Task<string> SaveCollectionAsync(RequestCollection collection, string source, IReadOnlyList<ApiEnvironment> bundled,
         IEnumerable<Guid> changedRequests)
     {
+        if (Directory.Exists(source) && Bruno.IsCollectionFolder(source))
+        {
+            // Never write Dispatch files into a Bruno collection: put a Dispatch file next to it instead.
+            var target = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar))!,
+                DispatchFormat.Slug(collection.Name) + ".dispatch.json");
+            await File.WriteAllTextAsync(target, DispatchFormat.ExportCollection(collection, bundled));
+            return target;
+        }
         if (Directory.Exists(source))
         {
             DispatchFormat.ExportFolder(collection, source, bundled);
