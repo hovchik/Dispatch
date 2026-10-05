@@ -190,9 +190,9 @@
       <Grid Grid.Column="2" RowDefinitions="Auto,*">
         <Border Grid.Row="0" Background="{DynamicResource AppBackgroundBrush}" Padding="8,6,8,0"
                 BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
-          <Grid ColumnDefinitions="*,Auto">
+          <Grid ColumnDefinitions="*,Auto,Auto">
             <ListBox x:Name="TabStrip" Classes="tabs" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
-                     ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                     ScrollViewer.HorizontalScrollBarVisibility="Hidden">
               <ListBox.ItemsPanel>
                 <ItemsPanelTemplate>
                   <StackPanel Orientation="Horizontal" />
@@ -266,7 +266,12 @@
                 </DataTemplate>
               </ListBox.ItemTemplate>
             </ListBox>
-            <Button Grid.Column="1" Classes="icon" Command="{Binding NewTabCommand}" Margin="4,0,0,4"
+            <!-- Shown when tabs don't fit; lists the hidden ones vertically. -->
+            <Button x:Name="TabOverflowButton" Grid.Column="1" Classes="icon" Margin="4,0,0,4" IsVisible="False"
+                    ToolTip.Tip="More tabs" Click="OnTabOverflowClick">
+              <PathIcon Data="{StaticResource IconChevronDown}" />
+            </Button>
+            <Button Grid.Column="2" Classes="icon" Command="{Binding NewTabCommand}" Margin="4,0,0,4"
                     ToolTip.Tip="New request (Ctrl+T)">
               <PathIcon Data="{StaticResource IconPlus}" />
             </Button>
