@@ -254,3 +254,13 @@ dotnet run --project src/Dispatch.App
 
 Requires the .NET 10 SDK. The Kafka and RabbitMQ integration tests run when `DISPATCH_KAFKA` (e.g.
 `localhost:9092`) and `DISPATCH_AMQP` (e.g. `amqp://guest:guest@localhost:5672/`) are set.
+
+### Windows installer
+
+```powershell
+.\installer\build-installer.ps1 -Version 1.2.0
+```
+
+Builds `installer\out\Dispatch-Setup-1.2.0.exe` with Inno Setup: a self-contained app and `dispatch` CLI (no .NET
+needed on the target PC), Start menu shortcuts, optional CLI on `PATH` and "Open with" for collection files. See
+[installer/README.md](installer/README.md). The **Windows installer** GitHub workflow builds it on `v*` tags.

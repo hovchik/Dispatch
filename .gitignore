@@ -8,3 +8,4 @@ obj/
 *.db-wal
 TestResults/
 .build/
+installer/out/

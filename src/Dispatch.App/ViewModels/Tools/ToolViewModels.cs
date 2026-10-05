@@ -72,6 +72,8 @@ public sealed partial class ImportViewModel(
         SetPreview(combined, string.Join(", ", formats.Distinct()));
     });
 
+    public Task PreviewPathAsync(string path) => BusyAsync(async () => SetPreview(await importer.ImportPathAsync(path), null));
+
     [RelayCommand]
     private Task ChooseFolderAsync() => BusyAsync(async () =>
     {
