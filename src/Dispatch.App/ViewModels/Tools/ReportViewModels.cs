@@ -23,7 +23,7 @@ public static class ReportBrushes
     public static readonly IBrush Warning = new SolidColorBrush(Color.Parse("#D97706"));
     public static readonly IBrush Bad = new SolidColorBrush(Color.Parse("#EF4444"));
     public static readonly IBrush Info = new SolidColorBrush(Color.Parse("#3B82F6"));
-    public static readonly IBrush Accent = new SolidColorBrush(Color.Parse("#FF6C37"));
+    public static readonly IBrush Accent = new SolidColorBrush(Color.Parse("#2F6BFF"));
     public static readonly IBrush Neutral = new SolidColorBrush(Color.Parse("#8B949E"));
 
     public static IBrush For(InsightLevel level) => level switch

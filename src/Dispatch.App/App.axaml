@@ -10,12 +10,28 @@
   <Application.Resources>
     <ResourceDictionary>
       <!-- Brand accent (used by Fluent for primary buttons, focus, selection). -->
-      <Color x:Key="SystemAccentColor">#FF6C37</Color>
-      <Color x:Key="SystemAccentColorDark1">#E85A28</Color>
-      <Color x:Key="SystemAccentColorDark2">#CC4E22</Color>
-      <Color x:Key="SystemAccentColorLight1">#FF8559</Color>
-      <Color x:Key="SystemAccentColorLight2">#FF9E7A</Color>
-      <SolidColorBrush x:Key="AccentBrush" Color="#FF6C37" />
+      <Color x:Key="SystemAccentColor">#2F6BFF</Color>
+      <Color x:Key="SystemAccentColorDark1">#2457D6</Color>
+      <Color x:Key="SystemAccentColorDark2">#1B44AD</Color>
+      <Color x:Key="SystemAccentColorLight1">#5B8CFF</Color>
+      <Color x:Key="SystemAccentColorLight2">#8AAEFF</Color>
+      <SolidColorBrush x:Key="AccentBrush" Color="#2F6BFF" />
+      <!-- Signature Dispatch gradient: sky → electric blue → indigo. -->
+      <LinearGradientBrush x:Key="AccentGradientBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Offset="0" Color="#1FA2FF" />
+        <GradientStop Offset="0.55" Color="#2F6BFF" />
+        <GradientStop Offset="1" Color="#4F46E5" />
+      </LinearGradientBrush>
+      <LinearGradientBrush x:Key="AccentGradientHoverBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Offset="0" Color="#4DB8FF" />
+        <GradientStop Offset="0.55" Color="#5B8CFF" />
+        <GradientStop Offset="1" Color="#6D66F0" />
+      </LinearGradientBrush>
+      <LinearGradientBrush x:Key="AccentGradientPressedBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Offset="0" Color="#1785D6" />
+        <GradientStop Offset="0.55" Color="#2457D6" />
+        <GradientStop Offset="1" Color="#3F37C2" />
+      </LinearGradientBrush>
 
       <FontFamily x:Key="MonoFont">Cascadia Code, Consolas, JetBrains Mono, Menlo, monospace</FontFamily>
 
@@ -297,6 +313,22 @@
     <Style Selector="Button.tool PathIcon">
       <Setter Property="Width" Value="13" />
       <Setter Property="Height" Value="13" />
+    </Style>
+
+    <!-- Primary buttons wear the brand gradient. -->
+    <Style Selector="Button.accent /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AccentGradientBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AccentGradientHoverBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.accent:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AccentGradientPressedBrush}" />
+    </Style>
+    <Style Selector="Button.accent:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Opacity" Value="0.5" />
     </Style>
 
     <!-- Inline "Learn more" links that open a help topic. -->

@@ -22,7 +22,7 @@
         <DataTemplate x:DataType="vm:EnvironmentItemViewModel">
           <StackPanel Orientation="Horizontal" Spacing="6">
             <TextBlock Text="{Binding Name}" />
-            <TextBlock Text="•" Foreground="#FF6C37" IsVisible="{Binding IsDirty}"
+            <TextBlock Text="•" Foreground="#2F6BFF" IsVisible="{Binding IsDirty}"
                        ToolTip.Tip="Unsaved changes" />
           </StackPanel>
         </DataTemplate>
