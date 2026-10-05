@@ -27,17 +27,20 @@ public sealed partial class FuzzExperimentItem(FuzzExperiment experiment) : Obse
     public bool IsRunning => Model.Verdict == FuzzVerdict.Running;
     public bool Breaks => Model.Verdict == FuzzVerdict.Breaks;
     public string Badge => Model.Verdict switch { FuzzVerdict.Breaks => "BREAKS", FuzzVerdict.Copes => "OK", _ => "…" };
-    public Avalonia.Media.IBrush BadgeBrush => new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse(Model.Verdict switch
+    private static readonly Avalonia.Media.IBrush BreaksBrush = Avalonia.Media.SolidColorBrush.Parse("#CF222E");
+    private static readonly Avalonia.Media.IBrush CopesBrush = Avalonia.Media.SolidColorBrush.Parse("#22A06B");
+    private static readonly Avalonia.Media.IBrush PendingBrush = Avalonia.Media.SolidColorBrush.Parse("#6E7781");
+    public Avalonia.Media.IBrush BadgeBrush => Model.Verdict switch
     {
-        FuzzVerdict.Breaks => "#CF222E",
-        FuzzVerdict.Copes => "#22A06B",
-        _ => "#6E7781"
-    }));
+        FuzzVerdict.Breaks => BreaksBrush,
+        FuzzVerdict.Copes => CopesBrush,
+        _ => PendingBrush
+    };
     public string Result => Model.Verdict switch
     {
         FuzzVerdict.Breaks => string.Join("\n", Model.Signals),
         FuzzVerdict.Copes => $"copes · {Model.RequestsAfter} request(s) afterwards",
-        _ => "watching…"
+        _ => "watching how the app reacts…"
     };
 
     public void Refresh()
@@ -48,6 +51,13 @@ public sealed partial class FuzzExperimentItem(FuzzExperiment experiment) : Obse
         OnPropertyChanged(nameof(Badge));
         OnPropertyChanged(nameof(BadgeBrush));
     }
+}
+
+/// <summary>A titled group of mutation kinds.</summary>
+public sealed class MutationKindGroup(string name, IReadOnlyList<MutationKindOption> kinds)
+{
+    public string Name { get; } = name;
+    public IReadOnlyList<MutationKindOption> Kinds { get; } = kinds;
 }
 
 /// <summary>Client fuzzing: a proxy that varies responses to the app under test and watches how the app reacts.</summary>
@@ -67,7 +77,11 @@ public sealed partial class ClientFuzzViewModel : ObservableObject, ITool
         _authority = authority;
         _dialogs = dialogs;
         _clipboard = clipboard;
+        KindGroups = Kinds.GroupBy(k => k.Group).Select(g => new MutationKindGroup(g.Key, g.ToList())).ToList();
+        Experiments.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasExperiments));
     }
+
+    public IReadOnlyList<MutationKindGroup> KindGroups { get; }
 
     public string Title => "Client fuzzing";
     public string? HelpTopic => Dispatch.Application.Help.HelpCatalog.ClientFuzz;
@@ -95,6 +109,60 @@ public sealed partial class ClientFuzzViewModel : ObservableObject, ITool
     ];
 
     public ObservableCollection<FuzzExperimentItem> Experiments { get; } = [];
+    public ObservableCollection<FuzzExperimentItem> Visible { get; } = [];
+    public bool HasExperiments => Experiments.Count > 0;
+    public bool HasVisible => Visible.Count > 0;
+    public string StateText => IsRunning ? "Running" : "Stopped";
+    public string ProxyAddress => IsRunning ? Address : $"127.0.0.1:{(int)Port}";
+    public string CountText => BreaksOnly ? $"{Visible.Count} of {Experiments.Count}" : $"{Experiments.Count} variation(s)";
+
+    [ObservableProperty] private bool _breaksOnly;
+    partial void OnBreaksOnlyChanged(bool value) => RebuildVisible();
+    partial void OnIsRunningChanged(bool value)
+    {
+        OnPropertyChanged(nameof(StateText));
+        OnPropertyChanged(nameof(ProxyAddress));
+    }
+    partial void OnPortChanged(decimal value) => OnPropertyChanged(nameof(ProxyAddress));
+    partial void OnAddressChanged(string value) => OnPropertyChanged(nameof(ProxyAddress));
+
+    private void RebuildVisible()
+    {
+        Visible.Clear();
+        foreach (var e in Experiments.Where(Shows))
+            Visible.Add(e);
+        OnVisibleChanged();
+    }
+
+    private bool Shows(FuzzExperimentItem e) => !BreaksOnly || e.Breaks;
+
+    private void OnVisibleChanged()
+    {
+        OnPropertyChanged(nameof(HasVisible));
+        OnPropertyChanged(nameof(CountText));
+    }
+
+    private void Added(FuzzExperimentItem item)
+    {
+        Experiments.Insert(0, item);
+        if (Shows(item))
+            Visible.Insert(0, item);
+        OnVisibleChanged();
+    }
+
+    [RelayCommand]
+    private void SelectAllKinds(string? group)
+    {
+        foreach (var k in Kinds.Where(k => group is null || k.Group == group))
+            k.IsEnabled = true;
+    }
+
+    [RelayCommand]
+    private void SelectNoKinds(string? group)
+    {
+        foreach (var k in Kinds.Where(k => group is null || k.Group == group))
+            k.IsEnabled = false;
+    }
 
     [ObservableProperty] private decimal _port = 8899;
     [ObservableProperty] private string _hostFilter = string.Empty;
@@ -111,6 +179,7 @@ public sealed partial class ClientFuzzViewModel : ObservableObject, ITool
     [ObservableProperty] private string _address = string.Empty;
     [ObservableProperty] private int _tried;
     [ObservableProperty] private int _breaks;
+    [ObservableProperty] private int _copes;
     [ObservableProperty] private string _summary = string.Empty;
 
     [RelayCommand(CanExecute = nameof(CanStart))]
@@ -123,7 +192,9 @@ public sealed partial class ClientFuzzViewModel : ObservableObject, ITool
             return;
         }
         Experiments.Clear();
-        Tried = Breaks = 0;
+        Visible.Clear();
+        OnVisibleChanged();
+        Tried = Breaks = Copes = 0;
         Summary = string.Empty;
         _fuzzer = new ClientFuzzer(new ClientFuzzOptions
         {
@@ -133,7 +204,7 @@ public sealed partial class ClientFuzzViewModel : ObservableObject, ITool
             MaxMutationsPerEndpoint = (int)Math.Max(1, MaxPerEndpoint),
             Kinds = kinds
         });
-        _fuzzer.ExperimentStarted += e => Dispatcher.UIThread.Post(() => Experiments.Insert(0, new FuzzExperimentItem(e)));
+        _fuzzer.ExperimentStarted += e => Dispatcher.UIThread.Post(() => Added(new FuzzExperimentItem(e)));
         _fuzzer.ExperimentFinished += e => Dispatcher.UIThread.Post(() => OnFinished(e));
         try
         {
@@ -159,9 +230,13 @@ public sealed partial class ClientFuzzViewModel : ObservableObject, ITool
     private void OnFinished(FuzzExperiment experiment)
     {
         Experiments.FirstOrDefault(e => e.Model == experiment)?.Refresh();
+        if (BreaksOnly)
+            RebuildVisible();
         Tried++;
         if (experiment.Verdict == FuzzVerdict.Breaks)
             Breaks++;
+        else if (experiment.Verdict == FuzzVerdict.Copes)
+            Copes++;
         Summary = ClientFuzzReport.Summary(_fuzzer?.Experiments ?? []);
     }
 

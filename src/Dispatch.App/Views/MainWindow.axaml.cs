@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Dispatch.App.ViewModels;
 using Dispatch.App.ViewModels.Tools;
 
@@ -38,7 +39,36 @@ public partial class MainWindow : Window
             if (_viewModel is not null)
                 _viewModel.Palette.PropertyChanged += OnPaletteChanged;
         };
+        // Middle-click closes a tab, like in browsers. Tunnel so the press doesn't select the tab first.
+        TabStrip.AddHandler(PointerPressedEvent, OnTabStripPointerPressed, RoutingStrategies.Tunnel);
+        TabStrip.AddHandler(PointerReleasedEvent, OnTabStripPointerReleased, RoutingStrategies.Tunnel);
     }
+
+    private RequestTabViewModel? _middlePressedTab;
+
+    private void OnTabStripPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(TabStrip).Properties.PointerUpdateKind != PointerUpdateKind.MiddleButtonPressed)
+            return;
+        _middlePressedTab = TabAt(e.Source);
+        e.Handled = _middlePressedTab is not null;
+    }
+
+    private void OnTabStripPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (e.InitialPressMouseButton != MouseButton.Middle)
+            return;
+        var tab = TabAt(e.Source);
+        if (tab is not null && ReferenceEquals(tab, _middlePressedTab))
+        {
+            tab.CloseCommand.Execute(null);
+            e.Handled = true;
+        }
+        _middlePressedTab = null;
+    }
+
+    private static RequestTabViewModel? TabAt(object? source) =>
+        (source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true)?.DataContext as RequestTabViewModel;
 
     private void OnPaletteChanged(object? sender, PropertyChangedEventArgs e)
     {
