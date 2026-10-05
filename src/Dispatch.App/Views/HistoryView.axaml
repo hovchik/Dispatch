@@ -63,7 +63,7 @@
                           Margin="0,2,0,0">
                 <TextBlock Text="{Binding WhenText}" Classes="muted" FontSize="11" />
                 <TextBlock Text="{Binding ElapsedText}" Classes="muted" FontSize="11" />
-                <TextBlock Text="◆ compare base" FontSize="11" Foreground="#FF6C37"
+                <TextBlock Text="◆ compare base" FontSize="11" Foreground="#2F6BFF"
                            IsVisible="{Binding IsCompareBase}" />
               </StackPanel>
             </Grid>

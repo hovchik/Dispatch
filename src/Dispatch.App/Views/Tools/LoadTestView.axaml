@@ -101,7 +101,7 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="tools:TimelineBar">
                   <Panel VerticalAlignment="Bottom" ToolTip.Tip="{Binding Tooltip}">
-                    <Rectangle Width="5" Height="{Binding Height}" Fill="#FF6C37" RadiusX="1" RadiusY="1" IsVisible="{Binding !HasErrors}" />
+                    <Rectangle Width="5" Height="{Binding Height}" Fill="#2F6BFF" RadiusX="1" RadiusY="1" IsVisible="{Binding !HasErrors}" />
                     <Rectangle Width="5" Height="{Binding Height}" Fill="#EF4444" RadiusX="1" RadiusY="1" IsVisible="{Binding HasErrors}" />
                   </Panel>
                 </DataTemplate>
@@ -229,7 +229,7 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="tools:TimelineBar">
                         <Panel VerticalAlignment="Bottom" Margin="1,0" MaxWidth="28" ToolTip.Tip="{Binding Tooltip}" Background="Transparent">
-                          <Rectangle Height="{Binding Height}" Fill="#FF6C37" RadiusX="1" RadiusY="1" IsVisible="{Binding !HasErrors}" />
+                          <Rectangle Height="{Binding Height}" Fill="#2F6BFF" RadiusX="1" RadiusY="1" IsVisible="{Binding !HasErrors}" />
                           <Rectangle Height="{Binding Height}" Fill="#EF4444" RadiusX="1" RadiusY="1" IsVisible="{Binding HasErrors}" />
                         </Panel>
                       </DataTemplate>

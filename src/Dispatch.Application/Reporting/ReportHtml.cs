@@ -57,7 +57,7 @@ internal static class ReportHtml
     };
 
     public const string Styles = """
-        :root{--bg:#fff;--fg:#1d1f24;--muted:#6b7280;--card:#f6f7f9;--line:#e5e7eb;--ok:#16a34a;--bad:#dc2626;--warn:#d97706;--accent:#ff6c37}
+        :root{--bg:#fff;--fg:#1d1f24;--muted:#6b7280;--card:#f6f7f9;--line:#e5e7eb;--ok:#16a34a;--bad:#dc2626;--warn:#d97706;--accent:#2f6bff;--accent-grad:linear-gradient(135deg,#1fa2ff,#2f6bff 55%,#4f46e5)}
         @media (prefers-color-scheme:dark){:root{--bg:#16181d;--fg:#e8eaed;--muted:#9aa0a6;--card:#1f2228;--line:#2d3139}}
         *{box-sizing:border-box}
         body{margin:0 auto;max-width:1200px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding:24px}
@@ -72,10 +72,10 @@ internal static class ReportHtml
         table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
         th{color:var(--muted);font-weight:600;font-size:12px}td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
         .bar{display:grid;grid-template-columns:110px 1fr 70px;gap:8px;align-items:center;margin:4px 0;font-size:13px}
-        .bt{background:var(--line);border-radius:4px;height:10px;overflow:hidden}.bt i{display:block;height:100%;background:var(--accent);border-radius:4px}
+        .bt{background:var(--line);border-radius:4px;height:10px;overflow:hidden}.bt i{display:block;height:100%;background:var(--accent-grad);border-radius:4px}
         .bv{text-align:right;font-variant-numeric:tabular-nums}
         .chart{display:flex;align-items:flex-end;gap:2px;height:140px;background:var(--card);border-radius:10px;padding:10px}
-        .chart i{flex:1;min-width:2px;max-width:28px;background:var(--accent);border-radius:2px 2px 0 0}.chart i.e{background:var(--bad)}
+        .chart i{flex:1;min-width:2px;max-width:28px;background:var(--accent-grad);border-radius:2px 2px 0 0}.chart i.e{background:var(--bad)}
         ul.ins{list-style:none;padding:0;margin:0}ul.ins li{padding:8px 12px;border-radius:8px;margin:6px 0;background:var(--card);border-left:4px solid var(--muted)}
         ul.ins li.good{border-color:var(--ok)}ul.ins li.warning{border-color:var(--warn)}ul.ins li.bad{border-color:var(--bad)}
         code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all}
