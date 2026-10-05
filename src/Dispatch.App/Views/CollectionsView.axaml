@@ -7,7 +7,21 @@
 
   <DockPanel>
     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="10,10,10,6">
-      <TextBox Text="{Binding Filter}" Watermark="Search requests" />
+      <TextBox Text="{Binding Filter}" Watermark="Search collections and requests">
+        <TextBox.InnerLeftContent>
+          <PathIcon Data="{StaticResource IconSearch}" Width="13" Height="13" Margin="8,0,0,0"
+                    Foreground="{DynamicResource MutedTextBrush}" />
+        </TextBox.InnerLeftContent>
+        <TextBox.InnerRightContent>
+          <Button Classes="icon" Padding="6,4" Command="{Binding ClearFilterCommand}" ToolTip.Tip="Clear search"
+                  IsVisible="{Binding Filter, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <PathIcon Data="{StaticResource IconClose}" Width="10" Height="10" />
+          </Button>
+        </TextBox.InnerRightContent>
+        <TextBox.KeyBindings>
+          <KeyBinding Gesture="Escape" Command="{Binding ClearFilterCommand}" />
+        </TextBox.KeyBindings>
+      </TextBox>
       <Button Grid.Column="1" Classes="icon" Margin="6,0,0,0" Command="{Binding NewCollectionCommand}"
               ToolTip.Tip="New collection">
         <PathIcon Data="{StaticResource IconPlus}" />
@@ -26,8 +40,25 @@
                 ToolTip.Tip="Ready-made requests that show tests, variables, chaining, scripts and auth" />
       </StackPanel>
 
-      <TreeView ItemsSource="{Binding Items}" Padding="4,0">
+      <TextBlock Classes="muted" Margin="16" TextWrapping="Wrap" TextAlignment="Center"
+                 Text="No requests match your search." IsVisible="{Binding HasNoMatches}" />
+
+      <!-- Horizontal scrolling is disabled: long names are trimmed with an ellipsis instead, and
+           selecting/expanding an item no longer jerks the tree left and right. -->
+      <TreeView ItemsSource="{Binding Items}" Padding="4,0"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled">
         <TreeView.Styles>
+          <Style Selector="TreeViewItem">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Margin" Value="0,1" />
+          </Style>
+          <!-- Quick actions on collection rows only show on hover / selection to keep the list calm. -->
+          <Style Selector="Grid.collrow StackPanel.quick">
+            <Setter Property="Opacity" Value="0" />
+          </Style>
+          <Style Selector="Grid.collrow:pointerover StackPanel.quick">
+            <Setter Property="Opacity" Value="1" />
+          </Style>
           <Style Selector="TreeViewItem" x:DataType="vm:TreeNodeViewModel">
             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
             <Setter Property="IsVisible" Value="{Binding IsVisible}" />
@@ -37,7 +68,7 @@
 
         <TreeView.DataTemplates>
           <TreeDataTemplate DataType="vm:CollectionNodeViewModel" ItemsSource="{Binding Children}">
-            <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent">
+            <Grid Classes="collrow" ColumnDefinitions="Auto,*,Auto,Auto" Background="Transparent">
               <Grid.ContextMenu>
                 <ContextMenu>
                   <MenuItem Header="Add request" Command="{Binding AddRequestCommand}" />
@@ -108,8 +139,20 @@
                   <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}" />
                 </TextBox.KeyBindings>
               </TextBox>
-              <TextBlock Grid.Column="2" Text="{Binding RequestCount}" Classes="muted" FontSize="11"
-                         VerticalAlignment="Center" Margin="8,0,4,0" />
+              <StackPanel Grid.Column="2" Classes="quick" Orientation="Horizontal" Margin="4,0,0,0"
+                          IsVisible="{Binding !IsRenaming}">
+                <Button Classes="icon" Padding="4" Command="{Binding AddRequestCommand}" ToolTip.Tip="Add request">
+                  <PathIcon Data="{StaticResource IconPlus}" Width="11" Height="11" />
+                </Button>
+                <Button Classes="icon" Padding="4" Command="{Binding ActionCommand}"
+                        CommandParameter="{x:Static vm:CollectionAction.Run}" ToolTip.Tip="Run collection">
+                  <PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" />
+                </Button>
+              </StackPanel>
+              <Border Grid.Column="3" CornerRadius="8" Padding="6,1" Margin="4,0,4,0" VerticalAlignment="Center"
+                      Background="{DynamicResource DividerBrush}" ToolTip.Tip="Requests in this collection">
+                <TextBlock Text="{Binding RequestCount}" FontSize="11" Foreground="{DynamicResource MutedTextBrush}" />
+              </Border>
             </Grid>
           </TreeDataTemplate>
 
