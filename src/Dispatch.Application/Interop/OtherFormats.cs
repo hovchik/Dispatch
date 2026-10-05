@@ -44,30 +44,7 @@ public static class Insomnia
                     request.Url = QueryString.WithParams(request.Url, request.QueryParams);
 
                 var body = r["body"];
-                var mime = body?["mimeType"]?.ToString() ?? "";
-                if (mime == "application/graphql")
-                {
-                    request.Kind = RequestKind.GraphQl;
-                    var gql = JsonNode.Parse(body?["text"]?.ToString() ?? "{}");
-                    request.Protocol.GraphQl.Query = gql?["query"]?.ToString() ?? "";
-                    request.Protocol.GraphQl.Variables = gql?["variables"]?.ToJsonString() ?? "";
-                }
-                else if (mime is "application/x-www-form-urlencoded")
-                    request.Body = new RequestBody { Mode = BodyMode.FormUrlEncoded, FormFields = Pairs(body?["params"]) };
-                else if (mime is "multipart/form-data")
-                    request.Body = new RequestBody
-                    {
-                        Mode = BodyMode.Multipart,
-                        FormFields = (body?["params"] as JsonArray ?? []).Select(p => new KeyValueItem(p?["name"]?.ToString() ?? "",
-                            p?["type"]?.ToString() == "file" ? p["fileName"]?.ToString() ?? "" : ConvertTemplates(p?["value"]?.ToString() ?? ""),
-                            p?["disabled"]?.GetValue<bool>() != true) { IsFile = p?["type"]?.ToString() == "file" }).ToList()
-                    };
-                else if (body?["text"] is { } text)
-                    request.Body = new RequestBody
-                    {
-                        Mode = mime.Contains("json") ? BodyMode.Json : mime.Contains("xml") ? BodyMode.Xml : BodyMode.Text,
-                        Content = ConvertTemplates(text.ToString())
-                    };
+                ApplyBody(request, body);
 
                 if (type == "grpc_request")
                 {
@@ -100,6 +77,35 @@ public static class Insomnia
         return result;
     }
 
+    /// <summary>Insomnia request body (v4 and v5 share the shape: mimeType + text or params).</summary>
+    internal static void ApplyBody(ApiRequest request, JsonNode? body)
+    {
+        var mime = body?["mimeType"]?.ToString() ?? "";
+        if (mime == "application/graphql")
+        {
+            request.Kind = RequestKind.GraphQl;
+            var gql = JsonNode.Parse(body?["text"]?.ToString() ?? "{}");
+            request.Protocol.GraphQl.Query = gql?["query"]?.ToString() ?? "";
+            request.Protocol.GraphQl.Variables = gql?["variables"]?.ToJsonString() ?? "";
+        }
+        else if (mime is "application/x-www-form-urlencoded")
+            request.Body = new RequestBody { Mode = BodyMode.FormUrlEncoded, FormFields = Pairs(body?["params"]) };
+        else if (mime is "multipart/form-data")
+            request.Body = new RequestBody
+            {
+                Mode = BodyMode.Multipart,
+                FormFields = (body?["params"] as JsonArray ?? []).Select(p => new KeyValueItem(p?["name"]?.ToString() ?? "",
+                    p?["type"]?.ToString() == "file" ? p["fileName"]?.ToString() ?? "" : ConvertTemplates(p?["value"]?.ToString() ?? ""),
+                    p?["disabled"]?.GetValue<bool>() != true) { IsFile = p?["type"]?.ToString() == "file" }).ToList()
+            };
+        else if (body?["text"] is { } text)
+            request.Body = new RequestBody
+            {
+                Mode = mime.Contains("json") ? BodyMode.Json : mime.Contains("xml") ? BodyMode.Xml : BodyMode.Text,
+                Content = ConvertTemplates(text.ToString())
+            };
+    }
+
     /// <summary>Insomnia uses Nunjucks: {{ _.baseUrl }} → {{baseUrl}}.</summary>
     internal static string ConvertTemplates(string text) =>
         Regex.Replace(text, @"\{\{\s*_\.([\w.-]+)\s*\}\}", "{{$1}}");
@@ -130,11 +136,11 @@ public static class Insomnia
         return string.Join("/", parts);
     }
 
-    private static List<KeyValueItem> Pairs(JsonNode? array) =>
+    internal static List<KeyValueItem> Pairs(JsonNode? array) =>
         (array as JsonArray ?? []).Select(p => new KeyValueItem(p?["name"]?.ToString() ?? "", ConvertTemplates(p?["value"]?.ToString() ?? ""),
             p?["disabled"]?.GetValue<bool>() != true)).Where(p => p.Key.Length > 0).ToList();
 
-    private static AuthSettings ImportAuth(JsonNode? auth)
+    internal static AuthSettings ImportAuth(JsonNode? auth)
     {
         string S(string key) => ConvertTemplates(auth?[key]?.ToString() ?? "");
         return auth?["type"]?.ToString() switch

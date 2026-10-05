@@ -143,7 +143,8 @@ Two investigative tools that go beyond what API clients usually offer. Open them
 
 ## Developer tools
 
-* **Import**: Postman (collections and environments), OpenAPI / Swagger (JSON or YAML), Insomnia, HAR, WSDL,
+* **Import**: Postman (collections and environments), OpenAPI / Swagger (JSON or YAML), Insomnia (v4 JSON and v5 YAML),
+  Thunder Client, Hoppscotch, Bruno (a `.bru` collection folder, a single `.bru` file or a JSON export), HAR, WSDL,
   `.proto`, `.http` files, cURL commands, and Dispatch files or folders, from a file, a URL or pasted text.
 * **Export**: a Dispatch file, a **git-friendly folder** (one file per request), a Postman collection v2.1, or a
   `.http` file.

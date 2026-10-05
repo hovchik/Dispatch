@@ -53,7 +53,7 @@ public sealed partial class ImportViewModel(
     public ObservableCollection<string> PreviewLines { get; } = [];
 
     public static string SupportedFormats =>
-        "Postman collections & environments · OpenAPI / Swagger (JSON or YAML) · Insomnia · HAR · WSDL · .proto · .http files · " +
+        "Postman collections & environments · OpenAPI / Swagger (JSON or YAML) · Insomnia · Thunder Client · Hoppscotch · Bruno · HAR · WSDL · .proto · .http files · " +
         "cURL commands · Dispatch files and folders";
 
     [RelayCommand]
@@ -75,7 +75,7 @@ public sealed partial class ImportViewModel(
     [RelayCommand]
     private Task ChooseFolderAsync() => BusyAsync(async () =>
     {
-        if (await dialogs.OpenFolderAsync("Import a Dispatch collection folder") is { } folder)
+        if (await dialogs.OpenFolderAsync("Import a Dispatch or Bruno collection folder") is { } folder)
             SetPreview(await importer.ImportPathAsync(folder), null);
     });
 

@@ -11,7 +11,7 @@ namespace Dispatch.Infrastructure.Interop;
 
 /// <summary>
 /// Imports anything a developer or QA is likely to have: Dispatch files/folders, Postman collections and environments,
-/// Insomnia exports, HAR, OpenAPI/Swagger (JSON or YAML), WSDL, .proto, .http files and cURL commands.
+/// Insomnia (v4 JSON, v5 YAML), Thunder Client, Hoppscotch and Bruno (.bru folders or JSON) exports, HAR, OpenAPI/Swagger (JSON or YAML), WSDL, .proto, .http files and cURL commands.
 /// The format is detected from the content.
 /// </summary>
 public sealed class Importer(IHttpClientSource clients, WsdlLoader wsdlLoader)
@@ -19,7 +19,7 @@ public sealed class Importer(IHttpClientSource clients, WsdlLoader wsdlLoader)
     public async Task<ImportResult> ImportPathAsync(string path, CancellationToken ct = default)
     {
         if (Directory.Exists(path))
-            return DispatchFormat.ImportFolder(path);
+            return Bruno.IsCollectionFolder(path) ? Bruno.ImportFolder(path) : DispatchFormat.ImportFolder(path);
         if (!File.Exists(path))
             throw new FileNotFoundException($"Not found: {path}");
 
@@ -28,6 +28,8 @@ public sealed class Importer(IHttpClientSource clients, WsdlLoader wsdlLoader)
             return ImportProto([path]);
         if (extension == ".wsdl")
             return await ImportWsdlAsync(path, ct).ConfigureAwait(false);
+        if (Path.GetFileName(path).Equals("bruno.json", StringComparison.OrdinalIgnoreCase))
+            return Bruno.ImportFolder(Path.GetDirectoryName(Path.GetFullPath(path))!);
 
         var text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
         return await ImportTextAsync(text, Path.GetFileNameWithoutExtension(path), Path.GetFullPath(path), ct).ConfigureAwait(false);
@@ -82,6 +84,9 @@ public sealed class Importer(IHttpClientSource clients, WsdlLoader wsdlLoader)
             return FromProto([file], [file], []);
         }
 
+        if (Bruno.LooksLikeBru(trimmed))
+            return Bruno.ImportBru(trimmed, name);
+
         JsonNode? json = null;
         if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
         {
@@ -104,8 +109,13 @@ public sealed class Importer(IHttpClientSource clients, WsdlLoader wsdlLoader)
         }
 
         if (json is null)
-            throw new FormatException("Unrecognized format. Supported: Dispatch, Postman, Insomnia, HAR, OpenAPI/Swagger, WSDL, .proto, .http, cURL.");
+            throw new FormatException("Unrecognized format. Supported: Dispatch, Postman, Insomnia, Thunder Client, Hoppscotch, Bruno, HAR, OpenAPI/Swagger, WSDL, .proto, .http, cURL.");
 
+        // Top-level arrays: Hoppscotch exports several collections (or environments) at once.
+        if (json is JsonArray)
+            return Hoppscotch.IsCollection(json) || Hoppscotch.IsEnvironment(json)
+                ? Hoppscotch.Import(json)
+                : throw new FormatException("Unrecognized JSON array. Supported: Hoppscotch collections or environments.");
         if (DispatchFormat.IsDispatchJson(json))
             return DispatchFormat.Import(trimmed);
         if (OpenApi.IsOpenApi(json))
@@ -114,9 +124,17 @@ public sealed class Importer(IHttpClientSource clients, WsdlLoader wsdlLoader)
             return Postman.Import(json);
         if (Insomnia.IsExport(json))
             return Insomnia.Import(json);
+        if (InsomniaV5.IsExport(json))
+            return InsomniaV5.Import(json);
         if (Har.IsHar(json))
             return Har.Import(json);
-        throw new FormatException("Unrecognized JSON/YAML document. Supported: Dispatch, Postman, Insomnia, HAR, OpenAPI/Swagger.");
+        if (ThunderClient.IsExport(json))
+            return ThunderClient.Import(json);
+        if (Hoppscotch.IsCollection(json) || Hoppscotch.IsEnvironment(json))
+            return Hoppscotch.Import(json);
+        if (Bruno.IsJsonExport(json))
+            return Bruno.ImportJson(json);
+        throw new FormatException("Unrecognized JSON/YAML document. Supported: Dispatch, Postman, Insomnia, Thunder Client, Hoppscotch, Bruno, HAR, OpenAPI/Swagger.");
     }
 
     public async Task<ImportResult> ImportWsdlAsync(string location, CancellationToken ct)

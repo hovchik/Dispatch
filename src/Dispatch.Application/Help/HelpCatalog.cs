@@ -401,7 +401,7 @@ public static class HelpCatalog
         ["capture", "proxy", "record", "har", "traffic", "intercept", "sniff", "browser", "report"],
         null, [ImportExport]),
 
-        new(ImportExport, "Basics", "Import & export", "Bring in Postman, OpenAPI, Insomnia, HAR, WSDL, .proto, .http or cURL.",
+        new(ImportExport, "Basics", "Import & export", "Bring in Postman, OpenAPI, Insomnia, Thunder Client, Hoppscotch, Bruno, HAR, WSDL, .proto, .http or cURL.",
         [
             new HelpParagraph("Click Import (Ctrl+O) and choose a file, a URL or paste text. Dispatch detects the format and creates a collection (and environments, for Postman)."),
             new HelpExample("Paste a cURL command into Import", "curl -X POST https://httpbin.org/post \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\"hello\":\"world\"}'"),
