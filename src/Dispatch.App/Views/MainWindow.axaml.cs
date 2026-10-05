@@ -1,10 +1,13 @@
 using System.ComponentModel;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Dispatch.App.Converters;
 using Dispatch.App.ViewModels;
 using Dispatch.App.ViewModels.Tools;
 
@@ -42,6 +45,51 @@ public partial class MainWindow : Window
         // Middle-click closes a tab, like in browsers. Tunnel so the press doesn't select the tab first.
         TabStrip.AddHandler(PointerPressedEvent, OnTabStripPointerPressed, RoutingStrategies.Tunnel);
         TabStrip.AddHandler(PointerReleasedEvent, OnTabStripPointerReleased, RoutingStrategies.Tunnel);
+        TabStrip.LayoutUpdated += (_, _) => UpdateTabOverflow();
+        TabStrip.AddHandler(ScrollViewer.ScrollChangedEvent, (_, _) => UpdateTabOverflow());
+    }
+
+    /// <summary>Tabs that are scrolled out of (or clipped by) the visible part of the tab strip.</summary>
+    private List<RequestTabViewModel> HiddenTabs()
+    {
+        var hidden = new List<RequestTabViewModel>();
+        if (_viewModel is null)
+            return hidden;
+        var width = TabStrip.Bounds.Width;
+        foreach (var tab in _viewModel.Tabs)
+        {
+            if (TabStrip.ContainerFromItem(tab) is not Control container ||
+                container.TranslatePoint(default, TabStrip) is not { } origin)
+                continue;
+            if (origin.X < -0.5 || origin.X + container.Bounds.Width > width + 0.5)
+                hidden.Add(tab);
+        }
+        return hidden;
+    }
+
+    private void UpdateTabOverflow()
+    {
+        var overflow = HiddenTabs().Count > 0;
+        if (TabOverflowButton.IsVisible != overflow)
+            TabOverflowButton.IsVisible = overflow;
+    }
+
+    private void OnTabOverflowClick(object? sender, RoutedEventArgs e)
+    {
+        if (_viewModel is null)
+            return;
+        var flyout = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+        foreach (var tab in HiddenTabs())
+        {
+            var item = new MenuItem { Header = $"{MethodTextConverter.Instance.Convert(tab.Badge, typeof(string), null, CultureInfo.CurrentCulture)}  {tab.DisplayName}" };
+            item.Click += (_, _) =>
+            {
+                _viewModel.SelectedTab = tab;
+                TabStrip.ScrollIntoView(tab);
+            };
+            flyout.Items.Add(item);
+        }
+        flyout.ShowAt(TabOverflowButton);
     }
 
     private RequestTabViewModel? _middlePressedTab;
