@@ -24,6 +24,19 @@ public sealed class SendOptions
     public bool RecordHistory { get; init; } = true;
     public bool RunScripts { get; init; } = true;
 
+    /// <summary>The owning collection's requests: message expectations find their listener requests here.</summary>
+    public IReadOnlyList<ApiRequest>? CollectionRequests { get; init; }
+
+    /// <summary>Open listeners and check message expectations. Off for tools that send many probes (load test, scans).</summary>
+    public bool CheckExpectations { get; init; } = true;
+
+    /// <summary>
+    /// Serves a response instead of sending the (resolved) request, e.g. a recorded or edited one when replaying a flow.
+    /// The rest of the pipeline (extraction, assertions, scripts) runs as usual; nothing is sent, so no history is
+    /// recorded and message expectations are skipped. Returning null sends the request normally.
+    /// </summary>
+    public Func<ApiRequest, ApiResponse?>? ResponseOverride { get; init; }
+
     /// <summary>Whether snapshot assertions record missing snapshots, overwrite them, or only compare.</summary>
     public SnapshotMode Snapshots { get; init; } = SnapshotMode.RecordMissing;
 }
@@ -173,10 +186,19 @@ public sealed class RequestSender : IRequestSender
             Interactive = options.Interactive
         };
 
+        var served = options.ResponseOverride?.Invoke(resolved);
+
+        // Listeners for message expectations subscribe before the request goes out, so nothing it causes is missed.
+        await using var consequences = options.CheckExpectations && served is null
+            ? await Consequences.ConsequenceSession.StartAsync(working, options.CollectionRequests,
+                kind => _executors.GetValueOrDefault(kind), variables, cancellationToken).ConfigureAwait(false)
+            : null;
+        consequences?.MarkTriggered();
+
         ApiResponse response;
         try
         {
-            response = await executor.ExecuteAsync(resolved, context, cancellationToken).ConfigureAwait(false);
+            response = served ?? await executor.ExecuteAsync(resolved, context, cancellationToken).ConfigureAwait(false);
         }
         catch (RequestBuildException ex)
         {
@@ -213,7 +235,11 @@ public sealed class RequestSender : IRequestSender
                 tests.Add(new TestResult("Test script", false, post.Error));
         }
 
-        if (options.RecordHistory && !cancellationToken.IsCancellationRequested)
+        // 6. Message expectations: did the request cause the right messages on other channels?
+        if (consequences is not null)
+            tests.AddRange(await consequences.EvaluateAsync(response, variables.Resolve, cancellationToken).ConfigureAwait(false));
+
+        if (options.RecordHistory && served is null && !cancellationToken.IsCancellationRequested)
             await RecordHistoryAsync(request, response).ConfigureAwait(false);
 
         return Finish(response, variables, tests, log, options);

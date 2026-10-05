@@ -172,10 +172,21 @@ public class CliCaptureTests
         // The proxy would block on Ctrl+C; run it on a background task and cancel quickly.
         using var cts = new CancellationTokenSource();
         var task = Dispatch.Cli.Program.Main(["capture", "--port", "0", "--export-ca", ca]);
-        // The CA file is written synchronously before the proxy blocks.
-        for (var i = 0; i < 50 && !File.Exists(ca); i++)
+        // The CA file is written before the proxy blocks. Wait until it is complete: it exists as soon as it is created,
+        // before its content is written.
+        var pem = "";
+        for (var i = 0; i < 200 && !pem.Contains("END CERTIFICATE"); i++)
+        {
             await Task.Delay(50);
-        Assert.True(File.Exists(ca));
-        Assert.Contains("BEGIN CERTIFICATE", await File.ReadAllTextAsync(ca));
+            try
+            {
+                pem = File.Exists(ca) ? await File.ReadAllTextAsync(ca) : "";
+            }
+            catch (IOException)
+            {
+                // Still being written.
+            }
+        }
+        Assert.Contains("BEGIN CERTIFICATE", pem);
     }
 }

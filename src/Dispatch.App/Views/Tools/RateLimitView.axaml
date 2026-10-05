@@ -1,0 +1,136 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             x:Class="Dispatch.App.Views.Tools.RateLimitView"
+             x:DataType="tools:RateLimitViewModel">
+  <Grid ColumnDefinitions="300,*" Margin="18">
+    <!-- Settings -->
+    <ScrollViewer Margin="0,0,16,0">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Rate-limit mapper" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Only probe APIs you own or are authorised to test. A cheap, read-only request works best." />
+        <SelectableTextBlock Text="{Binding RequestLine}" FontFamily="{StaticResource MonoFont}" FontSize="11" TextWrapping="Wrap" />
+
+        <TextBlock Classes="section" Text="LIMITS" Margin="0,6,0,0" />
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
+          <TextBlock Text="Max requests" VerticalAlignment="Center" />
+          <NumericUpDown Grid.Column="1" Value="{Binding MaxRequests}" Minimum="2" Maximum="20000" Width="130" FormatString="0" />
+          <TextBlock Grid.Row="1" Text="Max duration (s)" VerticalAlignment="Center" />
+          <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding MaxSeconds}" Minimum="5" Maximum="3600" Width="130" FormatString="0" />
+          <TextBlock Grid.Row="2" Text="Concurrency" VerticalAlignment="Center" />
+          <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding Concurrency}" Minimum="1" Maximum="64" Width="130" FormatString="0" />
+          <TextBlock Grid.Row="3" Text="Retry every (ms)" VerticalAlignment="Center" />
+          <NumericUpDown Grid.Row="3" Grid.Column="1" Value="{Binding PollMs}" Minimum="50" Maximum="60000" Width="130" FormatString="0" />
+        </Grid>
+        <CheckBox Content="Treat 503 + Retry-After as throttled" IsChecked="{Binding Treat503AsThrottle}" />
+
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,8,0,0">
+          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding ProbeCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconGauge}" Width="12" Height="12" />
+              <TextBlock Text="Probe" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StopCommand}">
+            <TextBlock Text="Stop" />
+          </Button>
+        </Grid>
+        <DropDownButton Content="Export report" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+          <DropDownButton.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+              <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+            </MenuFlyout>
+          </DropDownButton.Flyout>
+        </DropDownButton>
+        <TextBlock Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" FontSize="12" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Results -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,*">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding Sent}" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="Sent" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="#3322A06B">
+          <StackPanel>
+            <TextBlock Text="{Binding Accepted}" FontSize="22" FontWeight="Bold" Foreground="#22A06B" />
+            <TextBlock Text="Accepted" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="#33CF222E">
+          <StackPanel>
+            <TextBlock Text="{Binding Throttled}" FontSize="22" FontWeight="Bold" Foreground="#CF222E" />
+            <TextBlock Text="Throttled" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding Phase}" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="Phase" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <TextBlock Grid.Row="1" Text="{Binding Summary}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,12,0,8"
+                 IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <Grid Grid.Row="2" ColumnDefinitions="*,*,*,*" ColumnSpacing="8" Margin="0,0,0,10">
+        <Border Classes="card" Padding="10,6">
+          <StackPanel>
+            <TextBlock Text="Burst capacity" Classes="muted" FontSize="11" />
+            <TextBlock Text="{Binding CapacityText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="1" Classes="card" Padding="10,6">
+          <StackPanel>
+            <TextBlock Text="Recovery" Classes="muted" FontSize="11" />
+            <TextBlock Text="{Binding RecoveryText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="2" Classes="card" Padding="10,6">
+          <StackPanel>
+            <TextBlock Text="Refill" Classes="muted" FontSize="11" />
+            <TextBlock Text="{Binding RefillText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="3" Classes="card" Padding="10,6">
+          <StackPanel>
+            <TextBlock Text="Advertised limit" Classes="muted" FontSize="11" />
+            <TextBlock Text="{Binding AdvertisedText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <Grid Grid.Row="3" ColumnDefinitions="*,*" ColumnSpacing="12">
+        <Border Classes="card" Padding="12">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Classes="section" Text="INSIGHTS" Margin="0,0,0,6" />
+            <ScrollViewer>
+              <ItemsControl ItemsSource="{Binding Insights}" />
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+        <Border Grid.Column="1" Classes="card" Padding="12">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Classes="section" Text="REQUESTS (NEWEST FIRST)" Margin="0,0,0,6" />
+            <ScrollViewer>
+              <ItemsControl ItemsSource="{Binding Log}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <TextBlock Text="{Binding}" FontFamily="{StaticResource MonoFont}" FontSize="11" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+      </Grid>
+    </Grid>
+  </Grid>
+</UserControl>

@@ -63,6 +63,7 @@ public sealed class SseExecutor(IRequestMessageBuilder builder, IHttpClientSourc
             else
             {
                 log.Info("Connected; listening for events");
+                log.Listening();
                 try
                 {
                     await using var stream = await response.Content.ReadAsStreamAsync(log.Token).ConfigureAwait(false);

@@ -1,0 +1,116 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             x:Class="Dispatch.App.Views.Tools.ClientFuzzView"
+             x:DataType="tools:ClientFuzzViewModel">
+  <Grid ColumnDefinitions="320,*" Margin="18">
+    <!-- Settings -->
+    <ScrollViewer Margin="0,0,16,0">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Client fuzzing" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Tests the app, not the API: a proxy varies one response at a time (null fields, empty lists, 500s, …) and watches whether the app retries in a loop, sends broken values like /users/undefined, reports an error, or stops working." />
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8" Margin="0,4,0,0">
+          <TextBlock Text="Proxy port" VerticalAlignment="Center" />
+          <NumericUpDown Grid.Column="1" Value="{Binding Port}" Minimum="0" Maximum="65535" FormatString="0" Width="130" />
+          <TextBlock Grid.Row="1" Text="Watch window (s)" VerticalAlignment="Center" ToolTip.Tip="How long to watch the app after each changed response" />
+          <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding WindowSeconds}" Minimum="1" Maximum="120" FormatString="0" Width="130" />
+          <TextBlock Grid.Row="2" Text="Normal responses first" VerticalAlignment="Center" />
+          <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding Baseline}" Minimum="1" Maximum="20" FormatString="0" Width="130" />
+          <TextBlock Grid.Row="3" Text="Max per endpoint" VerticalAlignment="Center" ToolTip.Tip="Most variations to try on one endpoint" />
+          <NumericUpDown Grid.Row="3" Grid.Column="1" Value="{Binding MaxPerEndpoint}" Minimum="1" Maximum="500" FormatString="0" Width="130" />
+        </Grid>
+        <TextBox Text="{Binding HostFilter}" Watermark="Only this host (e.g. api.myapp.com)" />
+        <CheckBox Content="Decrypt HTTPS (trust the CA on the device)" IsChecked="{Binding DecryptHttps}" />
+        <TextBlock Classes="section" Text="VARIATIONS" Margin="0,6,0,0" />
+        <ItemsControl ItemsSource="{Binding Kinds}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="tools:MutationKindOption">
+              <CheckBox IsChecked="{Binding IsEnabled}" Content="{Binding Label}" Width="144" FontSize="12" ToolTip.Tip="{Binding Group}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,6,0,0">
+          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StartCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" />
+              <TextBlock Text="Start" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StopCommand}" Content="Stop" />
+        </Grid>
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+          <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding ExportCaCommand}" Content="Export CA…" />
+          <DropDownButton Grid.Column="1" Content="Report" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+            <DropDownButton.Flyout>
+              <MenuFlyout>
+                <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+                <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+              </MenuFlyout>
+            </DropDownButton.Flyout>
+          </DropDownButton>
+        </Grid>
+        <TextBlock Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" FontSize="12" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Live results -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding Tried}" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="Variations tried" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="#33CF222E">
+          <StackPanel>
+            <TextBlock Text="{Binding Breaks}" FontSize="22" FontWeight="Bold" Foreground="#CF222E" />
+            <TextBlock Text="Broke the app" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}" IsVisible="{Binding IsRunning}">
+          <StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock Text="{Binding Address}" FontSize="16" FontWeight="Bold" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" />
+              <Button Classes="icon" Command="{Binding CopyAddressCommand}" ToolTip.Tip="Copy proxy address">
+                <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
+              </Button>
+            </StackPanel>
+            <TextBlock Text="Proxy address" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+      <TextBlock Grid.Row="1" Text="{Binding Summary}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,12,0,8"
+                 IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <Border Grid.Row="2" Classes="card" Padding="0">
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Experiments}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="tools:FuzzExperimentItem">
+                <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="12,7">
+                  <Grid ColumnDefinitions="Auto,*">
+                    <Border CornerRadius="4" Padding="6,1" Margin="0,1,10,0" VerticalAlignment="Top" Width="64"
+                            Background="{Binding BadgeBrush}">
+                      <TextBlock HorizontalAlignment="Center" FontSize="11" FontWeight="Bold" Foreground="White" Text="{Binding Badge}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                      <TextBlock TextWrapping="Wrap">
+                        <Run Text="{Binding Endpoint}" FontWeight="SemiBold" FontFamily="{StaticResource MonoFont}" FontSize="12" /><Run Text="  " /><Run Text="{Binding Variation}" />
+                      </TextBlock>
+                      <TextBlock Text="{Binding Result}" FontSize="12" TextWrapping="Wrap" Foreground="{Binding BadgeBrush}" />
+                      <TextBlock Text="{Binding Time}" FontSize="10.5" Classes="muted" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

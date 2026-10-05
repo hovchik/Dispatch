@@ -74,6 +74,8 @@ public static class DependencyInjection
         services.AddSingleton<Dispatch.Application.Running.CollectionRunner>();
         services.AddSingleton<Dispatch.Application.Load.LoadTester>();
         services.AddSingleton<Dispatch.Application.Security.SecurityScanner>();
+        services.AddSingleton<Dispatch.Application.Minimize.RequestMinimizer>();
+        services.AddSingleton<Dispatch.Application.RateLimits.RateLimitProber>();
         services.AddSingleton<Dispatch.Application.Flows.FlowRunner>();
         services.AddSingleton<Dispatch.Application.Monitoring.IAlertSender, Monitoring.AlertSender>();
         services.AddSingleton<Dispatch.Application.Monitoring.MonitorService>();

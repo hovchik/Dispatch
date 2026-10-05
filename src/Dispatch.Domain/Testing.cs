@@ -93,8 +93,63 @@ public sealed class ResponseExample
     /// <summary>JSON Schema of the body (from OpenAPI); the mock server can generate fresh data from it.</summary>
     public string Schema { get; set; } = string.Empty;
 
+    /// <summary>
+    /// A recorded streaming session (WebSocket, SSE): every message with its time offset. The mock server replays it,
+    /// answering client messages with the segment that followed the matching recorded one.
+    /// </summary>
+    public List<SessionMessage> Session { get; set; } = [];
+
     public ResponseExample Clone() => DeepCopy.Of(this);
+}
+
+/// <summary>One message of a recorded streaming session.</summary>
+public sealed class SessionMessage
+{
+    /// <summary>Milliseconds since the session started.</summary>
+    public long AtMs { get; set; }
+
+    /// <summary>Received = from the server (replayed by the mock); Sent = from the client (what the mock waits for).</summary>
+    public MessageDirection Direction { get; set; }
+    public string Content { get; set; } = string.Empty;
+
+    /// <summary>SSE event name (and id), MQTT topic, ….</summary>
+    public string? Label { get; set; }
 }
 
 /// <summary>The outcome of one assertion or script test.</summary>
 public sealed record TestResult(string Name, bool Passed, string? Message = null, string? Actual = null);
+
+/// <summary>
+/// A cross-protocol consequence check: sending this request must (or must not) cause a matching message on another
+/// channel — a Kafka topic, an MQTT topic, a RabbitMQ queue, a WebSocket, SSE or Socket.IO stream — within a time limit.
+/// The channel is a saved streaming request (the listener) in the same collection; it is subscribed before this request
+/// is sent, so nothing published in between is missed. <see cref="Expected"/> may use variables extracted from this
+/// request's response, e.g. <c>{{orderId}}</c>.
+/// </summary>
+public sealed class MessageExpectation
+{
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>The saved streaming request that subscribes to the channel.</summary>
+    public Guid ListenerId { get; set; }
+
+    /// <summary>Where to read the value in each message: JsonPath (default), Body, Regex or XPath.</summary>
+    public ValueSource Source { get; set; } = ValueSource.JsonPath;
+    public string Path { get; set; } = string.Empty;
+    public AssertionOperator Operator { get; set; } = AssertionOperator.Equals;
+    public string Expected { get; set; } = string.Empty;
+
+    /// <summary>Only consider messages whose label (topic, event name, routing key) contains this text.</summary>
+    public string Channel { get; set; } = string.Empty;
+
+    /// <summary>How long after the request is sent the message may arrive.</summary>
+    public int TimeoutMs { get; set; } = 5000;
+
+    /// <summary>At least this many matching messages must arrive.</summary>
+    public int MinCount { get; set; } = 1;
+
+    /// <summary>Invert the check: no matching message may arrive within the time limit.</summary>
+    public bool ExpectNone { get; set; }
+
+    public MessageExpectation Clone() => (MessageExpectation)MemberwiseClone();
+}

@@ -38,7 +38,10 @@ public sealed class KafkaExecutor : IProtocolExecutor
                 consumer = new ConsumerBuilder<string?, string>(ConsumerConfig(request, servers))
                     .SetErrorHandler((_, e) => { if (e.IsFatal || e.IsBrokerError) lock (errors) errors.Add(e.Reason); })
                     .SetPartitionsAssignedHandler((_, partitions) =>
-                        log.Info($"Assigned {string.Join(", ", partitions.Select(p => $"{p.Topic}[{p.Partition.Value}]"))}"))
+                    {
+                        log.Info($"Assigned {string.Join(", ", partitions.Select(p => $"{p.Topic}[{p.Partition.Value}]"))}");
+                        log.Listening();
+                    })
                     .Build();
                 consumer.Subscribe(s.Topic);
                 log.Info($"Subscribed to {s.Topic} as group '{s.GroupId}' ({s.AutoOffsetReset})");

@@ -1,0 +1,109 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             x:Class="Dispatch.App.Views.Tools.MinimizeView"
+             x:DataType="tools:MinimizeViewModel">
+  <Grid ColumnDefinitions="300,*" Margin="18">
+    <!-- Settings -->
+    <ScrollViewer Margin="0,0,16,0">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Minimize request" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Removes headers, cookies, query parameters, auth and body fields until only the parts the outcome depends on are left." />
+        <SelectableTextBlock Text="{Binding RequestLine}" FontFamily="{StaticResource MonoFont}" FontSize="11" TextWrapping="Wrap" />
+        <TextBlock Classes="muted" FontSize="12">
+          <Run Text="{Binding PartCount}" /><Run Text=" top-level part(s) to try" />
+        </TextBlock>
+        <Border CornerRadius="6" Padding="10,6" Background="#339A6700" IsVisible="{Binding HasSideEffects}">
+          <TextBlock TextWrapping="Wrap" FontSize="12"
+                     Text="This method can change data, and every probe is a real request. Use a test environment." />
+        </Border>
+
+        <TextBlock Classes="section" Text="KEEP THE SAME" Margin="0,6,0,0" />
+        <ComboBox ItemsSource="{x:Static tools:MinimizeViewModel.MatchOptions}" SelectedIndex="{Binding MatchIndex}" HorizontalAlignment="Stretch" />
+        <TextBox Watermark="Text the response body must contain" Text="{Binding BodyContains}" IsVisible="{Binding NeedsText}" />
+
+        <TextBlock Classes="section" Text="OPTIONS" Margin="0,6,0,0" />
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto" ColumnSpacing="8">
+          <TextBlock Text="Max requests" VerticalAlignment="Center" />
+          <NumericUpDown Grid.Column="1" Value="{Binding MaxRequests}" Minimum="2" Maximum="5000" Width="130" FormatString="0" />
+        </Grid>
+        <CheckBox Content="Split cookies and JSON / form bodies" IsChecked="{Binding Deep}" />
+
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,8,0,0">
+          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding MinimizeCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconFlask}" Width="12" Height="12" />
+              <TextBlock Text="Minimize" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StopCommand}">
+            <TextBlock Text="Stop" />
+          </Button>
+        </Grid>
+        <TextBlock Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" FontSize="12" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Result -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto">
+      <StackPanel Spacing="4" Margin="0,0,0,10">
+        <TextBlock Text="{Binding Summary}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"
+                   IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Classes="muted" Text="Run Minimize to see which parts of this request matter." IsVisible="{Binding !HasResult}" />
+        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasResult}">
+          <Button Command="{Binding OpenMinimalCommand}" Content="Open minimal request" />
+          <Button Command="{Binding CopyCurlCommand}" Content="Copy as cURL" />
+          <DropDownButton Content="Export report">
+            <DropDownButton.Flyout>
+              <MenuFlyout>
+                <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+                <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+              </MenuFlyout>
+            </DropDownButton.Flyout>
+          </DropDownButton>
+        </StackPanel>
+      </StackPanel>
+
+      <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding HasResult}">
+        <Border Classes="card" Padding="12">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Classes="section" Text="REQUIRED" Foreground="#22A06B" Margin="0,0,0,6" />
+            <ScrollViewer>
+              <ItemsControl ItemsSource="{Binding Required}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <TextBlock Text="{Binding}" FontFamily="{StaticResource MonoFont}" FontSize="12" Margin="0,2" TextWrapping="Wrap" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+        <Border Grid.Column="1" Classes="card" Padding="12">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Classes="section" Text="NOT NEEDED" Margin="0,0,0,6" />
+            <ScrollViewer>
+              <ItemsControl ItemsSource="{Binding Removed}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <TextBlock Text="{Binding}" FontFamily="{StaticResource MonoFont}" FontSize="12" Margin="0,2" Classes="muted" TextWrapping="Wrap" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+      </Grid>
+
+      <Border Grid.Row="2" Classes="card" Padding="12" Margin="0,12,0,0" MaxHeight="220" IsVisible="{Binding HasResult}">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Classes="section" Text="MINIMAL REQUEST" Margin="0,0,0,6" />
+          <ScrollViewer HorizontalScrollBarVisibility="Auto">
+            <SelectableTextBlock Text="{Binding MinimalCurl}" FontFamily="{StaticResource MonoFont}" FontSize="12" />
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

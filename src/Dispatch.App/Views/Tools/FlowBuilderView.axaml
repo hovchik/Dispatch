@@ -153,13 +153,16 @@
         <ItemsControl ItemsSource="{Binding Log}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="flows:FlowEvent">
-              <Grid ColumnDefinitions="Auto,*" Margin="8,1">
+              <Grid ColumnDefinitions="Auto,*,Auto" Margin="8,1">
                 <TextBlock Text="{Binding Ok, Converter={x:Static conv:PassTextConverter.Instance}}"
                            Foreground="{Binding Ok, Converter={x:Static conv:PassBrushConverter.Instance}}" FontWeight="Bold"
                            Margin="{Binding Depth, Converter={x:Static tools:DepthIndentConverter.Instance}}" />
-                <TextBlock Grid.Column="1" FontSize="12.5" Margin="6,0,0,0">
-                  <Run Text="{Binding StepName}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Detail}" Foreground="{DynamicResource MutedTextBrush}" />
+                <TextBlock Grid.Column="1" FontSize="12.5" Margin="6,0,0,0" VerticalAlignment="Center">
+                  <Run Text="{Binding ExchangeLabel}" Foreground="{DynamicResource MutedTextBrush}" /><Run Text=" " /><Run Text="{Binding StepName}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding Detail}" Foreground="{DynamicResource MutedTextBrush}" />
                 </TextBlock>
+                <Button Grid.Column="2" Classes="link" Content="Fork…" FontSize="11" Padding="4,0" IsVisible="{Binding CanFork}"
+                        Command="{Binding $parent[UserControl].((tools:FlowBuilderViewModel)DataContext).ForkCommand}" CommandParameter="{Binding}"
+                        ToolTip.Tip="Replay this run with a different response for this request (what if it returned 500, an empty list, …?)" />
               </Grid>
             </DataTemplate>
           </ItemsControl.ItemTemplate>

@@ -25,6 +25,7 @@ public enum CollectionAction
     DocsHtml,
     DocsMarkdown,
     Scan,
+    Laws,
     Flows,
     Monitors
 }

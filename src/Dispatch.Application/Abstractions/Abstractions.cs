@@ -27,7 +27,15 @@ public sealed class ExecutionContext
     /// </summary>
     public bool Interactive { get; init; }
 
+    /// <summary>
+    /// Called by streaming executors once they are subscribed and can receive messages (MQTT subscription granted, Kafka
+    /// partitions assigned, AMQP consumer started, WebSocket / SSE / Socket.IO connected). Consequence checks wait for it
+    /// before sending the request that should cause a message.
+    /// </summary>
+    public Action? Listening { get; init; }
+
     public void Report(StreamMessage message) => Progress?.Report(message);
+    public void ReportListening() => Listening?.Invoke();
 }
 
 /// <summary>Executes requests of one or more <see cref="RequestKind"/>s. Must not throw for network / protocol errors.</summary>

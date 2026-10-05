@@ -135,6 +135,7 @@ public sealed class WebSocketExecutor(WebSocketConnector connector) : IProtocolE
                     await WebSocketConnector.SendTextAsync(socket, message.Value, log.Token).ConfigureAwait(false);
                     log.Sent(message.Value);
                 }
+                log.Listening();
 
                 var sending = context.Outgoing is null ? Task.CompletedTask : PumpOutgoingAsync(socket, context.Outgoing, log);
                 while (!log.Token.IsCancellationRequested)

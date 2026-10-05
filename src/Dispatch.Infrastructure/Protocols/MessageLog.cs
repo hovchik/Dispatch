@@ -54,6 +54,9 @@ internal sealed class MessageLog : IDisposable
             Stop();
     }
 
+    /// <summary>The session can receive messages from now on.</summary>
+    public void Listening() => _context.ReportListening();
+
     public void Stop()
     {
         try

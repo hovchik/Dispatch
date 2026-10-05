@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             x:Class="Dispatch.App.Views.Tools.LawsView"
+             x:DataType="tools:LawsViewModel">
+  <Grid ColumnDefinitions="290,*" Margin="18">
+    <!-- Sources and actions -->
+    <ScrollViewer Margin="0,0,16,0">
+      <StackPanel Spacing="8">
+        <TextBlock Text="API laws" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Rules this API keeps across its responses, learned from traffic: required fields, enums, formats, totals that match their items, page sizes, round trips. Rules that held except a few times are anomalies, and probably bugs." />
+        <TextBlock Classes="section" Text="OBSERVATIONS" Margin="0,6,0,0" />
+        <TextBlock Text="{Binding Sources}" TextWrapping="Wrap" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding RunCollectionCommand}"
+                  ToolTip.Tip="Send every request of the collection this many times and learn from the responses">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" />
+              <TextBlock Text="Run collection" />
+            </StackPanel>
+          </Button>
+          <NumericUpDown Grid.Column="1" Value="{Binding Runs}" Minimum="1" Maximum="50" FormatString="0×" Width="118" />
+        </Grid>
+        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding ImportHarCommand}"
+                Content="Import traffic (HAR)…" ToolTip.Tip="From the capture proxy's export or browser devtools" />
+        <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding AddSelectedCommand}"
+                Content="Add selected as tests" Margin="0,8,0,0"
+                ToolTip.Tip="Adds each selected law to its saved request as an assertion or a pm.test check, so a later break fails the request's tests" />
+        <DropDownButton Content="Export report" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+          <DropDownButton.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+              <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+            </MenuFlyout>
+          </DropDownButton.Flyout>
+        </DropDownButton>
+        <TextBlock Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" FontSize="12" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Findings -->
+    <DockPanel Grid.Column="1">
+      <TextBlock DockPanel.Dock="Top" Text="{Binding Summary}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,10" />
+      <ScrollViewer>
+        <StackPanel Spacing="10">
+          <StackPanel Spacing="6" IsVisible="{Binding HasAnomalies}">
+            <TextBlock Classes="section" Text="ANOMALIES · held except a few times" Foreground="#CF222E" />
+            <ItemsControl ItemsSource="{Binding Anomalies}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="tools:LawItemViewModel">
+                  <Border Classes="card" Padding="12,8" Margin="0,0,0,6" BorderBrush="#CF222E" BorderThickness="3,0,0,0">
+                    <StackPanel Spacing="3">
+                      <TextBlock FontSize="12" Classes="muted" Text="{Binding Endpoint}" FontFamily="{StaticResource MonoFont}" />
+                      <TextBlock Text="{Binding Description}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                      <SelectableTextBlock Text="{Binding Counterexamples}" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="#9A6700" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+          <TextBlock Classes="section" Text="LAWS" />
+          <ItemsControl ItemsSource="{Binding Laws}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="tools:LawItemViewModel">
+                <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="4,6">
+                  <Grid ColumnDefinitions="28,*,Auto">
+                    <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding CanAdd}" MinWidth="0" VerticalAlignment="Top"
+                              ToolTip.Tip="Add as a test to the matching saved request" />
+                    <StackPanel Grid.Column="1" Spacing="2">
+                      <TextBlock Text="{Binding Description}" TextWrapping="Wrap" />
+                      <TextBlock FontSize="11" Classes="muted" TextWrapping="Wrap">
+                        <Run Text="{Binding Endpoint}" FontFamily="{StaticResource MonoFont}" /><Run Text=" · " /><Run Text="{Binding Meta}" />
+                      </TextBlock>
+                      <TextBlock Text="{Binding Advice}" FontSize="11" Foreground="#22A06B" TextWrapping="Wrap"
+                                 IsVisible="{Binding Advice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="added ✓" Foreground="#22A06B" FontSize="12" IsVisible="{Binding IsAdded}" VerticalAlignment="Top" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
+  </Grid>
+</UserControl>

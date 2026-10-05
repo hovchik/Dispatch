@@ -37,6 +37,10 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
 * **Mock server**: serves the saved examples of a collection over HTTP and gRPC, with latency, jitter, error-rate
   and dropped-connection simulation, CORS and path parameters. Routes are listed before you start, with live hit counts,
   and the request log can be filtered to unmatched requests and simulated faults.
+  **Recorded sessions:** save a WebSocket or SSE session as an example and the mock server replays it with the original
+  timing. On WebSocket, each client message plays the part of the recording that answered the matching recorded
+  message (exact, same JSON apart from ids, or the next part in order), with the client's ids put into the replies.
+  `--session-speed` changes the pace.
 * **Load testing**: virtual users, ramp-up, think time, live requests-per-second chart, p50 / p95 / p99, and
   per-request stats. When a test ends you get a **detailed report**: verdict, insights (long tails, degradation over time,
   throttling), latency distribution, status codes and per-request percentiles, exportable as **HTML, JSON or CSV**.
@@ -46,12 +50,96 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
   compare with ignore paths, line diff for text. The CLI records with `--update-snapshots`.
 * **Test flows**: chain requests with control flow — if, repeat, for-each, until (retry with a wait), set-variable,
   script, delay and stop/fail — in a visual builder, sharing one set of variables. Run headless with `dispatch flow`.
+  **Fork a run:** every flow run is recorded. Pick any request in the run log, edit its response (500, an empty list,
+  a timeout, or any body) and replay the flow. Requests before the fork come from the recording, and the rest are
+  replayed offline or sent live. The result shows what changed compared with the original run. From the CLI:
+  `dispatch flow --record run.json`, then `--replay run.json --fork 2 --status 500 --offline`.
 * **Monitors**: run a collection on an interval or cron schedule and alert via **Slack, a webhook, or email**
   (every-run / on-failure / on-change, with recovery notices and a response-time ceiling). `dispatch monitor --watch`
   runs them as a daemon; runs are kept as history.
 * **Security scan**: passive checks (transport, security headers, CORS, banner / stack-trace / secret disclosure) and
   bounded active probes (injection and reflection, boundary input, missing authentication) for APIs you are
   authorised to test. `dispatch scan --fail-on high` gates CI; reports export to HTML / JSON.
+
+### Message checks: cross-protocol consequence assertions
+
+A request's tests can include **messages it must cause on other channels**. For example, after `POST /orders` there
+must be a message on the Kafka topic `orders.created` with `$.orderId == {{orderId}}` within 2 s, and no
+`payment.failed` event on MQTT. The listener is any saved MQTT, Kafka, AMQP, WebSocket, SSE or Socket.IO request in the
+collection. It subscribes *before* the request is sent, so nothing is missed, and only messages that arrive afterwards
+count. Expected values can use variables extracted from the response. The checks appear as normal test results in the
+app, the collection runner, flows, monitors and `dispatch run`, with how long the message took or what arrived instead.
+Edit them in a request's **Messages** tab.
+
+### Client fuzzing
+
+**Fuzz app** in the toolbar (or `dispatch fuzz-client`) fuzzes the client instead of the server. It is a proxy, like
+Capture, between your web or mobile app and its API. After a few normal responses per endpoint it changes one response
+at a time:
+
+* a null or missing field, an empty or single-item list
+* an unexpected enum value, a wrong type, an unknown field, very long text
+* a 500 / 503 / 429 / 401, a malformed, empty or slow body
+
+It then watches what the app does next, and flags:
+
+* retry storms
+* broken values sent back to the API (`GET /avatars/undefined`, `null`, `NaN`, `[object Object]`)
+* calls to error trackers (Sentry, `/errors`, `/log`…)
+* an app that goes silent where it normally continues
+
+The result reads like *"breaks when `$.user.avatar` is missing: GET /avatars/undefined"*. Reports export as HTML and
+JSON, and `--fail-on-break` gates CI runs of automated UI tests that go through the proxy.
+
+### API laws (inferred invariants)
+
+**Collection menu → API laws…** learns the rules an API keeps from its traffic: recent history, runs of the collection,
+or a HAR file from the capture proxy or a browser. These are semantic rules, not a schema:
+
+* required fields and types
+* enums, never-negative numbers, and formats (UUID, email, date-time)
+* `createdAt ≤ updatedAt`
+* `count == items.length` and `total == sum(items[*].price)`
+* page sizes within `?limit=`
+* request fields echoed back
+* created resources that read back with the submitted values
+* deleted resources that return 404
+* GETs that repeat, minus volatile fields
+
+Rules that held in all but a few of many responses are reported as **anomalies**, together with the responses that
+broke them, e.g. *status is "paid" or "shipped", but once "shiped"*. Selected laws become assertions or `pm.test`
+checks on the matching saved requests, so a later violation fails the tests. `dispatch laws traffic.har
+--fail-on-anomaly` gates CI, and `dispatch laws <collection> --runs 5 --write` adds the laws as tests.
+
+### Change impact map
+
+When a response changes shape (a field renamed, removed or retyped), **Tools → Change impact…** compares it with the
+previous response, the recorded snapshot or a saved example. It then lists everything in the collection that depends
+on the change: the request's JSONPath assertions and snapshot, the variables its extraction rules will no longer set,
+and every request, script, message check and test flow that uses those variables. Chains are followed (a request that
+uses a broken variable can break what it extracts too), and saved examples that still serve the old shape are flagged.
+Renames come with the corrected path, e.g. *"renamed `$.user.id` → `$.user.userId` breaks 3 tests, 2 extractions,
+2 requests and 1 flow"*. `dispatch impact <collection> --request "Get user"` checks the live API against the snapshot
+in CI and fails when something breaks.
+
+### Experimental: request forensics
+
+Two investigative tools that go beyond what API clients usually offer. Open them from the flask button next to
+**Send** and from the CLI:
+
+* **Request minimizer** (delta debugging for HTTP): give it a request and its outcome, such as a 403, a 500, a failing
+  assertion, a success, or a body containing some text. It keeps re-sending the request with headers, individual
+  cookies, query parameters, auth, form fields and JSON members removed (in halves, then smaller groups, one nesting
+  level at a time). It ends with the smallest request that gives the same outcome. Minimize a failure to see exactly
+  what triggers it; minimize a success to see what an endpoint really requires. The result is re-sent to confirm it,
+  and you can open it in a tab, copy it as cURL, or export an HTML / JSON report.
+  `dispatch minimize <collection> --request "Create order" [--match status|class|tests|body --contains text]`
+* **Rate-limit mapper**: it probes one endpoint to find its real policy. It measures **burst capacity**, **recovery
+  time**, and whether capacity comes back **all at once (fixed window)** or **gradually (token bucket / sliding window)**,
+  including the refill rate. It also checks the `X-RateLimit-*`, `RateLimit-*` and `Retry-After` headers against what
+  actually happened: a Retry-After that is too optimistic, an advertised limit that doesn't match, or a 429 that still
+  reports remaining quota. `dispatch ratelimit <collection> --request Login --expect-limit` fails CI when an endpoint
+  has no rate limit.
 
 ## Developer tools
 
@@ -121,8 +209,13 @@ dotnet run --project src/Dispatch.Cli -- run tests/api.dispatch.json --update-sn
 dotnet run --project src/Dispatch.Cli -- flow "My Collection" --name "Login smoke"
 dotnet run --project src/Dispatch.Cli -- scan petstore.yaml --fail-on high -r cli,html
 dotnet run --project src/Dispatch.Cli -- docs "My Collection" --format html -o api.html
+dotnet run --project src/Dispatch.Cli -- minimize "My Collection" --request "Create order" -r cli,html
+dotnet run --project src/Dispatch.Cli -- ratelimit "My Collection" --request Login --expect-limit
+dotnet run --project src/Dispatch.Cli -- impact "My Collection" --request "Get user" --baseline snapshot -r cli,html
+dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
 dotnet run --project src/Dispatch.Cli -- monitor --watch
 dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
+dotnet run --project src/Dispatch.Cli -- fuzz-client --port 8899 --host api.myapp.com --duration 10m -r cli,html
 ```
 
 `<collection>` can be any importable file, a URL, a Dispatch folder, or the name of a collection saved in the

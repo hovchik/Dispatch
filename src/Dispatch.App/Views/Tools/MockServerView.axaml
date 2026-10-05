@@ -139,6 +139,11 @@
                   <NumericUpDown Grid.Column="1" Value="{Binding Seed}" Minimum="0" Maximum="2147483647" FormatString="0" Watermark="random" />
                 </Grid>
                 <TextBlock Classes="hint" Text="Set a seed to get the same generated data on every run." />
+                <Grid Classes="form" ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Session replay speed" />
+                  <NumericUpDown Grid.Column="1" Value="{Binding SessionSpeed}" Minimum="0" Maximum="100" Increment="0.5" FormatString="0.#×" />
+                </Grid>
+                <TextBlock Classes="hint" Text="WebSocket and SSE requests with a recorded session (Save as example after a session) are replayed: 1× keeps the recorded timing, 0 sends without delays." />
               </StackPanel>
               <Button Command="{Binding ResetStateCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                       ToolTip.Tip="Forget items created, updated or deleted while the server runs">

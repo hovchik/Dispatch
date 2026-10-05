@@ -29,6 +29,9 @@ public sealed record MainServices(
     CollectionRunner Runner,
     LoadTester LoadTester,
     Dispatch.Application.Security.SecurityScanner Scanner,
+    Dispatch.Application.Minimize.RequestMinimizer Minimizer,
+    Dispatch.Application.RateLimits.RateLimitProber RateLimits,
+    IHistoryRepository HistoryStore,
     IFlowRepository Flows,
     Dispatch.Application.Flows.FlowRunner FlowRunner,
     IMonitorRepository Monitors,
@@ -124,6 +127,28 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
     public void ShowCode(ApiRequest request, ApiRequest resolved) =>
         Dialogs.ShowTool(new CodeSnippetViewModel(request, resolved, _services.Tabs.Clipboard));
+
+    public void ShowMinimizer(ApiRequest request) =>
+        Dialogs.ShowTool(new MinimizeViewModel(request, _services.Minimizer, Dialogs, _services.Tabs.Clipboard, () => ActiveEnvironment,
+            FindCollection(request.CollectionId)?.Variables, AddTab));
+
+    public void ShowRateLimit(ApiRequest request) =>
+        Dialogs.ShowTool(new RateLimitViewModel(request, _services.RateLimits, Dialogs, () => ActiveEnvironment,
+            FindCollection(request.CollectionId)?.Variables));
+
+    public void ShowImpact(ApiRequest request, string? currentBody, string? previousBody)
+    {
+        var collection = FindCollection(request.CollectionId);
+        // The open tab's (possibly unsaved) version of the request replaces the stored one.
+        var requests = collection?.Requests.Select(r => r.Id == request.Id ? request : r).ToList();
+        var tool = new ImpactViewModel(request, currentBody, previousBody, requests,
+            async () => collection is null
+                ? []
+                : (await _services.Flows.GetAllAsync()).Where(f => f.CollectionId == collection.Id).ToList(),
+            Dialogs);
+        Dialogs.ShowTool(tool);
+        _ = tool.AnalyzeAsync();
+    }
 
     public void ShowDiff(string title, ResponseViewModel left, ResponseViewModel right) =>
         Dialogs.ShowTool(new DiffViewModel(title, "Previous", "Latest", left.PrettyBody, right.PrettyBody, left.StatusText, right.StatusText));
@@ -241,6 +266,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         Dialogs, _services.Tabs.Clipboard, _services.Tabs.Collections, Collections.LoadAsync));
 
     [RelayCommand]
+    private void OpenClientFuzz() => Dialogs.ShowTool(new ClientFuzzViewModel(_services.CaptureProxyFactory, _services.CaptureAuthority,
+        Dialogs, _services.Tabs.Clipboard));
+
+    [RelayCommand]
     private void OpenRunner() => OpenCollectionTool(CollectionAction.Run);
 
     [RelayCommand]
@@ -280,6 +309,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
             case CollectionAction.LoadTest:
                 Dialogs.ShowTool(new LoadTestViewModel(collection, _services.LoadTester, Dialogs, () => ActiveEnvironment));
                 break;
+            case CollectionAction.Laws:
+            {
+                var tool = new LawsViewModel(collection, _services.HistoryStore, _services.Runner, _services.Tabs.Collections, Dialogs,
+                    () => ActiveEnvironment, () => SafeAsync(Collections.LoadAsync));
+                Dialogs.ShowTool(tool);
+                await tool.LoadHistoryAsync();
+                break;
+            }
             case CollectionAction.Scan:
                 Dialogs.ShowTool(new SecurityScanViewModel(collection, _services.Scanner, Dialogs, () => ActiveEnvironment));
                 break;
@@ -431,6 +468,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         });
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
         yield return new PaletteItem("Capture proxy…", "Record browser / app traffic into a collection", OpenCapture);
+        yield return new PaletteItem("Client fuzzing…", "Vary responses to an app through a proxy to find how it breaks", OpenClientFuzz);
         foreach (var collection in Collections.Items)
             yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
                 () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));

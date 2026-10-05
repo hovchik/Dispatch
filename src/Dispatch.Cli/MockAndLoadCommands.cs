@@ -15,7 +15,8 @@ public static class MockCommand
         var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["p"] = "port" });
         if (args.Positionals.Count != 1)
             throw new UsageException("Usage: dispatch mock <collection> [--port 3000] [--grpc-port 50051] [--latency 100] [--jitter 50] " +
-                                     "[--error-rate 0.1] [--error-status 503] [--drop-rate 0.05] [--public] [--no-cors] [--dynamic] [--stateful] [--seed n]");
+                                     "[--error-rate 0.1] [--error-status 503] [--drop-rate 0.05] [--public] [--no-cors] [--dynamic] [--stateful] [--seed n] " +
+                                     "[--session-speed 1]");
 
         await using var services = Program.BuildServices(args.Option("db"));
         var workspace = new Workspace(services);
@@ -39,7 +40,8 @@ public static class MockCommand
             Cors = !args.Flag("no-cors"),
             DynamicData = args.Flag("dynamic"),
             Stateful = args.Flag("stateful"),
-            Seed = args.Option("seed") is null ? null : args.Int("seed", 0)
+            Seed = args.Option("seed") is null ? null : args.Int("seed", 0),
+            SessionSpeed = SessionSpeed(args)
         }, cancellationToken);
 
         Console.WriteLine($"Mocking {collection.Name} at {server.BaseUrl}" + (server.GrpcUrl is null ? "" : $" (gRPC at {server.GrpcUrl})") +
@@ -61,6 +63,17 @@ public static class MockCommand
         }
         await server.StopAsync();
         return Program.ExitOk;
+    }
+
+    /// <summary>--session-speed: 1 = recorded timing, 2 = twice as fast, 0 = no delays.</summary>
+    private static double SessionSpeed(Arguments args)
+    {
+        var text = args.Option("session-speed");
+        if (text is null)
+            return 1;
+        return double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var speed) && speed >= 0
+            ? speed
+            : throw new UsageException("--session-speed must be a number ≥ 0 (1 = recorded timing, 0 = no delays).");
     }
 
     private static double Rate(Arguments args, string name)

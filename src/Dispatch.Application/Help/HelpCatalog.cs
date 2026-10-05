@@ -65,6 +65,12 @@ public static class HelpCatalog
     public const string Flows = "flows";
     public const string Monitors = "monitors";
     public const string SecurityScan = "security-scan";
+    public const string MessageChecks = "message-checks";
+    public const string ChangeImpact = "change-impact";
+    public const string ApiLaws = "api-laws";
+    public const string ClientFuzz = "client-fuzz";
+    public const string Minimize = "minimize";
+    public const string RateLimit = "rate-limit";
     public const string Capture = "capture";
     public const string ImportExport = "import-export";
     public const string Docs = "docs";
@@ -220,9 +226,11 @@ public static class HelpCatalog
                 "Point your app at the base URL in the header, e.g. http://localhost:3000. The Routes tab lists every path with its hit count; the Request log shows what each call was answered with."
             ]),
             new HelpParagraph("You can add latency, jitter, an error rate and dropped connections to test how your client copes. Dynamic mode generates fresh fake data from schemas; stateful mode remembers POST/PUT/PATCH/DELETE like a tiny database."),
-            new HelpExample("Templating in an example body", "{ \"id\": \"{{$guid}}\", \"name\": \"{{body.name}}\", \"agent\": \"{{header.User-Agent}}\" }")
+            new HelpExample("Templating in an example body", "{ \"id\": \"{{$guid}}\", \"name\": \"{{body.name}}\", \"agent\": \"{{header.User-Agent}}\" }"),
+            new HelpParagraph("Recorded sessions: after a WebSocket or SSE session, click Save as example. The example keeps every message with its timing, and the mock server replays it on the request's path. SSE events stream out as recorded. A WebSocket replay sends the server's opening messages on connect; each client message then plays the part of the recording that followed the matching recorded message (an exact match, the same JSON apart from ids, or else the next part in order). Ids the client sends (id, requestId, correlationId, …) are put into the replies, and replies can copy values with {{message.field}}. Session replay speed sets the pace: 1× as recorded, 0 for no delays."),
+            new HelpExample("Replay a recorded ticker twice as fast", "dispatch mock \"My Collection\" --session-speed 2\n# then connect to ws://localhost:3000/feed")
         ],
-        ["mock", "stub", "fake", "example", "latency", "server", "crud", "offline"],
+        ["mock", "stub", "fake", "example", "latency", "server", "crud", "offline", "websocket", "sse", "replay", "record", "session", "stream"],
         "Simple GET", [Collections]),
 
         new(LoadTest, "Tools", "Load testing", "Virtual users, ramp-up and latency percentiles.",
@@ -250,9 +258,11 @@ public static class HelpCatalog
                 "Add a Request step for login, then an Until step that polls a job until $.status equals done.",
                 "Run it and follow each step's result; run it in CI with dispatch flow."
             ]),
-            new HelpTip("Use flows when the order or a condition matters; use the plain runner when every request is independent.")
+            new HelpTip("Use flows when the order or a condition matters; use the plain runner when every request is independent."),
+            new HelpParagraph("Fork a run (what if…?): every run is recorded. Click Fork… next to any request in the run log, edit its response (or pick a preset: 500, 404, 401, 429, empty lists, timeout) and replay. The flow runs again from the start: requests before the fork are answered from the recording, the forked one gets your response, and the rest are either replayed from the recording (offline, nothing is sent) or sent live. The result lists what changed compared with the original run, e.g. a step that now fails, or loop steps that silently no longer run."),
+            new HelpExample("Fork from the command line", "dispatch flow \"My Collection\" --name \"Order check\" --record run.json\ndispatch flow \"My Collection\" --replay run.json --fork 2 --status 500 --offline\ndispatch flow \"My Collection\" --replay run.json --fork 2 --body @empty-orders.json")
         ],
-        ["flow", "workflow", "if", "loop", "repeat", "for-each", "retry", "until", "poll", "scenario"],
+        ["flow", "workflow", "if", "loop", "repeat", "for-each", "retry", "until", "poll", "scenario", "fork", "replay", "what if", "record"],
         null, [Extraction, Runner]),
 
         new(Monitors, "Tools", "Monitors", "Run a collection on a schedule and get alerts.",
@@ -272,6 +282,108 @@ public static class HelpCatalog
         ],
         ["security", "scan", "vulnerability", "headers", "cors", "injection", "owasp", "pentest"],
         null, [Cli]),
+
+        new(MessageChecks, "Testing", "Message checks (cross-protocol)", "Assert that a request causes the right Kafka, MQTT, RabbitMQ or WebSocket message.",
+        [
+            new HelpParagraph("Many APIs do their real work asynchronously: POST /orders returns 201, and then an event appears on a Kafka topic, an MQTT topic, a RabbitMQ queue or a WebSocket. A message check verifies that consequence as part of the request's tests."),
+            new HelpSteps(
+            [
+                "Save a listener in the same collection: a streaming request that subscribes to the channel, e.g. Kafka in Subscribe mode on orders.created, MQTT on orders/#, AMQP on a queue or exchange, or a WebSocket / SSE / Socket.IO URL. A broker request in Publish mode is switched to subscribe automatically.",
+                "Open the request that should cause the message (e.g. POST /orders), and in Extract save what you need from the response, e.g. orderId from $.id.",
+                "In the Messages tab click Add, pick the listener, and describe the message: a JSONPath (empty = the whole message), an operator and the expected value, e.g. $.orderId == {{orderId}}.",
+                "Optionally filter by topic / routing key / event name, set the time limit, or tick none to require that no matching message arrives (e.g. no payment.failed event).",
+                "Send. Listeners subscribe before the request goes out, and each check shows ✓ or ✗ in the Tests results, with how long the message took or what arrived instead."
+            ]),
+            new HelpParagraph("Message checks run everywhere tests run: in the app, the collection runner, test flows, monitors and dispatch run in CI. Only messages that arrive after the request was sent count, so retained or earlier messages can't produce a false pass."),
+            new HelpExample("A check, as it appears in the results", "Message on Order events [orders/created] where $.orderId == 1042 within 2000 ms  ✓ after 37 ms"),
+            new HelpTip("For Kafka, use a dedicated consumer group and 'latest' offsets on the listener, so old records are not replayed into the check.")
+        ],
+        ["message", "event", "consequence", "kafka", "mqtt", "amqp", "rabbitmq", "websocket", "sse", "socket.io", "async", "event-driven", "side effect", "topic"],
+        null, [Assertions, Extraction, Protocols]),
+
+        new(ChangeImpact, "Testing", "Change impact map", "See what breaks when a response changes shape.",
+        [
+            new HelpParagraph("When an API renames, removes or retypes a field, the change impact map lists everything in the collection that depends on it. That covers the request's JSONPath assertions and snapshot, the variables its extraction rules will no longer set, every request, script and message check that uses those variables (followed through chains of extractions), saved examples that still show the old shape, and the test flows that run any of them."),
+            new HelpSteps(
+            [
+                "Send the request so its latest response is loaded.",
+                "Choose Tools → Change impact… next to the Send button.",
+                "Pick what to compare with: the previous response, the recorded snapshot, or a saved example.",
+                "Read the shape changes on the left and the affected items on the right. Breaks will fail; Worth checking are heuristic matches. Renames come with the corrected path."
+            ]),
+            new HelpExample("In CI: fail when the live API breaks the collection's tests", "dispatch impact \"My Collection\" --request \"Get user\" --baseline snapshot -r cli,html"),
+            new HelpTip("Renames are detected when a removed and an added field have the same type and value, or are the only same-typed pair under one parent. Check suggested paths before applying them.")
+        ],
+        ["impact", "breaking change", "rename", "renamed field", "schema change", "blast radius", "dependency", "json shape", "api change", "regression"],
+        null, [Assertions, Extraction, Flows, Cli]),
+
+        new(ApiLaws, "Testing", "API laws", "Learn the rules an API keeps from its traffic, and spot the responses that break them.",
+        [
+            new HelpParagraph("API laws are inferred from real responses rather than a schema. They cover required fields and types, enumerations, never-negative numbers, formats (UUID, email, date-time, URL), date ordering (createdAt ≤ updatedAt), counts and totals that match their items (count == items.length, total == sum of prices), page sizes that respect ?limit=, request fields echoed back, created resources that can be read back, deleted resources that return 404, and GETs that repeat the same body."),
+            new HelpParagraph("A rule that held in all but a few of many responses is an anomaly, with the responses that broke it. For example, a status that is \"shipped\" or \"paid\" 40 times and once \"shiped\". Anomalies are usually bugs."),
+            new HelpSteps(
+            [
+                "Open the collection menu → API laws…. Recent history for the collection's endpoints is analysed right away.",
+                "For more evidence, click Run collection (it sends every request a few times), or import a HAR file from the capture proxy or your browser.",
+                "Review the anomalies first, then the laws. Each law shows how often it was seen and how confident the inference is.",
+                "Select laws and click Add selected as tests. They become assertions or pm.test checks on the matching saved requests, so a later violation fails the request's tests in the app, the runner and CI."
+            ]),
+            new HelpExample("From the command line", "dispatch laws traffic.har --fail-on-anomaly\ndispatch laws \"My Collection\" --runs 5 --write"),
+            new HelpTip("Laws need a few successful responses per endpoint (3 by default), and anomalies need at least 10. More varied traffic gives more reliable laws, so review them before adding.")
+        ],
+        ["laws", "invariants", "properties", "anomaly", "infer", "learn", "property-based", "daikon", "consistency", "rules"],
+        null, [Assertions, Capture, Cli]),
+
+        new(ClientFuzz, "Tools", "Client fuzzing", "Find out how your app breaks when the API answers unexpectedly.",
+        [
+            new HelpParagraph("Client fuzzing tests the app, not the API. Like the capture proxy, it sits between your web or mobile app and its API. It lets a few normal responses per endpoint through, then changes one response at a time: a null or missing field, an empty or single-item list, an unexpected enum value, a wrong type, an unknown extra field, very long text, a 500 / 503 / 429 / 401, a malformed or empty body, or a slow response."),
+            new HelpParagraph("After each change it watches what the app does next. It flags retry storms (many repeats of the same call), broken values sent back to the API (GET /users/undefined, null, NaN, [object Object]), calls to error trackers (Sentry, /errors, /log…), and an app that goes silent where it normally continues. The result reads like: the app breaks when $.user.avatar is null: GET /avatars/undefined."),
+            new HelpSteps(
+            [
+                "Click Fuzz app in the toolbar, choose the port and the kinds of variation, and click Start.",
+                "Point the app at the proxy address, as with the capture proxy. For HTTPS, export the CA and trust it on the device.",
+                "Use the app as usual, revisiting screens so endpoints are requested several times. Each variation is tried once, and you get a live verdict.",
+                "Stop and export an HTML or JSON report."
+            ]),
+            new HelpExample("From the command line", "dispatch fuzz-client --port 8899 --host api.myapp.com --window 5s --duration 10m -r cli,html\ndispatch fuzz-client --kinds NullField,DropField,EmptyArray --fail-on-break"),
+            new HelpTip("Use a test account: variations such as 401 or empty lists can make an app sign out or show empty states. Signals are heuristics, so a quiet app isn't proof that it copes. Check flagged screens yourself.")
+        ],
+        ["fuzz", "fuzzing", "client", "app", "mobile", "frontend", "resilience", "chaos", "null", "crash", "robustness", "proxy"],
+        null, [Capture, Mock]),
+
+        new(Minimize, "Tools", "Minimize a request", "Find the parts of a request its outcome really depends on.",
+        [
+            new HelpParagraph("Minimize takes a request and its current outcome (a 403, a 500, a failing assertion, or a success) and keeps re-sending it with parts taken away: headers, individual cookies, query parameters, auth, form fields and JSON body members. It ends with the smallest request that still gives the same outcome."),
+            new HelpSteps(
+            [
+                "Open a request and choose Tools → Minimize request… next to the Send button.",
+                "Pick what must stay the same: the status code, the status class (2xx, 4xx…), the status plus which tests fail, or a text the body has to contain.",
+                "Click Minimize. Parts are removed in halves first, then in smaller groups, one level of nesting at a time.",
+                "Required lists what the outcome depends on. Not needed lists everything that made no difference.",
+                "Open the minimal request in a new tab, copy it as cURL, or export an HTML / JSON report."
+            ]),
+            new HelpParagraph("Minimize a failure to find exactly what triggers a bug (\"a 500 only with sort=desc and Accept-Language: fr\"). Minimize a success to learn what an endpoint really requires, such as which of 20 copied browser headers and cookies matter."),
+            new HelpExample("From the command line", "dispatch minimize \"My Collection\" --request \"Create order\"\ndispatch minimize api.dispatch.json --request Search --match body --contains \"Internal error\" -r cli,html"),
+            new HelpTip("Every probe is a real request. For POST, PUT, PATCH or DELETE use a test environment, because each probe can create or change data.")
+        ],
+        ["minimize", "minimise", "reduce", "delta debugging", "ddmin", "root cause", "bisect", "required headers", "smallest", "reproduce"],
+        null, [Assertions, Cli]),
+
+        new(RateLimit, "Tools", "Rate-limit mapper", "Discover an endpoint's real rate limit and check its headers.",
+        [
+            new HelpParagraph("The rate-limit mapper probes one request to learn its real policy. It sends a burst until the first throttled response to measure capacity, then retries until requests are accepted again to measure recovery. A second burst shows whether capacity comes back all at once (a fixed window) or gradually (a token bucket or sliding window), and for gradual refill it measures the refill rate."),
+            new HelpParagraph("Along the way it reads X-RateLimit-*, RateLimit-* and Retry-After headers and checks them against what happened. For example, it flags a Retry-After that is too optimistic, an advertised limit that doesn't match, or a 429 that still claims requests are remaining."),
+            new HelpSteps(
+            [
+                "Open a request (ideally a cheap, read-only GET) and choose Tools → Probe rate limit… next to the Send button.",
+                "Set the request cap, time limit and concurrency, then click Probe.",
+                "Read the summary (e.g. \"100 requests per window of about 60 s\"), the insights and the timeline, and export an HTML / JSON report if needed."
+            ]),
+            new HelpExample("Fail CI when an endpoint has no rate limit", "dispatch ratelimit \"My Collection\" --request Login --max-requests 300 --expect-limit"),
+            new HelpTip("This deliberately sends many requests to one endpoint. Probe only APIs you own or are authorised to test, and preferably not production.")
+        ],
+        ["rate limit", "ratelimit", "throttle", "429", "retry-after", "quota", "token bucket", "sliding window", "fixed window", "burst"],
+        null, [LoadTest, Cli]),
 
         new(Capture, "Tools", "Capture proxy", "Record traffic from a browser or app.",
         [
@@ -327,7 +439,7 @@ public static class HelpCatalog
         new(Cli, "Tools", "Command line (CI)", "Run collections, flows, scans and mocks headlessly.",
         [
             new HelpParagraph("The dispatch command uses the same engine as the app. Point it at a file, a URL, a Dispatch folder or the name of a collection saved in the app. Exit code 0 means everything passed, 1 means failures, 2 a usage error."),
-            new HelpExample("Common commands", "dispatch run \"My Collection\" -e Staging -r cli,junit,html -o reports\ndispatch run api.dispatch.json --data users.csv --bail\ndispatch flow \"My Collection\" --name \"Login smoke\"\ndispatch mock petstore.yaml --port 4010 --latency 200\ndispatch docs \"My Collection\" --format html -o api.html\ndispatch help"),
+            new HelpExample("Common commands", "dispatch run \"My Collection\" -e Staging -r cli,junit,html -o reports\ndispatch run api.dispatch.json --data users.csv --bail\ndispatch flow \"My Collection\" --name \"Login smoke\"\ndispatch mock petstore.yaml --port 4010 --latency 200\ndispatch docs \"My Collection\" --format html -o api.html\ndispatch minimize \"My Collection\" --request Search\ndispatch ratelimit \"My Collection\" --request Login --expect-limit\ndispatch impact \"My Collection\" --request \"Get user\"\ndispatch laws \"My Collection\" --runs 5\ndispatch help"),
             new HelpTip("Export the collection as a git-friendly folder and run it from your repository in CI.")
         ],
         ["cli", "command line", "terminal", "ci", "pipeline", "headless", "github actions", "jenkins", "exit code"],

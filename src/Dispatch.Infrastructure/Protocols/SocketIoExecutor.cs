@@ -106,6 +106,7 @@ public sealed class SocketIoExecutor(WebSocketConnector connector) : IProtocolEx
                                 case '0': // CONNECT
                                     connected = true;
                                     log.Info($"Connected to namespace {ns} {json}".TrimEnd());
+                                    log.Listening();
                                     if (!string.IsNullOrWhiteSpace(settings.Event))
                                         await Emit(BuildEvent(settings.Event, settings.Arguments)).ConfigureAwait(false);
                                     if (context.Outgoing is not null)

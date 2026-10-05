@@ -83,6 +83,9 @@ public sealed class ApiRequest
     public List<Assertion> Assertions { get; set; } = [];
     public List<ExtractionRule> Extractions { get; set; } = [];
 
+    /// <summary>Messages this request must cause on other channels (Kafka, MQTT, AMQP, WebSocket, ...).</summary>
+    public List<MessageExpectation> Expectations { get; set; } = [];
+
     /// <summary>JavaScript run before sending (can change variables and the request).</summary>
     public string PreRequestScript { get; set; } = string.Empty;
 
@@ -116,6 +119,7 @@ public sealed class ApiRequest
         Settings = Settings.Clone(),
         Assertions = Assertions.Select(a => a.Clone()).ToList(),
         Extractions = Extractions.Select(e => e.Clone()).ToList(),
+        Expectations = Expectations.Select(e => e.Clone()).ToList(),
         PreRequestScript = PreRequestScript,
         TestScript = TestScript,
         Examples = Examples.Select(e => e.Clone()).ToList(),

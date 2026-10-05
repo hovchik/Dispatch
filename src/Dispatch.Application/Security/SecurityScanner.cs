@@ -32,6 +32,7 @@ public sealed partial class SecurityScanner(IRequestSender sender)
                 Environment = environment,
                 CollectionVariables = collectionVariables,
                 RecordHistory = false,
+                CheckExpectations = false,
                 RunScripts = false
             };
 

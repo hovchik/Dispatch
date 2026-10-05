@@ -177,7 +177,8 @@ public sealed class LoadTester(IRequestSender sender)
                             {
                                 Variables = variables,
                                 RecordHistory = false,
-                                RunScripts = options.RunChecks
+                                RunScripts = options.RunChecks,
+                                CheckExpectations = false
                             }, stop.Token).ConfigureAwait(false);
                         }
                         catch (OperationCanceledException)

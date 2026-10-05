@@ -70,6 +70,8 @@
       <StreamGeometry x:Key="IconKey">M7,9 A5,5 0 1 1 11.6,12 L21,12 V15 H19 V17 H16 V15 H11.6 A5,5 0 0 1 7,9 Z M7,7 A2,2 0 1 0 7.01,7 Z</StreamGeometry>
       <StreamGeometry x:Key="IconFile">M6,2 H14 L20,8 V22 H6 Z M13,3.5 V9 H18.5 Z</StreamGeometry>
       <StreamGeometry x:Key="IconHelp">M12,2 A10,10 0 1 0 12,22 A10,10 0 1 0 12,2 Z M11,16 H13 V18 H11 Z M12,6 A4,4 0 0 0 8,10 H10 A2,2 0 1 1 12,12 H11 V15 H13 V13.9 A4,4 0 0 0 12,6 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconFlask">M9,2 H15 V4 H14 V9 L20,19 A2,2 0 0 1 18.3,22 H5.7 A2,2 0 0 1 4,19 L10,9 V4 H9 Z M12,4 V9.6 L9.6,13.5 H14.4 L12,9.6 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconGauge">M12,4 A10,10 0 0 0 2,14 A10,10 0 0 0 3.3,19 H20.7 A10,10 0 0 0 22,14 A10,10 0 0 0 12,4 Z M12,6 A8,8 0 0 1 19.6,17 H4.4 A8,8 0 0 1 12,6 Z M16.9,8.5 L13.3,13.2 A2,2 0 1 1 11.6,12.1 Z</StreamGeometry>
       <StreamGeometry x:Key="IconRefresh">M12,4 A8,8 0 0 1 19.7,10 H17.6 A6,6 0 1 0 18,14 H20.1 A8,8 0 1 1 12,4 Z M20,4 V10 H14 Z</StreamGeometry>
     </ResourceDictionary>
   </Application.Resources>

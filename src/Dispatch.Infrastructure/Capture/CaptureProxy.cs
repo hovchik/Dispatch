@@ -19,6 +19,9 @@ public sealed class CaptureProxyOptions
     /// <summary>Decrypt HTTPS by terminating TLS with per-host certs (the CA must be trusted by the client).</summary>
     public bool DecryptHttps { get; init; } = true;
     public int MaxBodyBytes { get; init; } = 1024 * 1024;
+
+    /// <summary>Sees every request and may replace responses before they reach the client (client fuzzing).</summary>
+    public Dispatch.Application.ClientFuzz.IResponseInterceptor? Interceptor { get; init; }
 }
 
 /// <summary>
@@ -193,6 +196,7 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
             }
             : null;
 
+        _options.Interceptor?.OnRequest(method, url, body.Length > 0 ? SafeText(body) : "", started);
         try
         {
             using var request = new HttpRequestMessage(new HttpMethod(method), url);
@@ -211,10 +215,24 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
             var result = new ProxyResponse((int)response.StatusCode, response.ReasonPhrase ?? "",
                 CollectHeaders(response), responseBody);
 
+            // Client fuzzing: the interceptor may hand the client a changed (or delayed) response instead.
+            if (_options.Interceptor?.Intercept(new Dispatch.Application.ClientFuzz.InterceptedResponse(method, url, result.Status,
+                    response.Content.Headers.ContentType?.ToString(), SafeText(responseBody)), DateTimeOffset.Now) is { } changed)
+            {
+                if (changed.Delay > TimeSpan.Zero)
+                    await Task.Delay(changed.Delay, ct).ConfigureAwait(false);
+                result = new ProxyResponse(changed.Status, changed.Reason,
+                    result.Headers.Where(h => h.Name is not ("Content-Encoding" or "ETag" or "Content-MD5" or "Last-Modified"))
+                        .Append(new ProxyHeader("X-Dispatch-Fuzz", new string(changed.Note.Where(c => c is >= ' ' and <= '~').Take(200).ToArray()))).ToList(),
+                    Encoding.UTF8.GetBytes(changed.Body));
+                responseBody = result.Body;
+            }
+
             if (exchange is not null)
             {
                 exchange.StatusCode = result.Status;
                 exchange.ReasonPhrase = result.Reason;
+                // (When fuzzing, the exchange shows what the client actually received.)
                 exchange.ResponseHeaders = result.Headers.Select(h => new KeyValueItem(h.Name, h.Value)).ToList();
                 exchange.ResponseContentType = response.Content.Headers.ContentType?.ToString();
                 exchange.ResponseSize = responseBody.Length;

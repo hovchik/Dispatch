@@ -91,7 +91,7 @@ public sealed class AssertionEvaluator(IContractValidator? contractValidator = n
         throw new FormatException("Schema must be inline JSON or a path to a .json file.");
     }
 
-    private static (bool Passed, string? Message) Check(IReadOnlyList<string> values, AssertionOperator op, string expected)
+    internal static (bool Passed, string? Message) Check(IReadOnlyList<string> values, AssertionOperator op, string expected)
     {
         var first = values.Count > 0 ? values[0] : null;
         switch (op)

@@ -22,6 +22,9 @@ public interface ITabHost
     void CloseTab(RequestTabViewModel tab);
     void ReportError(string message);
     void ShowCode(ApiRequest request, ApiRequest resolved);
+    void ShowMinimizer(ApiRequest request);
+    void ShowRateLimit(ApiRequest request);
+    void ShowImpact(ApiRequest request, string? currentBody, string? previousBody);
     void ShowDiff(string title, ResponseViewModel left, ResponseViewModel right);
     void ShowHelp(string? topicId);
 }
@@ -86,6 +89,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
         Amqp = new AmqpEditor();
         Socket = new SocketEditor();
         Assertions = new AssertionsEditor();
+        Expectations = new ExpectationsEditor();
         Extractions = new ExtractionsEditor();
         Examples = new ExamplesEditor();
 
@@ -111,6 +115,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
         Amqp.Changed += markDirty;
         Socket.Changed += markDirty;
         Assertions.Changed += markDirty;
+        Expectations.Changed += markDirty;
         Extractions.Changed += markDirty;
         Examples.Changed += markDirty;
         Grpc.PropertyChanged += (_, e) =>
@@ -136,6 +141,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
     public AmqpEditor Amqp { get; }
     public SocketEditor Socket { get; }
     public AssertionsEditor Assertions { get; }
+    public ExpectationsEditor Expectations { get; }
     public ExtractionsEditor Extractions { get; }
     public ExamplesEditor Examples { get; }
     public ObservableCollection<CollectionNodeViewModel> SaveTargets => _host.CollectionNodes;
@@ -147,6 +153,13 @@ public sealed partial class RequestTabViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsSaved))]
     private Guid? _collectionId;
 
+    // Saving into (or moving to) another collection changes which listeners are available.
+    partial void OnCollectionIdChanged(Guid? value)
+    {
+        if (!_loading)
+            RefreshListeners();
+    }
+
     [ObservableProperty] private string _name = string.Empty;
     [ObservableProperty] private string _folder = string.Empty;
     [ObservableProperty] private string _description = string.Empty;
@@ -155,7 +168,8 @@ public sealed partial class RequestTabViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsHttp), nameof(IsGraphQl), nameof(IsGrpc), nameof(IsSoap), nameof(IsWebSocket), nameof(IsSse),
         nameof(IsSocketIo), nameof(IsMqtt), nameof(IsKafka), nameof(IsAmqp), nameof(IsSocket), nameof(ShowMethod), nameof(ShowParams),
         nameof(ShowHeaders), nameof(ShowAuth), nameof(ShowHttpBody), nameof(ShowSettings), nameof(IsStreamingKind), nameof(CanCompose),
-        nameof(SendLabel), nameof(UrlWatermark), nameof(HeadersLabel), nameof(IsSessionKind), nameof(BodyFormat), nameof(Badge))]
+        nameof(SendLabel), nameof(UrlWatermark), nameof(HeadersLabel), nameof(IsSessionKind), nameof(BodyFormat), nameof(Badge),
+        nameof(SupportsProbeTools))]
     private RequestKind _kind;
 
     [ObservableProperty]
@@ -307,6 +321,8 @@ public sealed partial class RequestTabViewModel : ObservableObject
             Amqp.Load(r.Protocol.Amqp);
             Socket.Load(r.Protocol.Socket);
             Assertions.Load(r.Assertions);
+            RefreshListeners();
+            Expectations.Load(r.Expectations);
             Extractions.Load(r.Extractions);
             Examples.Load(r.Examples);
             PreRequestScript = r.PreRequestScript;
@@ -348,6 +364,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
             Socket = Socket.ToModel()
         },
         Assertions = Assertions.ToModels(),
+        Expectations = Expectations.ToModels(),
         Extractions = Extractions.ToModels(),
         Examples = Examples.ToModels(),
         PreRequestScript = PreRequestScript,
@@ -498,6 +515,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
                 Environment = _host.ActiveEnvironment,
                 CollectionVariables = collection?.Variables,
                 CollectionSpec = collection?.SpecLocation,
+                CollectionRequests = collection?.Requests,
                 Progress = progress,
                 Outgoing = _outgoing.Reader,
                 Interactive = true
@@ -508,6 +526,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
             Response = await ResponseViewModel.CreateAsync(response, _services.Clipboard, _services.Dialogs);
             Assertions.ApplySnapshots(response.SnapshotUpdates);
             Assertions.ShowResults(response.TestResults);
+            Expectations.ShowResults(response.TestResults);
             if (response.RefreshedAuth is { } refreshed)
                 Auth.CacheToken(refreshed);
             await _host.OnRequestSentAsync(response);
@@ -650,6 +669,24 @@ public sealed partial class RequestTabViewModel : ObservableObject
     [RelayCommand]
     private void ShowCode() => _host.ShowCode(ToModel(), Resolve(ToModel()));
 
+    /// <summary>The experimental request tools work on HTTP-style requests (headers, query, body).</summary>
+    public bool SupportsProbeTools => Kind is RequestKind.Http or RequestKind.GraphQl or RequestKind.Soap;
+
+    /// <summary>Reloads the streaming requests of this request's collection as listener choices for message checks.</summary>
+    [RelayCommand]
+    private void RefreshListeners() =>
+        Expectations.SetListeners(_host.FindCollection(CollectionId)?.Requests ?? [], _requestId);
+
+    [RelayCommand]
+    private void Minimize() => _host.ShowMinimizer(ToModel());
+
+    [RelayCommand]
+    private void ProbeRateLimit() => _host.ShowRateLimit(ToModel());
+
+    [RelayCommand]
+    private void ShowImpact() => _host.ShowImpact(ToModel(), Response?.Model is { HasResponse: true } r ? r.Body : null,
+        PreviousResponse?.Model is { HasResponse: true } p ? p.Body : null);
+
     [RelayCommand]
     private void CompareWithPrevious()
     {
@@ -663,9 +700,12 @@ public sealed partial class RequestTabViewModel : ObservableObject
     {
         if (Response?.Model is not { HasResponse: true } r)
             return;
+        // A WebSocket / SSE session is saved with its messages and timing, so the mock server can replay it.
+        var session = Kind is RequestKind.WebSocket or RequestKind.Sse ? Application.Mock.SessionRecording.From(r.Messages) : [];
         Examples.AddAndSelect(new ResponseExample
         {
-            Name = $"{r.StatusCode} {r.ReasonPhrase}".Trim(),
+            Name = session.Count > 0 ? $"Session · {session.Count} messages" : $"{r.StatusCode} {r.ReasonPhrase}".Trim(),
+            Session = session,
             StatusCode = r.StatusCode,
             ContentType = r.ContentType ?? "",
             Body = r.Body,

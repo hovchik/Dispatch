@@ -76,6 +76,12 @@ public sealed class ResponseSnapshot
     public List<KeyValueItem> Headers { get; set; } = [];
     public string? Error { get; set; }
 
+    /// <summary>The URL actually requested (variables resolved). Empty in history recorded by older versions.</summary>
+    public string EffectiveUrl { get; set; } = string.Empty;
+
+    /// <summary>The request body as sent (variables resolved, capped). Empty for older history and bodiless requests.</summary>
+    public string RequestBody { get; set; } = string.Empty;
+
     public static ResponseSnapshot From(ApiResponse r) => new()
     {
         StatusCode = r.StatusCode,
@@ -83,6 +89,21 @@ public sealed class ResponseSnapshot
         ContentType = r.ContentType,
         Body = r.Body.Length > MaxBodyChars ? r.Body[..MaxBodyChars] : r.Body,
         Headers = r.Headers.Select(h => new KeyValueItem(h.Name, h.Value)).ToList(),
-        Error = r.Error
+        Error = r.Error,
+        EffectiveUrl = r.EffectiveUrl ?? string.Empty,
+        RequestBody = BodyOf(r.RawRequest)
     };
+
+    /// <summary>The body part of a raw HTTP request (after the blank line that ends the headers).</summary>
+    public static string BodyOf(string? rawRequest)
+    {
+        if (string.IsNullOrEmpty(rawRequest))
+            return string.Empty;
+        var text = rawRequest.Replace("\r\n", "\n");
+        var split = text.IndexOf("\n\n", StringComparison.Ordinal);
+        if (split < 0)
+            return string.Empty;
+        var body = text[(split + 2)..];
+        return body.Length > MaxBodyChars / 4 ? body[..(MaxBodyChars / 4)] : body;
+    }
 }
