@@ -34,6 +34,7 @@ public sealed partial class CollectionsViewModel(ICollectionRepository repositor
 {
     [ObservableProperty] private string _filter = string.Empty;
     [ObservableProperty] private string? _error;
+    [ObservableProperty] private bool _hasNoMatches;
 
     public ObservableCollection<CollectionNodeViewModel> Items { get; } = [];
 
@@ -69,7 +70,11 @@ public sealed partial class CollectionsViewModel(ICollectionRepository repositor
         var term = Filter.Trim();
         foreach (var collection in Items)
             collection.ApplyFilter(term);
+        HasNoMatches = term.Length > 0 && Items.Count > 0 && !Items.Any(i => i.IsVisible);
     }
+
+    [RelayCommand]
+    private void ClearFilter() => Filter = string.Empty;
 
     [RelayCommand]
     private async Task NewCollectionAsync()
