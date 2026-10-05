@@ -163,4 +163,7 @@ public static class SettingKeys
 
     /// <summary>Set once the user has closed the first-run welcome card.</summary>
     public const string WelcomeDismissed = "welcomeDismissed";
+
+    /// <summary>The request tabs that were open when the app last closed, restored on the next start.</summary>
+    public const string OpenTabs = "openTabs";
 }

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -185,10 +187,64 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
             await Task.WhenAll(Collections.LoadAsync(), History.LoadAsync(), Environments.LoadAsync());
             IsWelcomeOpen = await _services.Settings.GetAsync(SettingKeys.WelcomeDismissed) is null;
+            RestoreTabs(await _services.Settings.GetAsync(SettingKeys.OpenTabs));
         });
 
         if (Tabs.Count == 0)
             NewTab();
+    }
+
+    private static readonly JsonSerializerOptions TabJson = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
+
+    private sealed record OpenTab(ApiRequest Request, bool IsDirty);
+
+    private sealed record OpenTabsState(List<OpenTab> Tabs, int SelectedIndex);
+
+    /// <summary>Remembers the open tabs (including unsaved edits) so the next start reopens them.</summary>
+    public string SnapshotOpenTabs() => JsonSerializer.Serialize(new OpenTabsState(
+        Tabs.Select(t => new OpenTab(t.ToModel(), t.IsDirty)).ToList(),
+        SelectedTab is null ? -1 : Tabs.IndexOf(SelectedTab)), TabJson);
+
+    public async Task SaveOpenTabsAsync(string snapshot)
+    {
+        try
+        {
+            await _services.Settings.SetAsync(SettingKeys.OpenTabs, snapshot);
+        }
+        catch
+        {
+            // The app is closing; there is nowhere left to report this.
+        }
+    }
+
+    private void RestoreTabs(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return;
+        OpenTabsState? state;
+        try
+        {
+            state = JsonSerializer.Deserialize<OpenTabsState>(json, TabJson);
+        }
+        catch (JsonException)
+        {
+            return; // A stale or corrupt snapshot is not worth failing startup over.
+        }
+        if (state?.Tabs is not { Count: > 0 })
+            return;
+
+        foreach (var saved in state.Tabs)
+        {
+            var tab = new RequestTabViewModel(saved.Request, _services.Tabs, this);
+            if (saved.IsDirty)
+                tab.IsDirty = true;
+            Tabs.Add(tab);
+        }
+        SelectedTab = Tabs[Math.Clamp(state.SelectedIndex, 0, Tabs.Count - 1)];
+        OnPropertyChanged(nameof(HasTabs));
     }
 
     private async Task SaveCookiesAsync()

@@ -41,6 +41,13 @@ public sealed class App : Avalonia.Application
                 if (desktop.Args is [var path, ..] && (File.Exists(path) || Directory.Exists(path)))
                     viewModel.OpenImport(path);
             };
+            // Remember the open tabs so the next start picks up where the user left off.
+            // The snapshot is taken on the UI thread; the write runs off it so blocking here cannot deadlock.
+            window.Closing += (_, _) =>
+            {
+                var snapshot = viewModel.SnapshotOpenTabs();
+                Task.Run(() => viewModel.SaveOpenTabsAsync(snapshot)).GetAwaiter().GetResult();
+            };
             desktop.Exit += (_, _) => _services.Dispose();
             desktop.MainWindow = window;
         }
