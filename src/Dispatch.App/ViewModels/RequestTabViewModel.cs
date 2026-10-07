@@ -20,6 +20,10 @@ public interface ITabHost
     Task OnRequestSentAsync(ApiResponse response);
     Task OnRequestSavedAsync();
     void CloseTab(RequestTabViewModel tab);
+    void DuplicateTab(RequestTabViewModel tab);
+    void MoveTab(RequestTabViewModel tab, int newIndex);
+    int IndexOfTab(RequestTabViewModel tab);
+    int TabCount { get; }
     void ReportError(string message);
     void ShowCode(ApiRequest request, ApiRequest resolved);
     void ShowMinimizer(ApiRequest request);
@@ -745,6 +749,21 @@ public sealed partial class RequestTabViewModel : ObservableObject
 
     [RelayCommand]
     private void Close() => _host.CloseTab(this);
+
+    [RelayCommand]
+    private void Duplicate() => _host.DuplicateTab(this);
+
+    [RelayCommand]
+    private void MoveLeft() => _host.MoveTab(this, _host.IndexOfTab(this) - 1);
+
+    [RelayCommand]
+    private void MoveRight() => _host.MoveTab(this, _host.IndexOfTab(this) + 1);
+
+    [RelayCommand]
+    private void MoveToStart() => _host.MoveTab(this, 0);
+
+    [RelayCommand]
+    private void MoveToEnd() => _host.MoveTab(this, _host.TabCount - 1);
 
     /// <summary>Opens this request's documentation (as it would appear in the collection docs) in the browser.</summary>
     [RelayCommand]

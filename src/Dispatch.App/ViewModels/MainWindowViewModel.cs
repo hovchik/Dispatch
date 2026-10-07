@@ -125,6 +125,37 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         OnPropertyChanged(nameof(HasTabs));
     }
 
+    public int TabCount => Tabs.Count;
+
+    public int IndexOfTab(RequestTabViewModel tab) => Tabs.IndexOf(tab);
+
+    public void MoveTab(RequestTabViewModel tab, int newIndex)
+    {
+        var index = Tabs.IndexOf(tab);
+        newIndex = Math.Clamp(newIndex, 0, Tabs.Count - 1);
+        if (index < 0 || index == newIndex)
+            return;
+
+        Tabs.Move(index, newIndex);
+        SelectedTab = tab;
+    }
+
+    /// <summary>Opens an unsaved copy of the tab (including its unsaved edits) right next to it.</summary>
+    public void DuplicateTab(RequestTabViewModel tab)
+    {
+        var index = Tabs.IndexOf(tab);
+        if (index < 0)
+            return;
+
+        var copy = tab.ToModel().Clone(newIdentity: true);
+        copy.CollectionId = null;
+        copy.Name = $"{copy.Name} (copy)";
+        var duplicate = new RequestTabViewModel(copy, _services.Tabs, this) { IsDirty = true };
+        Tabs.Insert(index + 1, duplicate);
+        SelectedTab = duplicate;
+        OnPropertyChanged(nameof(HasTabs));
+    }
+
     public void ReportError(string message) => ErrorMessage = message;
 
     public void ShowCode(ApiRequest request, ApiRequest resolved) =>

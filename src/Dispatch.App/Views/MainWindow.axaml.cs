@@ -45,6 +45,9 @@ public partial class MainWindow : Window
         // Middle-click closes a tab, like in browsers. Tunnel so the press doesn't select the tab first.
         TabStrip.AddHandler(PointerPressedEvent, OnTabStripPointerPressed, RoutingStrategies.Tunnel);
         TabStrip.AddHandler(PointerReleasedEvent, OnTabStripPointerReleased, RoutingStrategies.Tunnel);
+        TabStrip.AddHandler(PointerMovedEvent, OnTabStripPointerMoved, RoutingStrategies.Tunnel);
+        TabStrip.AddHandler(DragDrop.DragOverEvent, OnTabStripDragOver);
+        TabStrip.AddHandler(DragDrop.DropEvent, OnTabStripDrop);
         TabStrip.LayoutUpdated += (_, _) => UpdateTabOverflow();
         TabStrip.AddHandler(ScrollViewer.ScrollChangedEvent, (_, _) => UpdateTabOverflow());
     }
@@ -93,6 +96,57 @@ public partial class MainWindow : Window
     }
 
     private RequestTabViewModel? _middlePressedTab;
+    private RequestTabViewModel? _dragCandidate;
+    private Point _dragStart;
+    private const string TabDragFormat = "dispatch/request-tab";
+
+    private void OnTabStripPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var point = e.GetCurrentPoint(TabStrip);
+        if (!point.Properties.IsLeftButtonPressed)
+        {
+            _dragCandidate = null;
+            return;
+        }
+        if (_dragCandidate is null)
+        {
+            // Remember where the press started; only tabs (not their buttons / rename box) can be dragged.
+            if (e.Source is Visual v && v.FindAncestorOfType<Button>(includeSelf: true) is null &&
+                v.FindAncestorOfType<TextBox>(includeSelf: true) is null)
+            {
+                _dragCandidate = TabAt(e.Source);
+                _dragStart = point.Position;
+            }
+            return;
+        }
+        var delta = point.Position - _dragStart;
+        if (Math.Abs(delta.X) < 6 && Math.Abs(delta.Y) < 6)
+            return;
+
+        var tab = _dragCandidate;
+        _dragCandidate = null;
+        var data = new DataObject();
+        data.Set(TabDragFormat, tab);
+        _ = DragDrop.DoDragDrop(e, data, DragDropEffects.Move);
+    }
+
+    private void OnTabStripDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = e.Data.Contains(TabDragFormat) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnTabStripDrop(object? sender, DragEventArgs e)
+    {
+        if (_viewModel is null || e.Data.Get(TabDragFormat) is not RequestTabViewModel tab)
+            return;
+        var target = TabAt(e.Source);
+        if (target is not null && !ReferenceEquals(target, tab))
+            _viewModel.MoveTab(tab, _viewModel.IndexOfTab(target));
+        else if (target is null)
+            _viewModel.MoveTab(tab, _viewModel.TabCount - 1);
+        e.Handled = true;
+    }
 
     private void OnTabStripPointerPressed(object? sender, PointerPressedEventArgs e)
     {
