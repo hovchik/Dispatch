@@ -260,6 +260,14 @@ public class RateLimitProberTests
         Assert.InRange(report.WindowEstimate!.Value.TotalSeconds, 1.0, 2.5);
         Assert.Contains(report.Insights, i => i.Level == InsightLevel.Good && i.Text.Contains("matches"));
         Assert.Contains("fixed window", report.Summary);
+        Assert.Contains(report.AcceptedHeaders, h => h.Name == "X-RateLimit-Remaining");
+        Assert.Contains(report.ThrottledHeaders, h => h.Name == "Retry-After");
+        Assert.InRange(report.SustainedPerSecond!.Value, 2, 6);
+        Assert.Equal(report.SustainedPerSecond * 0.8, report.RecommendedPerSecond);
+        Assert.NotNull(report.MedianAcceptedMs);
+        Assert.Contains(report.Insights, i => i.Text.Contains("Recommended client rate"));
+        Assert.Contains("\"recommendedPerSecond\"", RateLimitReportWriter.Json(report));
+        Assert.Contains("Retry-After", RateLimitReportWriter.Text(report));
         Assert.Contains("Limited", RateLimitReportWriter.Html(report));
         Assert.Contains("\"refill\": \"FixedWindow\"", RateLimitReportWriter.Json(report));
     }

@@ -2,14 +2,21 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using Dispatch.Domain;
 using Dispatch.Application.Reporting;
 using static Dispatch.Application.Reporting.ReportHtml;
 
 namespace Dispatch.Application.RateLimits;
 
 /// <summary>Plain-language findings about a probed rate limit.</summary>
-public static class RateLimitInsights
+public static partial class RateLimitInsights
 {
+    [GeneratedRegex(@"\b(ip address|ip|api key|key|user|token|account|tenant|plan|tier|upgrade|quota)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex ScopeWordsRegex();
+
+    private static Regex ScopeWords => ScopeWordsRegex();
+
     public static IEnumerable<ReportInsight> For(RateLimitReport report)
     {
         if (report.Error is not null)
@@ -87,6 +94,41 @@ public static class RateLimitInsights
                 break;
         }
 
+        if (report.SustainedPerSecond is { } sustained && report.RecommendedPerSecond is { } safe)
+            yield return new ReportInsight(InsightLevel.Good,
+                $"Recommended client rate: about {safe:0.##} req/s ({safe * 60:0} per minute), 80% of the {sustained:0.##} req/s " +
+                $"({sustained * 60:0}/min) the endpoint sustains. Bursts above {report.BurstCapacity} requests will be throttled.");
+
+        // Advertised reset vs observed window (fixed window only: elsewhere "reset" means something else).
+        if (report.Refill == RefillKind.FixedWindow && report.Advertised?.ResetSeconds is { } reset && report.WindowEstimate is { } window
+            && Math.Abs(reset - window.TotalSeconds) > Math.Max(2, window.TotalSeconds * 0.25))
+            yield return new ReportInsight(InsightLevel.Warning,
+                $"Headers say the window resets in {reset:0.#} s, but the limit actually reset about {window.TotalSeconds:0.#} s after the first request.");
+
+        // How much quota does one request cost? (X-RateLimit-Remaining should drop by 1.)
+        var counted = report.Samples.Where(s => s.Phase is RateLimitPhase.Baseline or RateLimitPhase.Burst && !s.Throttled && !s.Error
+                                                 && s.Remaining is not null).OrderByDescending(s => s.Remaining).ToList();
+        if (counted.Count >= 3 && counted[0].Remaining - counted[^1].Remaining is { } drop)
+        {
+            var cost = (double)drop / (counted.Count - 1);
+            if (Math.Abs(cost - 1) > 0.15)
+                yield return new ReportInsight(InsightLevel.Info,
+                    $"Each request seems to use {cost:0.##} units of the advertised quota (Remaining fell by {drop} over {counted.Count} requests).");
+        }
+
+        if (report.ThrottleBody is { } body)
+        {
+            yield return new ReportInsight(InsightLevel.Info, $"Throttle response says: {body}");
+            var scope = ScopeWords.Matches(body).Select(m => m.Value.ToLowerInvariant()).Distinct().ToList();
+            if (scope.Count > 0)
+                yield return new ReportInsight(InsightLevel.Info,
+                    $"The throttle message mentions {string.Join(", ", scope)}: the limit may be applied per that scope, not globally.");
+        }
+
+        if (report.MedianAcceptedMs is { } fast && report.MedianThrottledMs is { } slow && slow > Math.Max(200, fast * 3))
+            yield return new ReportInsight(InsightLevel.Info,
+                $"Throttled responses are slow ({slow:0} ms vs {fast:0} ms accepted): the server may be delaying rejected requests.");
+
         if (report.Stopped)
             yield return new ReportInsight(InsightLevel.Info, "The probe stopped early (time limit, request cap or cancelled); some results are incomplete.");
     }
@@ -115,6 +157,14 @@ public static class RateLimitReportWriter
             sb.AppendLine($"  advertised       {a.HeaderStyle}: limit {a.Limit?.ToString(CultureInfo.InvariantCulture) ?? "?"}, " +
                           $"remaining {a.Remaining?.ToString(CultureInfo.InvariantCulture) ?? "?"}, reset {a.ResetSeconds?.ToString("0.#", CultureInfo.InvariantCulture) ?? "?"} s" +
                           (a.Policy is null ? "" : $", policy {a.Policy}"));
+        if (report.SustainedPerSecond is { } sustained && report.RecommendedPerSecond is { } safe)
+            sb.AppendLine($"  sustained rate   {sustained:0.##} req/s ({sustained * 60:0}/min); recommended client rate {safe:0.##} req/s");
+        if (report.MedianAcceptedMs is { } ms)
+            sb.AppendLine($"  latency          {ms:0} ms accepted" + (report.MedianThrottledMs is { } t ? $", {t:0} ms throttled" : ""));
+        AppendHeaders(sb, "accepted headers", report.AcceptedHeaders);
+        AppendHeaders(sb, "throttled headers", report.ThrottledHeaders);
+        if (report.ThrottleBody is { } body)
+            sb.AppendLine($"  throttle body    {body.ReplaceLineEndings(" ")}");
         if (report.Insights.Count > 0)
         {
             sb.AppendLine();
@@ -123,6 +173,17 @@ public static class RateLimitReportWriter
         }
         return sb.ToString().TrimEnd();
     }
+
+    private static void AppendHeaders(StringBuilder sb, string label, IReadOnlyList<ResponseHeader> headers)
+    {
+        for (var i = 0; i < headers.Count; i++)
+            sb.AppendLine($"  {(i == 0 ? label : ""),-16} {headers[i].Name}: {headers[i].Value}");
+    }
+
+    private static string HeaderTable(string title, IReadOnlyList<ResponseHeader> headers) => headers.Count == 0
+        ? $"<h3>{E(title)}</h3><p class=\"muted\">No rate-limit headers.</p>"
+        : $"<h3>{E(title)}</h3><div class=\"card\"><table><tbody>" +
+          string.Concat(headers.Select(h => $"<tr><td>{E(h.Name)}</td><td>{E(h.Value)}</td></tr>")) + "</tbody></table></div>";
 
     private static string Marker(InsightLevel level) => level switch
     {
@@ -145,7 +206,17 @@ public static class RateLimitReportWriter
                 hint: report.RetryAfterSeconds is { } ra ? $"Retry-After {N(ra, "0.#")} s" : "no Retry-After"))
             .Append(Stat("Refill", report.Refill.ToString(), hint: report.RefillPerSecond is { } r ? $"{N(r, "0.##")} req/s" : null))
             .Append(Stat("Advertised limit", report.Advertised?.Limit?.ToString(CultureInfo.InvariantCulture) ?? "—", hint: report.Advertised?.HeaderStyle))
+            .Append(Stat("Sustained rate", report.SustainedPerSecond is { } sr ? $"{N(sr, "0.##")} req/s" : "—",
+                hint: report.RecommendedPerSecond is { } rr ? $"use ≤ {N(rr, "0.##")} req/s" : null))
+            .Append(Stat("Latency", report.MedianAcceptedMs is { } lat ? $"{N(lat, "0")} ms" : "—",
+                hint: report.MedianThrottledMs is { } tl ? $"{N(tl, "0")} ms throttled" : null))
             .Append("</div>");
+
+        sb.Append("<h2>Headers</h2>")
+            .Append(HeaderTable("First accepted response", report.AcceptedHeaders))
+            .Append(HeaderTable("First throttled response", report.ThrottledHeaders));
+        if (report.ThrottleBody is { } throttleBody)
+            sb.Append($"<h3>Throttle response body</h3><pre>{E(throttleBody)}</pre>");
 
         if (report.Insights.Count > 0)
         {
@@ -186,6 +257,9 @@ public static class RateLimitReportWriter
         return sb.ToString();
     }
 
+    private static JsonArray HeadersJson(IReadOnlyList<ResponseHeader> headers) =>
+        new(headers.Select(h => (JsonNode)new JsonObject { ["name"] = h.Name, ["value"] = h.Value }).ToArray());
+
     public static string Json(RateLimitReport report)
     {
         var root = new JsonObject
@@ -209,6 +283,13 @@ public static class RateLimitReportWriter
             ["capacityAfterRecovery"] = report.CapacityAfterRecovery,
             ["refillPerSecond"] = report.RefillPerSecond is { } rate ? Math.Round(rate, 3) : null,
             ["refillIsLowerBound"] = report.RefillIsLowerBound,
+            ["sustainedPerSecond"] = report.SustainedPerSecond is { } sus ? Math.Round(sus, 3) : null,
+            ["recommendedPerSecond"] = report.RecommendedPerSecond is { } rec ? Math.Round(rec, 3) : null,
+            ["medianAcceptedMs"] = report.MedianAcceptedMs is { } ma ? Math.Round(ma, 1) : null,
+            ["medianThrottledMs"] = report.MedianThrottledMs is { } mt ? Math.Round(mt, 1) : null,
+            ["throttleBody"] = report.ThrottleBody,
+            ["acceptedHeaders"] = HeadersJson(report.AcceptedHeaders),
+            ["throttledHeaders"] = HeadersJson(report.ThrottledHeaders),
             ["advertised"] = report.Advertised is { } a
                 ? new JsonObject
                 {

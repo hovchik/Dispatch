@@ -49,7 +49,7 @@
     </ScrollViewer>
 
     <!-- Results -->
-    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,*">
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,Auto,*">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}">
           <StackPanel>
@@ -107,7 +107,22 @@
         </Border>
       </Grid>
 
-      <Grid Grid.Row="3" ColumnDefinitions="*,*" ColumnSpacing="12">
+      <Grid Grid.Row="3" ColumnDefinitions="*,2*" ColumnSpacing="8" Margin="0,0,0,10">
+        <Border Classes="card" Padding="10,6">
+          <StackPanel>
+            <TextBlock Text="Safe client rate" Classes="muted" FontSize="11" />
+            <TextBlock Text="{Binding SafeRateText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="1" Classes="card" Padding="10,6">
+          <StackPanel>
+            <TextBlock Text="Rate-limit headers and throttle response" Classes="muted" FontSize="11" />
+            <SelectableTextBlock Text="{Binding HeadersText}" FontFamily="{StaticResource MonoFont}" FontSize="11" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <Grid Grid.Row="4" ColumnDefinitions="*,*" ColumnSpacing="12">
         <Border Classes="card" Padding="12">
           <DockPanel>
             <TextBlock DockPanel.Dock="Top" Classes="section" Text="INSIGHTS" Margin="0,0,0,6" />

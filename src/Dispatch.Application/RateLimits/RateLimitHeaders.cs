@@ -45,6 +45,13 @@ public static partial class RateLimitHeaders
         return policy is null ? null : new AdvertisedLimit(policyLimit, null, null, policy, "RateLimit-Policy");
     }
 
+    /// <summary>
+    /// Every header that says something about limits (X-RateLimit-*, RateLimit-*, Retry-After, quota and throttle headers,
+    /// vendor variants), in the order the server sent them. Raw, so reports show exactly what the server advertised.
+    /// </summary>
+    public static IReadOnlyList<ResponseHeader> Relevant(IReadOnlyList<ResponseHeader> headers) =>
+        headers.Where(h => RelevantRegex().IsMatch(h.Name)).ToList();
+
     /// <summary>Retry-After as seconds from now: either delta-seconds or an HTTP date.</summary>
     public static double? RetryAfterSeconds(IReadOnlyList<ResponseHeader> headers)
     {
@@ -76,6 +83,9 @@ public static partial class RateLimitHeaders
         Regex.Match(value, $@"(?:^|[;,\s]){Regex.Escape(key)}\s*=\s*(\d+)", RegexOptions.IgnoreCase) is { Success: true } m
             ? int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)
             : null;
+
+    [GeneratedRegex(@"rate[-_]?limit|retry-after|quota|throttl", RegexOptions.IgnoreCase)]
+    private static partial Regex RelevantRegex();
 
     [GeneratedRegex(@"^\s*\d+")]
     private static partial Regex LeadingIntRegex();
