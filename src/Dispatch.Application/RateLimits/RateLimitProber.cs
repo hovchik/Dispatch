@@ -42,6 +42,9 @@ public sealed record RateLimitSample(double AtMs, RateLimitPhase Phase, int Stat
 {
     /// <summary>When the request was sent (ms since the probe started).</summary>
     public double SentAtMs { get; init; }
+
+    /// <summary>How long the server took to answer, in ms.</summary>
+    public double LatencyMs { get; init; }
 }
 
 /// <summary>How the limit gives capacity back once it has been used up.</summary>
@@ -105,6 +108,33 @@ public sealed class RateLimitReport
     /// <summary>The bucket was full again after the measuring wait, so the real refill rate may be higher.</summary>
     public bool RefillIsLowerBound { get; set; }
     public AdvertisedLimit? Advertised { get; set; }
+
+    /// <summary>Rate-limit related headers on the first accepted response, exactly as sent.</summary>
+    public IReadOnlyList<ResponseHeader> AcceptedHeaders { get; set; } = [];
+
+    /// <summary>Rate-limit related headers on the first throttled response, exactly as sent.</summary>
+    public IReadOnlyList<ResponseHeader> ThrottledHeaders { get; set; } = [];
+
+    /// <summary>Start of the first throttled response's body: often says what is limited (IP, key, plan).</summary>
+    public string? ThrottleBody { get; set; }
+
+    /// <summary>Median response time of accepted requests, ms.</summary>
+    public double? MedianAcceptedMs { get; set; }
+
+    /// <summary>Median response time of throttled requests, ms.</summary>
+    public double? MedianThrottledMs { get; set; }
+
+    /// <summary>Requests per second the endpoint allows over time (window capacity / window, or the refill rate).</summary>
+    public double? SustainedPerSecond => Refill switch
+    {
+        RefillKind.FixedWindow when WindowEstimate is { TotalSeconds: > 0 } w => BurstCapacity / w.TotalSeconds,
+        RefillKind.Gradual => RefillPerSecond,
+        _ => null
+    };
+
+    /// <summary>A client rate that stays clear of the limit: 80% of <see cref="SustainedPerSecond"/>.</summary>
+    public double? RecommendedPerSecond => SustainedPerSecond * 0.8;
+
     public List<ReportInsight> Insights { get; } = [];
 
     /// <summary>One-line summary, e.g. "≈ 100 requests per 60 s window".</summary>
@@ -155,6 +185,7 @@ public sealed class RateLimitProber(IRequestSender sender)
         var gate = new Lock();
         var reserved = 0;
         var errors = 0;
+        var sawThrottle = false;
 
         async Task<RateLimitSample?> SendAsync(RateLimitPhase phase)
         {
@@ -171,10 +202,19 @@ public sealed class RateLimitProber(IRequestSender sender)
             var throttled = response.HasResponse && (options.ThrottleStatuses.Contains(response.StatusCode)
                                                      || response.StatusCode == 503 && retryAfter is not null);
             var sample = new RateLimitSample(clock.Elapsed.TotalMilliseconds, phase, response.StatusCode, throttled, !response.HasResponse,
-                RateLimitHeaders.Read(response.Headers)?.Remaining, retryAfter) { SentAtMs = sentAt };
+                RateLimitHeaders.Read(response.Headers)?.Remaining, retryAfter)
+            { SentAtMs = sentAt, LatencyMs = response.Elapsed.TotalMilliseconds };
             lock (gate)
             {
                 report.Samples.Add(sample);
+                if (response.HasResponse && throttled && !sawThrottle)
+                {
+                    sawThrottle = true;
+                    report.ThrottledHeaders = RateLimitHeaders.Relevant(response.Headers);
+                    report.ThrottleBody = Snippet(response.Body);
+                }
+                else if (response.HasResponse && !throttled && report.AcceptedHeaders.Count == 0)
+                    report.AcceptedHeaders = RateLimitHeaders.Relevant(response.Headers);
                 if (sample.Error)
                     errors++;
                 if (report.Url.Length == 0 || report.Url.Contains("{{", StringComparison.Ordinal))
@@ -342,9 +382,23 @@ public sealed class RateLimitProber(IRequestSender sender)
         return Finish(report, clock);
     }
 
+    private static double? Median(IEnumerable<RateLimitSample> samples)
+    {
+        var v = samples.Select(s => s.LatencyMs).Order().ToArray();
+        return v.Length == 0 ? null : v.Length % 2 == 1 ? v[v.Length / 2] : (v[v.Length / 2 - 1] + v[v.Length / 2]) / 2;
+    }
+
+    private static string? Snippet(string body)
+    {
+        var text = body.Trim();
+        return text.Length == 0 ? null : text.Length > 300 ? text[..300] + "…" : text;
+    }
+
     private static RateLimitReport Finish(RateLimitReport report, Stopwatch clock)
     {
         report.Duration = clock.Elapsed;
+        report.MedianAcceptedMs = Median(report.Samples.Where(s => !s.Throttled && !s.Error));
+        report.MedianThrottledMs = Median(report.Samples.Where(s => s.Throttled));
         if (report.Samples.Count(s => s.Phase != RateLimitPhase.Baseline) == 0 && report.Error is null && report.Stopped)
             report.Error = "Stopped before any requests were sent.";
         report.Insights.AddRange(RateLimitInsights.For(report));

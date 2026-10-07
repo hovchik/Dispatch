@@ -230,6 +230,8 @@ public sealed partial class RateLimitViewModel : ObservableObject, ITool
     [ObservableProperty] private string _recoveryText = "—";
     [ObservableProperty] private string _refillText = "—";
     [ObservableProperty] private string _advertisedText = "—";
+    [ObservableProperty] private string _safeRateText = "—";
+    [ObservableProperty] private string _headersText = "—";
 
     public ObservableCollection<ReportInsight> Insights { get; } = [];
 
@@ -243,7 +245,7 @@ public sealed partial class RateLimitViewModel : ObservableObject, ITool
         Log.Clear();
         Sent = Accepted = Throttled = 0;
         Summary = string.Empty;
-        CapacityText = RecoveryText = RefillText = AdvertisedText = "—";
+        CapacityText = RecoveryText = RefillText = AdvertisedText = SafeRateText = HeadersText = "—";
         IsRunning = true;
         _cts = new CancellationTokenSource();
         Status = "Probing… only probe APIs you are authorised to test.";
@@ -305,6 +307,21 @@ public sealed partial class RateLimitViewModel : ObservableObject, ITool
             _ => "Unknown"
         };
         AdvertisedText = report.Advertised is { } a ? $"{a.Limit?.ToString() ?? "?"} ({a.HeaderStyle})" : "none";
+        SafeRateText = report.RecommendedPerSecond is { } safe && report.SustainedPerSecond is { } sustained
+            ? $"≤ {safe:0.##} req/s ({safe * 60:0}/min)\nendpoint sustains {sustained:0.##} req/s"
+            : "—";
+        if (report.MedianAcceptedMs is { } ms)
+            SafeRateText += $"\nlatency {ms:0} ms" + (report.MedianThrottledMs is { } t ? $" ({t:0} ms throttled)" : "");
+        var lines = new List<string>();
+        lines.AddRange(report.AcceptedHeaders.Select(h => $"{h.Name}: {h.Value}"));
+        if (report.ThrottledHeaders.Count > 0)
+        {
+            lines.Add($"— throttled (HTTP {report.ThrottleStatus}) —");
+            lines.AddRange(report.ThrottledHeaders.Select(h => $"{h.Name}: {h.Value}"));
+        }
+        if (report.ThrottleBody is { } body)
+            lines.Add($"body: {body.ReplaceLineEndings(" ")}");
+        HeadersText = lines.Count > 0 ? string.Join('\n', lines) : "no rate-limit headers";
         foreach (var insight in report.Insights)
             Insights.Add(insight);
         Status = $"{report.RequestsSent} request(s) in {report.Duration.TotalSeconds:0.0} s" + (report.Stopped ? " · stopped early" : "");
