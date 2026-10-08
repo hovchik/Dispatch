@@ -147,6 +147,10 @@ public sealed class GrpcCall : IAsyncDisposable
         }
     }
 
+    /// <summary>True when the server sent a <c>grpc-status</c> (in trailers, or in headers for a "trailers-only" response).</summary>
+    public bool HasGrpcStatus =>
+        _response is not null && (_response.TrailingHeaders.Contains("grpc-status") || _response.Headers.Contains("grpc-status"));
+
     /// <summary>The call status: from trailers, or from headers for a "trailers-only" response.</summary>
     public (int Code, string Message, IReadOnlyList<ResponseHeader> Trailers) GetStatus()
     {

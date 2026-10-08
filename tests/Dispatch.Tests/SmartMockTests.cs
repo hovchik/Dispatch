@@ -173,6 +173,27 @@ public sealed class SmartMockServerTests
     }
 
     [Fact]
+    public async Task Stateful_mode_assigns_sequential_ids_across_repeated_posts()
+    {
+        await using var server = new MockServer();
+        await server.StartAsync(
+        [
+            Route(HttpVerb.Get, "{{baseUrl}}/pets", """[{"id":1,"name":"Rex"}]"""),
+            Route(HttpVerb.Post, "{{baseUrl}}/pets", """{"id":0,"name":"x"}""", 201)
+        ], new MockServerOptions { Port = HttpProtocolExecutorTests.FreePort(), Stateful = true });
+        var baseUrl = server.BaseUrl!.ToString().TrimEnd('/');
+
+        var (first, luna) = await SendAsync(HttpMethod.Post, $"{baseUrl}/pets", """{"name":"Luna"}""");
+        Assert.Equal(HttpStatusCode.Created, first);
+        Assert.Equal(2, luna!["id"]!.GetValue<long>());
+
+        // The second POST must compute the next id from the id the first POST created (a JsonValue<long>), not crash.
+        var (second, milo) = await SendAsync(HttpMethod.Post, $"{baseUrl}/pets", """{"name":"Milo"}""");
+        Assert.Equal(HttpStatusCode.Created, second);
+        Assert.Equal(3, milo!["id"]!.GetValue<long>());
+    }
+
+    [Fact]
     public async Task Examples_can_echo_the_request_body_and_headers()
     {
         await using var server = new MockServer();
@@ -191,5 +212,33 @@ public sealed class SmartMockServerTests
         Assert.Equal("tests", json["via"]!.GetValue<string>());
         Assert.Equal("POST", json["method"]!.GetValue<string>());
         Assert.Equal(6, json["ref"]!.GetValue<string>().Length);
+    }
+}
+
+public sealed class SeededMockServerTests
+{
+    [Fact]
+    public async Task Seeded_dynamic_data_is_generated_safely_under_concurrent_requests()
+    {
+        const string schema = """{"type":"object","required":["id","name","tags"],"properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string"},"tags":{"type":"array","items":{"type":"string"},"minItems":1}}}""";
+        await using var server = new MockServer();
+        await server.StartAsync([new ApiRequest
+        {
+            Name = "GET users", Method = HttpVerb.Get, Url = "{{baseUrl}}/users/{{id}}",
+            Examples = [new ResponseExample { StatusCode = 200, Body = """{"id":1,"name":"Ann","tags":["a"]}""", Schema = schema }]
+        }], new MockServerOptions { Port = HttpProtocolExecutorTests.FreePort(), DynamicData = true, Seed = 42 });
+
+        using var http = new HttpClient();
+        var responses = await Task.WhenAll(Enumerable.Range(0, 64).Select(async i =>
+        {
+            using var response = await http.GetAsync($"{server.BaseUrl}users/{i}");
+            return (response.StatusCode, Body: await response.Content.ReadAsStringAsync());
+        }));
+
+        Assert.All(responses, r =>
+        {
+            Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+            Assert.Empty(JsonSchemaValidator.Validate(r.Body, schema));
+        });
     }
 }

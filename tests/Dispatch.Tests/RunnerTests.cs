@@ -105,6 +105,34 @@ public class ScriptTests
     }
 
     [Fact]
+    public async Task Unset_persists_beyond_the_send_for_environment_and_session_runtime()
+    {
+        var session = new SessionVariables();
+        session.SetRuntime([new KeyValuePair<string, string>("tmp", "x"), new KeyValuePair<string, string>("keepRt", "1")]);
+        var sender = new RequestSender([new FakeExecutor(_ => new ApiResponse { StatusCode = 200, Succeeded = true, Body = "{}", ContentType = "application/json" })],
+            new NullHistory(), session, new JintScriptRunner());
+        var environment = new ApiEnvironment { Variables = [new("token", "old"), new("keep", "1")] };
+        var request = new ApiRequest
+        {
+            Url = "https://api/x",
+            TestScript = """
+                pm.environment.unset("token");
+                pm.variables.unset("tmp");
+                pm.environment.set("fresh", "f");
+                """
+        };
+
+        var response = await sender.SendAsync(request, new SendOptions { Environment = environment, RecordHistory = false }, CancellationToken.None);
+
+        Assert.Equal(["token"], response.EnvironmentRemovals);
+        Assert.Equal("f", response.EnvironmentUpdates["fresh"]);
+        Assert.DoesNotContain(environment.Variables, v => v.Key == "token");
+        Assert.Contains(environment.Variables, v => v.Key == "keep");
+        Assert.False(session.Runtime.ContainsKey("tmp"));
+        Assert.Equal("1", session.Runtime["keepRt"]);
+    }
+
+    [Fact]
     public async Task Errors_and_infinite_loops_are_contained()
     {
         var runner = new JintScriptRunner();
@@ -208,5 +236,39 @@ public class RunnerTests
         var json = DataFile.ParseJson("""[{"id":1,"tags":["a"],"name":"n"}]""");
         Assert.Equal("1", json[0]["id"]);
         Assert.Equal("""["a"]""", json[0]["tags"]);
+    }
+}
+
+public class ScriptHostCallbackTests
+{
+    private static readonly ApiResponse Response = new() { StatusCode = 200, ReasonPhrase = "OK", Body = "{}" };
+
+    [Fact]
+    public async Task Atob_accepts_base64url_whitespace_and_missing_padding()
+    {
+        const string script = """
+            pm.test("padded", () => pm.expect(atob("aGVsbG8=")).to.equal("hello"));
+            pm.test("unpadded", () => pm.expect(atob("aGVsbG8")).to.equal("hello"));
+            pm.test("base64url", () => pm.expect(atob("Pz8-Pw")).to.equal("??>?"));
+            pm.test("whitespace", () => pm.expect(atob("aGVs\nbG8=")).to.equal("hello"));
+            """;
+
+        var result = await new JintScriptRunner().RunTestsAsync(script, new ApiRequest(), Response, new VariableContext(), CancellationToken.None);
+
+        Assert.Null(result.Error);
+        Assert.All(result.Tests, t => Assert.True(t.Passed, $"{t.Name}: {t.Message}"));
+    }
+
+    [Fact]
+    public async Task Clr_exceptions_from_host_callbacks_fail_the_script_instead_of_the_send()
+    {
+        var runner = new JintScriptRunner();
+
+        var result = await runner.RunTestsAsync("""pm.test("ran", () => true); atob("%%%not base64%%%");""",
+            new ApiRequest(), Response, new VariableContext(), CancellationToken.None);
+
+        Assert.NotNull(result.Error);
+        Assert.Contains("atob", result.Error);
+        Assert.Single(result.Tests); // what ran before the failure is kept
     }
 }

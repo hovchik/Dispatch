@@ -28,22 +28,25 @@ public sealed class HttpRequestExecutor(IHttpClientSource clients) : IRequestExe
     public async Task<ApiResponse> ExecuteAsync(HttpRequestMessage request, RequestSettings settings,
         NetworkCredential? credentials, CancellationToken cancellationToken)
     {
-        var client = clients.GetClient(settings, credentials);
-        var timeout = settings.TimeoutMs > 0
-            ? TimeSpan.FromMilliseconds(settings.TimeoutMs)
-            : client.Timeout != Timeout.InfiniteTimeSpan ? client.Timeout : DefaultTimeout;
+        var timeout = settings.TimeoutMs > 0 ? TimeSpan.FromMilliseconds(settings.TimeoutMs) : DefaultTimeout;
 
         var timings = new ConnectionTimings();
         request.Options.Set(ConnectionTimings.Key, timings);
         ApplyVersion(request, settings.HttpVersion);
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(timeout);
         var stopwatch = Stopwatch.StartNew();
         var startTimestamp = Stopwatch.GetTimestamp();
 
         try
         {
+            // Building the handler can fail on the user's settings (missing or bad client certificate, invalid proxy URL):
+            // those must come back as an error response like any other transport problem.
+            var client = clients.GetClient(settings, credentials);
+            if (settings.TimeoutMs <= 0 && client.Timeout != Timeout.InfiniteTimeSpan)
+                timeout = client.Timeout;
+            timeoutCts.CancelAfter(timeout);
+
             using var response = await client
                 .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token)
                 .ConfigureAwait(false);
@@ -86,7 +89,7 @@ public sealed class HttpRequestExecutor(IHttpClientSource clients) : IRequestExe
         {
             return ApiResponse.Failed(Describe(ex), stopwatch.Elapsed, request.RequestUri?.ToString());
         }
-        catch (Exception ex) when (ex is IOException or AuthenticationException or FileNotFoundException
+        catch (Exception ex) when (ex is IOException or AuthenticationException or FileNotFoundException or UriFormatException
                                        or System.Security.Cryptography.CryptographicException)
         {
             return ApiResponse.Failed(ex.Message, stopwatch.Elapsed, request.RequestUri?.ToString());

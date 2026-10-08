@@ -5,6 +5,8 @@ using Dispatch.Application.Requests;
 using Dispatch.Domain;
 using Dispatch.Infrastructure.Http;
 using Dispatch.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dispatch.Tests;
@@ -226,5 +228,137 @@ public sealed class PersistenceTests : IAsyncLifetime
     {
         public Task<ApiResponse> ExecuteAsync(HttpRequestMessage request, RequestSettings settings, CancellationToken ct) =>
             Task.FromResult(response);
+    }
+}
+
+/// <summary>Redirects are followed by hand when the cookie jar is on, so cookies set on intermediate hops are kept.</summary>
+public sealed class HttpRedirectCookieTests : IDisposable
+{
+    private readonly HttpClientPool _pool = new();
+
+    public void Dispose() => _pool.Dispose();
+
+    private HttpProtocolExecutor Executor(CookieJar jar) => new(new RequestMessageBuilder(), new HttpRequestExecutor(_pool), jar);
+
+    [Fact]
+    public async Task Cookies_from_every_redirect_hop_are_stored_and_sent_to_the_next_hop()
+    {
+        await using var server = await TestServer.StartAsync(app =>
+        {
+            app.MapPost("/login", (HttpContext ctx) =>
+            {
+                ctx.Response.Headers.Append("Set-Cookie", "sid=1; Path=/");
+                return Results.Redirect("/step", permanent: false, preserveMethod: false); // 302
+            });
+            app.MapGet("/step", (HttpContext ctx) =>
+            {
+                if (ctx.Request.Cookies["sid"] != "1")
+                    return Results.Unauthorized();
+                ctx.Response.Headers.Append("Set-Cookie", "flag=2; Path=/");
+                ctx.Response.Headers.Location = "/me";
+                return Results.StatusCode(303);
+            });
+            app.MapGet("/me", (HttpContext ctx) => Results.Json(new
+            {
+                method = ctx.Request.Method,
+                cookie = ctx.Request.Headers.Cookie.ToString()
+            }));
+        });
+        var jar = new CookieJar();
+        var request = new ApiRequest
+        {
+            Method = HttpVerb.Post,
+            Url = server.BaseUrl + "/login",
+            Body = new RequestBody { Mode = BodyMode.Json, Content = """{"u":"ann"}""" }
+        };
+
+        var response = await Executor(jar).SendAsync(request, CancellationToken.None);
+
+        Assert.True(response.HasResponse, response.Error);
+        Assert.Equal(200, response.StatusCode);
+        Assert.EndsWith("/me", response.EffectiveUrl);
+        Assert.StartsWith("POST /login", response.RawRequest);
+        var body = System.Text.Json.Nodes.JsonNode.Parse(response.Body)!;
+        Assert.Equal("GET", body["method"]!.GetValue<string>());
+        Assert.Contains("sid=1", body["cookie"]!.GetValue<string>());
+        Assert.Contains("flag=2", body["cookie"]!.GetValue<string>());
+        Assert.Equal(["flag", "sid"], jar.GetAll().Select(c => c.Name).Order().ToArray());
+    }
+
+    [Fact]
+    public async Task Temporary_redirect_keeps_method_and_body_but_drops_authorization_across_origins()
+    {
+        await using var target = await TestServer.StartAsync(app =>
+            app.MapPost("/there", async (HttpContext ctx) =>
+            {
+                using var reader = new StreamReader(ctx.Request.Body);
+                return Results.Json(new
+                {
+                    body = await reader.ReadToEndAsync(),
+                    auth = ctx.Request.Headers.Authorization.ToString(),
+                    cookie = ctx.Request.Headers.Cookie.ToString(),
+                    contentType = ctx.Request.ContentType
+                });
+            }));
+        await using var origin = await TestServer.StartAsync(app =>
+            app.MapPost("/go", (HttpContext ctx) =>
+            {
+                ctx.Response.Headers.Location = target.BaseUrl + "/there";
+                return Results.StatusCode(307);
+            }));
+        // Cookies are scoped by host, not port: reach the origin as "localhost" so the two servers are different origins.
+        var originUrl = origin.BaseUrl.Replace("127.0.0.1", "localhost");
+        var jar = new CookieJar();
+        jar.Store(new Uri(originUrl), ["a=origin; Path=/"]);
+        jar.Store(new Uri(target.BaseUrl), ["b=target; Path=/"]);
+        var request = new ApiRequest
+        {
+            Method = HttpVerb.Post,
+            Url = originUrl + "/go",
+            Auth = new AuthSettings { Mode = AuthMode.Bearer, Token = "secret" },
+            Body = new RequestBody { Mode = BodyMode.Json, Content = """{"n":1}""" }
+        };
+
+        var response = await Executor(jar).SendAsync(request, CancellationToken.None);
+
+        Assert.Equal(200, response.StatusCode);
+        var body = System.Text.Json.Nodes.JsonNode.Parse(response.Body)!;
+        Assert.Equal("""{"n":1}""", body["body"]!.GetValue<string>());
+        Assert.StartsWith("application/json", body["contentType"]!.GetValue<string>());
+        Assert.Equal("", body["auth"]!.GetValue<string>());      // not forwarded to another origin
+        Assert.Equal("b=target", body["cookie"]!.GetValue<string>()); // the target's cookies, not the origin's
+    }
+
+    [Fact]
+    public async Task Max_redirects_is_honoured_and_the_last_3xx_is_returned()
+    {
+        await using var server = await TestServer.StartAsync(app =>
+            app.MapGet("/loop/{n:int}", (int n, HttpContext ctx) =>
+            {
+                ctx.Response.Headers.Location = $"/loop/{n + 1}";
+                return Results.StatusCode(302);
+            }));
+        var request = new ApiRequest { Url = server.BaseUrl + "/loop/0", Settings = new RequestSettings { MaxRedirects = 2 } };
+
+        var response = await Executor(new CookieJar()).SendAsync(request, CancellationToken.None);
+
+        Assert.Equal(302, response.StatusCode);
+        Assert.EndsWith("/loop/2", response.EffectiveUrl);
+    }
+
+    [Fact]
+    public async Task Transport_setup_errors_are_error_responses()
+    {
+        var executor = new HttpRequestExecutor(_pool);
+
+        var missingCert = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Get, "http://127.0.0.1:1/"),
+            new RequestSettings { ClientCertificatePath = Path.Combine(Path.GetTempPath(), "no-such-cert.pfx") }, CancellationToken.None);
+        var badProxy = await executor.ExecuteAsync(new HttpRequestMessage(HttpMethod.Get, "http://127.0.0.1:1/"),
+            new RequestSettings { Proxy = "not a proxy url" }, CancellationToken.None);
+
+        Assert.False(missingCert.HasResponse);
+        Assert.Contains("Client certificate not found", missingCert.Error);
+        Assert.False(badProxy.HasResponse);
+        Assert.NotNull(badProxy.Error);
     }
 }

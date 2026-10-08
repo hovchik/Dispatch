@@ -248,12 +248,16 @@ public static class JsonPath
             return andParts.All(p => Filter(item, p));
 
         expression = expression.Trim();
-        if (expression.StartsWith('(') && expression.EndsWith(')'))
-            return Filter(item, expression[1..^1]);
-
         var negate = expression.StartsWith('!');
         if (negate)
             expression = expression[1..].Trim();
+
+        // Parenthesised group, possibly negated: !(@.a == 1)
+        if (expression.StartsWith('(') && expression.EndsWith(')'))
+        {
+            var inner = Filter(item, expression[1..^1]);
+            return negate ? !inner : inner;
+        }
 
         foreach (var op in Operators)
         {
@@ -338,6 +342,19 @@ public static class JsonPath
         }
     }
 
+    /// <summary>User-supplied regex with a timeout, so a pathological pattern cannot hang the filter.</summary>
+    private static bool SafeMatch(string input, string pattern, System.Text.RegularExpressions.RegexOptions options)
+    {
+        try
+        {
+            return System.Text.RegularExpressions.Regex.IsMatch(input, pattern, options, TimeSpan.FromSeconds(2));
+        }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+        {
+            return false;
+        }
+    }
+
     private static bool Compare(JsonNode? left, JsonNode? right, string op)
     {
         if (op == "=~")
@@ -348,11 +365,11 @@ public static class JsonPath
                 var close = pattern.LastIndexOf('/');
                 var flags = pattern[(close + 1)..];
                 pattern = pattern[1..close];
-                return System.Text.RegularExpressions.Regex.IsMatch(ToText(left), pattern,
+                return SafeMatch(ToText(left), pattern,
                     flags.Contains('i') ? System.Text.RegularExpressions.RegexOptions.IgnoreCase
                         : System.Text.RegularExpressions.RegexOptions.None);
             }
-            return System.Text.RegularExpressions.Regex.IsMatch(ToText(left), pattern);
+            return SafeMatch(ToText(left), pattern, System.Text.RegularExpressions.RegexOptions.None);
         }
 
         if (TryNumber(left, out var l) && TryNumber(right, out var r))

@@ -29,7 +29,7 @@ public static class CaptureConverter
             var type = exchange.RequestContentType ?? "";
             request.Body = type.Contains("json") ? new RequestBody { Mode = BodyMode.Json, Content = exchange.RequestBody }
                 : type.Contains("xml") ? new RequestBody { Mode = BodyMode.Xml, Content = exchange.RequestBody }
-                : type.Contains("x-www-form-urlencoded") ? new RequestBody { Mode = BodyMode.FormUrlEncoded, FormFields = QueryString.Parse("?" + exchange.RequestBody) }
+                : type.Contains("x-www-form-urlencoded") ? new RequestBody { Mode = BodyMode.FormUrlEncoded, FormFields = QueryString.ParseForm(exchange.RequestBody) }
                 : new RequestBody { Mode = BodyMode.Text, Content = exchange.RequestBody };
         }
 

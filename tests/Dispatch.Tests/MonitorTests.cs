@@ -35,6 +35,9 @@ public class CronScheduleTests
     [InlineData("60 * * * *")]    // minute out of range
     [InlineData("* 24 * * *")]    // hour out of range
     [InlineData("*/0 * * * *")]   // bad step
+    [InlineData("99999999999 * * * *")]   // overflow
+    [InlineData("1-99999999999 * * * *")] // overflow in a range
+    [InlineData("*/99999999999 * * * *")] // overflow in a step
     public void Rejects_invalid_expressions(string cron) =>
         Assert.False(CronSchedule.TryParse(cron, out _));
 }

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Dispatch.Application.Requests;
@@ -84,9 +85,12 @@ public static class Insomnia
         if (mime == "application/graphql")
         {
             request.Kind = RequestKind.GraphQl;
-            var gql = JsonNode.Parse(body?["text"]?.ToString() ?? "{}");
-            request.Protocol.GraphQl.Query = gql?["query"]?.ToString() ?? "";
-            request.Protocol.GraphQl.Variables = gql?["variables"]?.ToJsonString() ?? "";
+            var text = body?["text"]?.ToString() ?? "";
+            JsonNode? gql = null;
+            try { gql = string.IsNullOrWhiteSpace(text) ? null : JsonNode.Parse(text); }
+            catch (JsonException) { /* not the {"query","variables"} envelope: treat the text as the raw query */ }
+            request.Protocol.GraphQl.Query = gql is JsonObject ? gql["query"]?.ToString() ?? "" : text;
+            request.Protocol.GraphQl.Variables = gql is JsonObject ? gql["variables"]?.ToJsonString() ?? "" : "";
         }
         else if (mime is "application/x-www-form-urlencoded")
             request.Body = new RequestBody { Mode = BodyMode.FormUrlEncoded, FormFields = Pairs(body?["params"]) };
@@ -233,7 +237,7 @@ public static class Har
                     Content = text.ToString()
                 };
                 if (request.Body.Mode == BodyMode.FormUrlEncoded)
-                    request.Body.FormFields = QueryString.Parse("?" + request.Body.Content).ToList();
+                    request.Body.FormFields = QueryString.ParseForm(request.Body.Content);
             }
 
             if (entry?["response"] is { } response && response["status"]?.GetValue<int>() is int status and > 0)
@@ -379,7 +383,7 @@ public static class HttpFile
                 if (contentType.Contains("x-www-form-urlencoded"))
                 {
                     request.Body.Mode = BodyMode.FormUrlEncoded;
-                    request.Body.FormFields = QueryString.Parse("?" + body.Replace("\n", "")).ToList();
+                    request.Body.FormFields = QueryString.ParseForm(body.Replace("\n", ""));
                 }
                 if (contentType.Contains("graphql") || body.StartsWith("query ", StringComparison.Ordinal) && request.Headers.Any(h => h.Key.Equals("X-REQUEST-TYPE", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -392,6 +396,15 @@ public static class HttpFile
             collection.Requests.Add(request);
         }
         return ImportResult.Single(".http", collection);
+    }
+
+    /// <summary>GraphQL variables as JSON when they parse; otherwise the raw text (a {{template}} or a typo must not abort the export).</summary>
+    private static JsonNode? GraphQlVariables(string? variables)
+    {
+        if (string.IsNullOrWhiteSpace(variables))
+            return null;
+        try { return JsonNode.Parse(variables); }
+        catch (JsonException) { return JsonValue.Create(variables); }
     }
 
     public static string Export(RequestCollection collection)
@@ -413,7 +426,7 @@ public static class HttpFile
                 RequestKind.GraphQl => new JsonObject
                 {
                     ["query"] = r.Protocol.GraphQl.Query,
-                    ["variables"] = string.IsNullOrWhiteSpace(r.Protocol.GraphQl.Variables) ? null : JsonNode.Parse(r.Protocol.GraphQl.Variables)
+                    ["variables"] = GraphQlVariables(r.Protocol.GraphQl.Variables)
                 }.ToJsonString(),
                 _ => r.Body.Mode switch
                 {

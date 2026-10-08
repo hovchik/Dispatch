@@ -255,7 +255,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
     public bool IsSessionKind => Kind is RequestKind.WebSocket or RequestKind.Sse or RequestKind.SocketIo;
 
     /// <summary>While connected, the user can type messages to send on the open connection.</summary>
-    public bool CanCompose => IsSending && (Kind is RequestKind.WebSocket or RequestKind.SocketIo or RequestKind.Tcp or RequestKind.Udp
+    public bool CanCompose => IsSending && IsOutgoingOpen && (Kind is RequestKind.WebSocket or RequestKind.SocketIo or RequestKind.Tcp or RequestKind.Udp
                                             or RequestKind.Mqtt or RequestKind.Kafka or RequestKind.Amqp
                                             || (Kind == RequestKind.Grpc && Grpc.IsClientStreaming));
 
@@ -535,6 +535,11 @@ public sealed partial class RequestTabViewModel : ObservableObject
                 Auth.CacheToken(refreshed);
             await _host.OnRequestSentAsync(response);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Cancel / Disconnect / closing the tab: executors rethrow the user's cancellation.
+            Response = await ResponseViewModel.CreateAsync(ApiResponse.Failed("Cancelled.", TimeSpan.Zero, kind: Kind), _services.Clipboard, _services.Dialogs);
+        }
         finally
         {
             _outgoing.Writer.TryComplete();
@@ -557,22 +562,29 @@ public sealed partial class RequestTabViewModel : ObservableObject
     private async Task SendMessageAsync()
     {
         var text = OutgoingText;
-        if (_outgoing is null || string.IsNullOrEmpty(text))
+        if (!IsOutgoingOpen || string.IsNullOrEmpty(text))
             return;
-        await _outgoing.Writer.WriteAsync(text);
-        OutgoingText = string.Empty;
+        if (_outgoing!.Writer.TryWrite(text))
+            OutgoingText = string.Empty;
     }
 
     [RelayCommand]
-    private async Task SendSavedMessageAsync(KeyValueRowViewModel? row)
+    private void SendSavedMessage(KeyValueRowViewModel? row)
     {
-        if (_outgoing is not null && row is { Value.Length: > 0 })
-            await _outgoing.Writer.WriteAsync(row.Value);
+        if (IsOutgoingOpen && row is { Value.Length: > 0 })
+            _outgoing!.Writer.TryWrite(row.Value);
     }
+
+    /// <summary>The outgoing channel exists and has not been half-closed with <see cref="EndStream"/>.</summary>
+    private bool IsOutgoingOpen => _outgoing is { } outgoing && !outgoing.Reader.Completion.IsCompleted;
 
     /// <summary>Half-closes a gRPC client stream so the server can respond.</summary>
     [RelayCommand]
-    private void EndStream() => _outgoing?.Writer.TryComplete();
+    private void EndStream()
+    {
+        _outgoing?.Writer.TryComplete();
+        OnPropertyChanged(nameof(CanCompose));
+    }
 
     [RelayCommand]
     private void ClearLiveMessages() => LiveMessages.Clear();
@@ -583,7 +595,9 @@ public sealed partial class RequestTabViewModel : ObservableObject
         if (CollectionId is null)
         {
             CommitRename();
-            SaveTarget ??= SaveTargets.FirstOrDefault();
+            // The node may be stale after a collection reload; re-resolve it by id.
+            var wantedId = SaveTarget?.Id;
+            SaveTarget = SaveTargets.FirstOrDefault(n => n.Id == wantedId) ?? SaveTargets.FirstOrDefault();
             IsSavePopupOpen = true;
             return;
         }
@@ -603,21 +617,25 @@ public sealed partial class RequestTabViewModel : ObservableObject
             _host.ReportError($"Could not create collection: {ex.Message}");
             return;
         }
-        CollectionId = target.Id;
         IsSavePopupOpen = false;
-        await PersistAsync();
+        await PersistAsync(target.Id);
     }
 
     [RelayCommand]
     private void CancelSave() => IsSavePopupOpen = false;
 
-    private async Task PersistAsync()
+    /// <param name="collectionId">Collection to save into; the tab only adopts it once the save succeeded.</param>
+    private async Task PersistAsync(Guid? collectionId = null)
     {
         try
         {
             var model = ToModel();
+            if (collectionId is { } target)
+                model.CollectionId = target;
             await _services.Collections.SaveRequestAsync(model);
             _sortOrder = model.SortOrder;
+            if (collectionId is not null)
+                CollectionId = collectionId;
             IsDirty = false;
             await _host.OnRequestSavedAsync();
         }

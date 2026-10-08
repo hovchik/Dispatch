@@ -39,6 +39,23 @@ public class PassiveCheckTests
     }
 
     [Fact]
+    public void Inspects_each_set_cookie_header_separately()
+    {
+        var request = new ApiRequest { Name = "Login", Url = "https://api.example.com/x" };
+        var findings = PassiveChecks.Inspect(request, Response(200, "{}", "application/json",
+            ("Set-Cookie", "theme=dark; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Secure; HttpOnly; SameSite=Lax"),
+            ("Set-Cookie", "sessionId=abc; Secure; HttpOnly"),
+            ("Set-Cookie", "auth_token=xyz; Expires=Wed, 21 Oct 2026 07:28:00 GMT; SameSite=Strict"))).ToList();
+
+        // Only the two session cookies are reported, each by its own name (no splitting on ", ").
+        var sameSite = findings.Where(f => f.Title.Contains("SameSite")).ToList();
+        Assert.Equal(["sessionId=abc"], sameSite.Select(f => f.Evidence));
+        var httpOnly = findings.Where(f => f.Title.Contains("HttpOnly")).ToList();
+        Assert.Equal(["auth_token=xyz"], httpOnly.Select(f => f.Evidence));
+        Assert.Equal(["auth_token=xyz"], findings.Where(f => f.Title.Contains("without Secure")).Select(f => f.Evidence));
+    }
+
+    [Fact]
     public void Flags_plaintext_http()
     {
         var request = new ApiRequest { Name = "Insecure", Url = "http://api.example.com/x" };

@@ -77,6 +77,41 @@ public sealed class WebSocketConnector(IHttpClientSource clients)
     public static Task SendTextAsync(WebSocket socket, string text, CancellationToken ct) =>
         socket.SendAsync(Encoding.UTF8.GetBytes(text), WebSocketMessageType.Text, true, ct);
 
+    /// <summary>
+    /// Ends the session gracefully when <paramref name="stop"/> fires (user disconnect, listen window over, message limit):
+    /// runs <paramref name="beforeClose"/>, then sends a Close frame so the pending receive completes with the server's
+    /// Close frame and its status. Cancelling the receive instead would abort the socket without any Close handshake.
+    /// If the server does not answer within 2 s the socket is aborted, which also ends the receive.
+    /// </summary>
+    public static CancellationTokenRegistration CloseOnStop(WebSocket socket, CancellationToken stop, Func<Task>? beforeClose = null) =>
+        stop.UnsafeRegister(_ => _ = CloseOrAbortAsync(socket, beforeClose), null);
+
+    private static async Task CloseOrAbortAsync(WebSocket socket, Func<Task>? beforeClose)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+            {
+                if (beforeClose is not null && socket.State == WebSocketState.Open)
+                    await beforeClose().WaitAsync(timeout.Token).ConfigureAwait(false);
+                await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Bye", timeout.Token).ConfigureAwait(false);
+            }
+            await Task.Delay(Timeout.Infinite, timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is WebSocketException or OperationCanceledException or ObjectDisposedException or InvalidOperationException)
+        {
+        }
+        try
+        {
+            if (socket.State is not (WebSocketState.Closed or WebSocketState.Aborted))
+                socket.Abort();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
     public static async Task CloseQuietlyAsync(WebSocket socket)
     {
         if (socket.State is not (WebSocketState.Open or WebSocketState.CloseReceived))
@@ -138,15 +173,20 @@ public sealed class WebSocketExecutor(WebSocketConnector connector) : IProtocolE
                 log.Listening();
 
                 var sending = context.Outgoing is null ? Task.CompletedTask : PumpOutgoingAsync(socket, context.Outgoing, log);
-                while (!log.Token.IsCancellationRequested)
+                // The receive itself is never cancelled: stopping sends a Close frame and the loop ends with the server's reply.
+                using (WebSocketConnector.CloseOnStop(socket, log.Token))
                 {
-                    var received = await WebSocketConnector.ReceiveAsync(socket, log.Token).ConfigureAwait(false);
-                    if (received is null)
+                    while (true)
                     {
-                        log.Info($"Server closed the connection: {socket.CloseStatus} {socket.CloseStatusDescription}".Trim());
-                        break;
+                        var received = await WebSocketConnector.ReceiveAsync(socket, CancellationToken.None).ConfigureAwait(false);
+                        if (received is null)
+                        {
+                            var closeInfo = $"{socket.CloseStatus} {socket.CloseStatusDescription}".Trim();
+                            log.Info(log.Token.IsCancellationRequested ? $"Connection closed: {closeInfo}" : $"Server closed the connection: {closeInfo}");
+                            break;
+                        }
+                        log.Received(received.Value.Text, received.Value.Binary ? "binary" : null, received.Value.Bytes);
                     }
-                    log.Received(received.Value.Text, received.Value.Binary ? "binary" : null, received.Value.Bytes);
                 }
                 log.Stop();
                 await sending.ConfigureAwait(false);
@@ -155,9 +195,13 @@ public sealed class WebSocketExecutor(WebSocketConnector connector) : IProtocolE
             {
                 // Disconnected by the user, or the listen window ended.
             }
-            catch (WebSocketException ex)
+            catch (WebSocketException ex) when (!log.Token.IsCancellationRequested)
             {
                 log.Failure(Describe(ex));
+            }
+            catch (WebSocketException)
+            {
+                // The server dropped the connection instead of answering our Close frame: we were leaving anyway.
             }
 
             await WebSocketConnector.CloseQuietlyAsync(socket).ConfigureAwait(false);

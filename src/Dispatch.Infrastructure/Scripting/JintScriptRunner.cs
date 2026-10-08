@@ -63,7 +63,7 @@ public sealed class JintScriptRunner : IScriptRunner
         engine.SetValue("__btoa", new Func<string, string>(s => Convert.ToBase64String(Encoding.Latin1.GetBytes(s))));
         engine.SetValue("__visualize", new Action<string, string>((template, dataJson) =>
             visualization = Template.Page(request.Name, Template.Render(template, JsonNode.Parse(dataJson)))));
-        engine.SetValue("__atob", new Func<string, string>(s => Encoding.Latin1.GetString(Convert.FromBase64String(s))));
+        engine.SetValue("__atob", new Func<string, string>(s => Encoding.Latin1.GetString(DecodeBase64(s))));
         engine.Execute("""
             var __host = {
               envGet: __envGet, envSet: __envSet, envUnset: __envUnset, varGet: __varGet, varSet: __varSet, varUnset: __varUnset,
@@ -97,6 +97,28 @@ public sealed class JintScriptRunner : IScriptRunner
         catch (ExecutionCanceledException)
         {
             return new ScriptResult(tests, log, "Script cancelled.");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A CLR exception from a host callback (bad input to atob, a null variable value, ...) must fail the script,
+            // not the whole send.
+            return new ScriptResult(tests, log, ex.Message);
+        }
+    }
+
+    /// <summary>Like a browser's <c>atob</c>, but also accepts base64url, whitespace and missing padding.</summary>
+    internal static byte[] DecodeBase64(string text)
+    {
+        var chars = text.Where(c => !char.IsWhiteSpace(c)).Select(c => c switch { '-' => '+', '_' => '/', _ => c }).ToArray();
+        var length = Array.IndexOf(chars, '=') is var pad && pad >= 0 ? pad : chars.Length;
+        var padded = new string(chars, 0, length).PadRight((length + 3) / 4 * 4, '=');
+        try
+        {
+            return Convert.FromBase64String(padded);
+        }
+        catch (FormatException)
+        {
+            throw new FormatException("atob: the string is not correctly encoded.");
         }
     }
 

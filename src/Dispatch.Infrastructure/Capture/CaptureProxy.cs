@@ -31,6 +31,9 @@ public sealed class CaptureProxyOptions
 /// </summary>
 public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposable
 {
+    /// <summary>Request bodies are buffered before forwarding; larger ones are refused with 413.</summary>
+    private const long MaxForwardBodyBytes = 256L * 1024 * 1024;
+
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private CaptureProxyOptions _options = new();
@@ -115,10 +118,27 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
                     await HandlePlainAsync(network, parts[0], parts[1], ct).ConfigureAwait(false);
             }
         }
-        catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or System.Security.Authentication.AuthenticationException)
+        catch (Exception)
         {
-            // A client that hangs up mid-request is normal for a proxy; ignore.
+            // A client that hangs up mid-request, or sends garbage (a bad chunk size, an invalid URL, ...), is normal for a
+            // proxy. The task is fire-and-forget, so nothing may escape here.
         }
+    }
+
+    /// <summary>
+    /// Host and port of a CONNECT target (<c>host:443</c>, <c>[::1]:8443</c>, <c>host</c>). Splitting on ':' would mangle
+    /// IPv6 literals.
+    /// </summary>
+    internal static bool TryParseConnectAuthority(string authority, out string host, out int port)
+    {
+        host = "";
+        port = 443;
+        if (authority.Length == 0 || authority.Contains('/') || !Uri.TryCreate("https://" + authority, UriKind.Absolute, out var uri)
+            || uri.HostNameType == UriHostNameType.Unknown || uri.IdnHost.Length == 0)
+            return false;
+        host = uri.IdnHost;
+        port = uri.Port;
+        return true;
     }
 
     // ---- Plain HTTP (absolute-form request target) -------------------------------------------------
@@ -127,7 +147,9 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
     {
         var headers = await ReadHeadersAsync(stream, ct).ConfigureAwait(false);
         var body = await ReadBodyAsync(stream, headers, ct).ConfigureAwait(false);
-        var response = await ForwardAsync(method, absoluteUri, headers, body, secure: false, ct).ConfigureAwait(false);
+        var response = body is null
+            ? PayloadTooLarge
+            : await ForwardAsync(method, absoluteUri, headers, body, secure: false, ct).ConfigureAwait(false);
         await WriteResponseAsync(stream, response, ct).ConfigureAwait(false);
     }
 
@@ -136,8 +158,11 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
     private async Task HandleConnectAsync(Stream clientStream, string authority2, CancellationToken ct)
     {
         await ReadHeadersAsync(clientStream, ct).ConfigureAwait(false); // drain CONNECT headers
-        var host = authority2.Split(':')[0];
-        var port = authority2.Contains(':') && int.TryParse(authority2.Split(':')[1], out var p) ? p : 443;
+        if (!TryParseConnectAuthority(authority2, out var host, out var port))
+        {
+            await WriteAsync(clientStream, "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", ct).ConfigureAwait(false);
+            return;
+        }
 
         await WriteAsync(clientStream, "HTTP/1.1 200 Connection Established\r\n\r\n", ct).ConfigureAwait(false);
 
@@ -171,7 +196,9 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
             var headers = await ReadHeadersAsync(tls, ct).ConfigureAwait(false);
             var body = await ReadBodyAsync(tls, headers, ct).ConfigureAwait(false);
             var url = $"https://{authority2}{parts[1]}";
-            var response = await ForwardAsync(parts[0], url, headers, body, secure: true, ct).ConfigureAwait(false);
+            var response = body is null
+                ? PayloadTooLarge
+                : await ForwardAsync(parts[0], url, headers, body, secure: true, ct).ConfigureAwait(false);
             await WriteResponseAsync(tls, response, ct).ConfigureAwait(false);
             if (ResponseClosesConnection(response))
                 break;
@@ -278,14 +305,17 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
         }
     }
 
+    /// <summary>One line per value: joining them with ", " would break Set-Cookie (whose values contain commas) for browsers.</summary>
     private static List<ProxyHeader> CollectHeaders(HttpResponseMessage response)
     {
         var headers = new List<ProxyHeader>();
         foreach (var h in response.Headers)
-            headers.Add(new ProxyHeader(h.Key, string.Join(", ", h.Value)));
+            foreach (var value in h.Value)
+                headers.Add(new ProxyHeader(h.Key, value));
         foreach (var h in response.Content.Headers)
             if (!h.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
-                headers.Add(new ProxyHeader(h.Key, string.Join(", ", h.Value)));
+                foreach (var value in h.Value)
+                    headers.Add(new ProxyHeader(h.Key, value));
         return headers;
     }
 
@@ -335,7 +365,8 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
         return headers;
     }
 
-    private async Task<byte[]> ReadBodyAsync(Stream stream, List<KeyValueItem> headers, CancellationToken ct)
+    /// <summary>The request body, or null when it is too large to forward (the caller answers 413).</summary>
+    private static async Task<byte[]?> ReadBodyAsync(Stream stream, List<KeyValueItem> headers, CancellationToken ct)
     {
         var transferEncoding = HeaderValue(headers, "Transfer-Encoding");
         if (transferEncoding is not null && transferEncoding.Contains("chunked", StringComparison.OrdinalIgnoreCase))
@@ -343,29 +374,27 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
 
         if (HeaderValue(headers, "Content-Length") is { } lengthText && long.TryParse(lengthText, out var length) && length > 0)
         {
-            var toRead = (int)Math.Min(length, _options.MaxBodyBytes * 4L);
-            var buffer = new byte[toRead];
+            // The whole body is forwarded upstream (MaxBodyBytes only caps what is recorded); a truncated body must never
+            // be passed off as the full request. Bodies we cannot hold in memory are refused with 413 instead.
+            if (length > MaxForwardBodyBytes)
+                return null;
+            var buffer = new byte[(int)length];
             var offset = 0;
-            while (offset < toRead)
+            while (offset < buffer.Length)
             {
                 var read = await stream.ReadAsync(buffer.AsMemory(offset), ct).ConfigureAwait(false);
                 if (read == 0)
                     break;
                 offset += read;
             }
-            // Drain any remainder beyond the cap so the stream stays aligned.
-            for (long remaining = length - offset; remaining > 0;)
-            {
-                var skip = new byte[(int)Math.Min(remaining, 8192)];
-                var read = await stream.ReadAsync(skip, ct).ConfigureAwait(false);
-                if (read == 0)
-                    break;
-                remaining -= read;
-            }
-            return offset == toRead ? buffer : buffer[..offset];
+            return offset == buffer.Length ? buffer : buffer[..offset];
         }
         return [];
     }
+
+    private static readonly ProxyResponse PayloadTooLarge = new(413, "Payload Too Large",
+        [new ProxyHeader("Content-Type", "text/plain"), new ProxyHeader("Connection", "close")],
+        Encoding.UTF8.GetBytes($"Capture proxy: request bodies over {MaxForwardBodyBytes:N0} bytes are not forwarded."));
 
     private static async Task<byte[]> ReadChunkedAsync(Stream stream, CancellationToken ct)
     {

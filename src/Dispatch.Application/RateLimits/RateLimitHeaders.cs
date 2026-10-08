@@ -81,8 +81,9 @@ public static partial class RateLimitHeaders
 
     private static int? FirstInt(string value, string key) =>
         Regex.Match(value, $@"(?:^|[;,\s]){Regex.Escape(key)}\s*=\s*(\d+)", RegexOptions.IgnoreCase) is { Success: true } m
-            ? int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)
-            : null;
+        && int.TryParse(m.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
+            ? n
+            : null; // absent, or too large to be a meaningful limit
 
     [GeneratedRegex(@"rate[-_]?limit|retry-after|quota|throttl", RegexOptions.IgnoreCase)]
     private static partial Regex RelevantRegex();

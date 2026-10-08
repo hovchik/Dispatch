@@ -87,6 +87,13 @@ public sealed class SessionVariables
                 _globals[k] = v;
     }
 
+    public void RemoveRuntime(IEnumerable<string> names)
+    {
+        lock (_gate)
+            foreach (var name in names)
+                _runtime.Remove(name);
+    }
+
     public void ClearRuntime()
     {
         lock (_gate)
@@ -278,19 +285,25 @@ public sealed class RequestSender : IRequestSender
             updates[k] = v;
         response.VariableUpdates = updates;
         response.EnvironmentUpdates = new Dictionary<string, string>(variables.EnvironmentUpdates, StringComparer.Ordinal);
+        response.EnvironmentRemovals = variables.EnvironmentRemovals.ToList();
 
         // Outside a collection run, runtime values and globals persist for the rest of the session.
         if (options.Variables is null)
         {
+            _session.RemoveRuntime(variables.RuntimeRemovals);
             _session.SetRuntime(variables.Runtime);
             _session.SetGlobals(variables.GlobalUpdates);
         }
 
-        // Environment updates are applied to the in-memory environment so the next send sees them;
-        // the UI persists them.
+        // Environment updates (and pm.environment.unset removals) are applied to the in-memory environment so the
+        // next send sees them; the UI persists them.
         if (options.Environment is not null)
+        {
             foreach (var (k, v) in variables.EnvironmentUpdates)
                 options.Environment.SetVariable(k, v);
+            foreach (var name in variables.EnvironmentRemovals)
+                options.Environment.Variables.RemoveAll(v => v.Enabled && v.Key.Trim() == name);
+        }
 
         return response;
     }

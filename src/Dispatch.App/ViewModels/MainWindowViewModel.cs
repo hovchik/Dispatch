@@ -137,10 +137,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     public async Task OnRequestSentAsync(ApiResponse response)
     {
         await SafeAsync(History.LoadAsync);
-        if (response.EnvironmentUpdates.Count > 0)
+        if (response.EnvironmentUpdates.Count > 0 || response.EnvironmentRemovals.Count > 0)
         {
-            await Environments.ApplyUpdatesAsync(response.EnvironmentUpdates);
-            ShowInfo($"Saved {string.Join(", ", response.EnvironmentUpdates.Keys)} to environment \"{Environments.Active.Name}\".");
+            await Environments.ApplyUpdatesAsync(response.EnvironmentUpdates, response.EnvironmentRemovals);
+            var parts = new List<string>();
+            if (response.EnvironmentUpdates.Count > 0)
+                parts.Add($"saved {string.Join(", ", response.EnvironmentUpdates.Keys)}");
+            if (response.EnvironmentRemovals.Count > 0)
+                parts.Add($"removed {string.Join(", ", response.EnvironmentRemovals)}");
+            ShowInfo($"Environment \"{Environments.Active.Name}\": {string.Join("; ", parts)}.");
         }
     }
 
@@ -459,7 +464,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         {
             case CollectionAction.Run:
                 Dialogs.ShowTool(new RunnerViewModel(collection, _services.Runner, Dialogs, () => ActiveEnvironment,
-                    Environments.ApplyUpdatesAsync));
+                    updates => Environments.ApplyUpdatesAsync(updates)));
                 break;
             case CollectionAction.LoadTest:
                 Dialogs.ShowTool(new LoadTestViewModel(collection, _services.LoadTester, Dialogs, () => ActiveEnvironment));

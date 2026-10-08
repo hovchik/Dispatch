@@ -15,6 +15,9 @@ public sealed class JsonSchemaValidator
 {
     private const int MaxDepth = 64;
 
+    /// <summary>Schema patterns are user input; a timeout keeps a pathological regex from hanging validation.</summary>
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(2);
+
     public JsonSchemaValidator(JsonNode schema, JsonNode? rootDocument = null)
     {
         Schema = schema;
@@ -175,7 +178,7 @@ public sealed class JsonSchemaValidator
             {
                 foreach (var (pattern, patternSchema) in patternProperties)
                 {
-                    if (!Regex.IsMatch(name, pattern))
+                    if (!Regex.IsMatch(name, pattern, RegexOptions.None, RegexTimeout))
                         continue;
                     matched = true;
                     Check(value, patternSchema, childPath, errors, depth + 1);
@@ -257,7 +260,7 @@ public sealed class JsonSchemaValidator
             errors.Add($"{path}: must be at least {min} characters");
         if (Int(s, "maxLength") is { } max && length > max)
             errors.Add($"{path}: must be at most {max} characters");
-        if (s["pattern"] is JsonValue p && p.TryGetValue<string>(out var pattern) && !Regex.IsMatch(value, pattern))
+        if (s["pattern"] is JsonValue p && p.TryGetValue<string>(out var pattern) && !Regex.IsMatch(value, pattern, RegexOptions.None, RegexTimeout))
             errors.Add($"{path}: '{value}' does not match pattern {pattern}");
         if (s["format"] is JsonValue f && f.TryGetValue<string>(out var format) && !MatchesFormat(value, format))
             errors.Add($"{path}: '{value}' is not a valid {format}");
@@ -294,7 +297,7 @@ public sealed class JsonSchemaValidator
                        && value.Contains('T', StringComparison.OrdinalIgnoreCase),
         "date" => DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _),
         "time" => TimeOnly.TryParse(value.Split('+', '-', 'Z')[0], CultureInfo.InvariantCulture, out _),
-        "email" => Regex.IsMatch(value, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"),
+        "email" => Regex.IsMatch(value, @"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.None, RegexTimeout),
         "uuid" => Guid.TryParse(value, out _),
         "uri" or "url" => Uri.TryCreate(value, UriKind.Absolute, out _),
         "uri-reference" => Uri.TryCreate(value, UriKind.RelativeOrAbsolute, out _),

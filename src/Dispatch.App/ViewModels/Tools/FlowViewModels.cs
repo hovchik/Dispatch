@@ -171,7 +171,7 @@ public sealed partial class FlowBuilderViewModel : ObservableObject, ITool
         _runner = runner;
         _environment = environment;
         _dialogs = dialogs;
-        Name = flow.Name;
+        _name = flow.Name; // the property setter would mark a freshly opened flow dirty
         RequestChoices = collection.Requests.OrderBy(r => r.Folder).ThenBy(r => r.SortOrder)
             .Select(r => new FlowRequestChoice(r.Id, r.Folder.Length > 0 ? $"{r.Folder}/{r.Name}" : r.Name)).ToList();
         foreach (var step in flow.Steps)

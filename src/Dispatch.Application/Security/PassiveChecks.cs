@@ -60,8 +60,8 @@ public static partial class PassiveChecks
                     "The response advertises the server software and its version, which helps an attacker target known vulnerabilities.",
                     $"{banner}: {value}", $"Remove or generalise the {banner} header.");
 
-        if (headers.TryGetValue("Set-Cookie", out var cookies))
-            foreach (var cookie in cookies.Split(", Path", StringSplitOptions.None))
+        // Each Set-Cookie header is one cookie; never join them (cookie values and Expires dates contain ", ").
+        foreach (var cookie in response.Headers.Where(h => h.Name.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase)).Select(h => h.Value))
             {
                 var isSession = SessionCookieRegex().IsMatch(cookie);
                 if (isSession && !cookie.Contains("HttpOnly", StringComparison.OrdinalIgnoreCase))

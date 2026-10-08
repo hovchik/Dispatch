@@ -41,7 +41,11 @@ public sealed class ShowcaseService : Showcase.ShowcaseBase
     public override async Task Chat(IAsyncStreamReader<Line> requestStream, IServerStreamWriter<Line> responseStream, ServerCallContext context)
     {
         await foreach (var line in requestStream.ReadAllAsync())
+        {
+            if (line.Text == "bye")
+                return; // the server ends the conversation while the client may still be typing
             await responseStream.WriteAsync(new Line { Text = line.Text.ToUpperInvariant() });
+        }
     }
 
     public override Task<Google.Protobuf.WellKnownTypes.Empty> Fail(Google.Protobuf.WellKnownTypes.Empty request, ServerCallContext context) =>
@@ -185,6 +189,40 @@ public sealed class GrpcTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Interactive_streaming_call_returns_once_the_server_completes()
+    {
+        var outgoing = Channel.CreateUnbounded<string>();
+        await outgoing.Writer.WriteAsync("""{"text": "hi"}""");
+        await outgoing.Writer.WriteAsync("""{"text": "bye"}""");
+        // The user keeps the session open (the channel is never completed): the call must still return.
+
+        var response = await Executor().ExecuteAsync(Request("Chat", ""),
+                new ExecutionContext { Outgoing = outgoing.Reader, Interactive = true }, CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.True(response.IsSuccess, response.ReasonPhrase);
+        var received = response.Messages.Where(m => m.Direction == MessageDirection.Received)
+            .Select(m => JsonNode.Parse(m.Content)!["text"]!.GetValue<string>()).ToList();
+        Assert.Equal(["HI"], received);
+    }
+
+    [Fact]
+    public async Task Server_stream_stopped_by_the_message_limit_is_a_success()
+    {
+        var request = Request("Count", """{"to": 100000}""");
+        request.Protocol.Stream.MaxMessages = 3;
+
+        var response = await Executor().ExecuteAsync(request, new ExecutionContext(), CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.True(response.IsSuccess, response.ReasonPhrase);
+        Assert.Equal(0, response.StatusCode);
+        Assert.Equal(3, response.Messages.Count(m => m.Direction == MessageDirection.Received));
+        Assert.Contains(response.Messages, m => m.Content == "Stopped listening");
+        Assert.DoesNotContain(response.Messages, m => m.Direction == MessageDirection.Error);
+    }
+
+    [Fact]
     public async Task Error_status_and_message_are_reported()
     {
         var response = await Executor().ExecuteAsync(Request("Fail", "{}"), new ExecutionContext(), CancellationToken.None);
@@ -259,6 +297,30 @@ public sealed class GrpcTests : IAsyncLifetime
         Assert.Equal("9007199254740993", json["big"]!.GetValue<string>());
         Assert.Equal("GREEN", json["color"]!.GetValue<string>());
         Assert.True(json["extra"]!["k"]![3]!["deep"]!.GetValue<bool>());
+    }
+}
+
+public class ProtoJsonFloatTests
+{
+    [Fact]
+    public void Float_fields_decode_to_single_precision_text()
+    {
+        var schema = GrpcSchemaProvider.LoadFromFiles(new GrpcSettings
+        {
+            ProtoFiles = [Path.Combine(AppContext.BaseDirectory, "Protos", "interop.proto")]
+        });
+        var codec = new ProtoJson(schema);
+
+        var bytes = codec.Encode("dispatch.interop.Everything", """{"approx": 0.1, "ratio": 0.1}""");
+        var json = JsonNode.Parse(codec.DecodeToJson("dispatch.interop.Everything", bytes))!;
+
+        Assert.Equal("0.1", json["approx"]!.ToJsonString()); // not 0.10000000149011612
+        Assert.Equal(0.1, json["ratio"]!.GetValue<double>());
+
+        var special = codec.Encode("dispatch.interop.Everything", """{"approx": "NaN", "ratio": "-Infinity"}""");
+        var specialJson = JsonNode.Parse(codec.DecodeToJson("dispatch.interop.Everything", special))!;
+        Assert.Equal("NaN", specialJson["approx"]!.GetValue<string>());
+        Assert.Equal("-Infinity", specialJson["ratio"]!.GetValue<string>());
     }
 }
 

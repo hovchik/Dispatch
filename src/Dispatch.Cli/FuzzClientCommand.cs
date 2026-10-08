@@ -26,7 +26,7 @@ public static class FuzzClientCommand
             Kinds = kinds
         };
 
-        using var authority = new CertificateAuthority();
+        using var authority = new CertificateAuthority(CertificateAuthority.LoadOrCreate(Dispatch.Infrastructure.DispatchPaths.CaptureCaFile));
         if (args.Option("export-ca") is { } caPath)
         {
             await File.WriteAllTextAsync(caPath, authority.CaCertificatePem, cancellationToken);

@@ -110,7 +110,18 @@ public sealed partial class KeyValueListViewModel : ObservableObject
         _syncingBulk = true;
         try
         {
-            Load(KeyValueBulkText.Parse(value));
+            // Bulk text only carries key/value/enabled; keep the secret/file flags of rows that still exist.
+            var flags = Rows.Where(r => !r.IsEmpty && (r.IsSecret || r.IsFile))
+                .GroupBy(r => r.Key.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            var items = KeyValueBulkText.Parse(value);
+            foreach (var item in items)
+                if (flags.TryGetValue(item.Key.Trim(), out var row))
+                {
+                    item.IsSecret = row.IsSecret;
+                    item.IsFile = row.IsFile;
+                }
+            Load(items);
         }
         finally
         {

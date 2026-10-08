@@ -22,7 +22,9 @@ public sealed record BrokerAddress(string Scheme, string Host, int Port, string?
             user = Uri.UnescapeDataString(parts[0]);
             password = parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : null;
         }
-        return new BrokerAddress(uri.Scheme.ToLowerInvariant(), uri.Host, uri.IsDefaultPort || uri.Port <= 0 ? defaultPort : uri.Port,
+        // Uri.Port is -1 for schemes it doesn't know (mqtt, amqp, ...) and the scheme's own default for ws/wss (80/443),
+        // which must win over the broker default: an omitted port on ws://host means 80, not 1883.
+        return new BrokerAddress(uri.Scheme.ToLowerInvariant(), uri.Host, uri.Port > 0 ? uri.Port : defaultPort,
             user, password, uri.AbsolutePath);
     }
 

@@ -88,12 +88,12 @@ public static class Program
             return command switch
             {
                 "run" => await RunCommand.ExecuteAsync(rest, cancel.Token),
-                "import" => await ImportAsync(rest),
-                "export" => await ExportAsync(rest),
-                "list" or "ls" => await ListAsync(rest),
+                "import" => await ImportAsync(rest, cancel.Token),
+                "export" => await ExportAsync(rest, cancel.Token),
+                "list" or "ls" => await ListAsync(rest, cancel.Token),
                 "mock" => await MockCommand.ExecuteAsync(rest, cancel.Token),
                 "load" => await LoadCommand.ExecuteAsync(rest, cancel.Token),
-                "docs" => await DocsAsync(rest),
+                "docs" => await DocsAsync(rest, cancel.Token),
                 "scan" => await ScanCommand.ExecuteAsync(rest, cancel.Token),
                 "minimize" or "minimise" => await MinimizeCommand.ExecuteAsync(rest, cancel.Token),
                 "ratelimit" or "rate-limit" => await RateLimitCommand.ExecuteAsync(rest, cancel.Token),
@@ -113,7 +113,9 @@ public static class Program
             return ExitError;
         }
         catch (Exception ex) when (ex is FormatException or FileNotFoundException or IOException or HttpRequestException
-                                       or InvalidOperationException or UnauthorizedAccessException)
+                                       or InvalidOperationException or UnauthorizedAccessException or ArgumentException
+                                       or System.Net.Sockets.SocketException or System.Text.Json.JsonException
+                                       or Microsoft.Data.Sqlite.SqliteException)
         {
             Console.Error.WriteLine($"error: {ex.Message}");
             return ExitError;
@@ -138,7 +140,7 @@ public static class Program
         return ExitOk;
     }
 
-    private static async Task<int> ImportAsync(string[] args)
+    private static async Task<int> ImportAsync(string[] args, CancellationToken cancellationToken)
     {
         var parsed = Arguments.Parse(args, new HashSet<string>(), null);
         if (parsed.Positionals.Count == 0)
@@ -150,8 +152,8 @@ public static class Program
         foreach (var source in parsed.Positionals)
         {
             var result = source.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !File.Exists(source)
-                ? await importer.ImportUrlAsync(source)
-                : await importer.ImportPathAsync(source);
+                ? await importer.ImportUrlAsync(source, cancellationToken)
+                : await importer.ImportPathAsync(source, cancellationToken);
             await workspace.SaveImportAsync(result);
             Console.WriteLine($"Imported {result.Format}: {result.Collections.Count} collection(s), {result.RequestCount} request(s), " +
                               $"{result.Environments.Count} environment(s) from {source}");
@@ -161,7 +163,7 @@ public static class Program
         return ExitOk;
     }
 
-    private static async Task<int> ExportAsync(string[] args)
+    private static async Task<int> ExportAsync(string[] args, CancellationToken cancellationToken)
     {
         var parsed = Arguments.Parse(args, new HashSet<string>(), new Dictionary<string, string> { ["o"] = "out", ["f"] = "format" });
         if (parsed.Positionals.Count == 0)
@@ -196,7 +198,7 @@ public static class Program
                     Console.WriteLine(content);
                 else
                 {
-                    await File.WriteAllTextAsync(path, content);
+                    await File.WriteAllTextAsync(path, content, cancellationToken);
                     Console.WriteLine($"Wrote {Path.GetFullPath(path)}");
                 }
                 return ExitOk;
@@ -205,7 +207,7 @@ public static class Program
         }
     }
 
-    private static async Task<int> DocsAsync(string[] args)
+    private static async Task<int> DocsAsync(string[] args, CancellationToken cancellationToken)
     {
         var parsed = Arguments.Parse(args, new HashSet<string>(["no-examples", "no-code", "no-tests"]),
             new Dictionary<string, string> { ["o"] = "out", ["f"] = "format" });
@@ -232,14 +234,15 @@ public static class Program
             Console.WriteLine(content);
             return ExitOk;
         }
-        await File.WriteAllTextAsync(path, content);
+        await File.WriteAllTextAsync(path, content, cancellationToken);
         Console.WriteLine($"Wrote documentation for {collection.Requests.Count} endpoint(s) to {Path.GetFullPath(path)}");
         return ExitOk;
     }
 
-    private static async Task<int> ListAsync(string[] args)
+    private static async Task<int> ListAsync(string[] args, CancellationToken cancellationToken)
     {
         var parsed = Arguments.Parse(args, new HashSet<string>(), null);
+        cancellationToken.ThrowIfCancellationRequested();
         await using var services = BuildServices(parsed.Option("db"));
         var workspace = new Workspace(services);
         Console.WriteLine("Collections:");

@@ -14,6 +14,19 @@ public static class ScanCommand
             throw new UsageException("Usage: dispatch scan <collection> [--env e] [--passive-only|--active-only] [--no-injection] " +
                                      "[--no-auth] [--no-boundaries] [--max-probes n] [--fail-on high|medium|low] [-r cli,html,json] [-o dir] [--insecure]");
 
+        // Validate the options that decide the outcome before doing any work.
+        var reporters = args.Options("reporter").Select(r => r.ToLowerInvariant()).DefaultIfEmpty("cli").ToHashSet();
+        if (reporters.Except(["cli", "html", "json"]).ToList() is { Count: > 0 } unknown)
+            throw new UsageException($"Unknown reporter(s): {string.Join(", ", unknown)}. Use cli, html or json.");
+        var failOn = args.Option("fail-on")?.ToLowerInvariant() switch
+        {
+            "high" => ScanSeverity.High,
+            "medium" => ScanSeverity.Medium,
+            "low" => ScanSeverity.Low,
+            null => (ScanSeverity?)null,
+            var other => throw new UsageException($"--fail-on expects high, medium or low, got '{other}'.")
+        };
+
         await using var services = Program.BuildServices(args.Option("db"));
         var workspace = new Workspace(services);
         var (collection, bundled) = await workspace.LoadCollectionAsync(args.Positionals[0], args.Option("collection"));
@@ -40,7 +53,6 @@ public static class ScanCommand
         var scanner = services.GetRequiredService<SecurityScanner>();
         var report = await scanner.ScanAsync(requests, options, environment, collection.Variables, cancellationToken: cancellationToken);
 
-        var reporters = args.Options("reporter").Select(r => r.ToLowerInvariant()).DefaultIfEmpty("cli").ToHashSet();
         if (reporters.Contains("cli"))
         {
             Console.WriteLine();
@@ -63,14 +75,6 @@ public static class ScanCommand
             Console.WriteLine($"{reporter} report: {Path.GetFullPath(path)}");
         }
 
-        var failOn = args.Option("fail-on")?.ToLowerInvariant() switch
-        {
-            "high" => ScanSeverity.High,
-            "medium" => ScanSeverity.Medium,
-            "low" => ScanSeverity.Low,
-            null => (ScanSeverity?)null,
-            var other => throw new UsageException($"--fail-on expects high, medium or low, got '{other}'.")
-        };
         return failOn is { } threshold && report.HasFindingsAtOrAbove(threshold) ? Program.ExitTestsFailed : Program.ExitOk;
     }
 }

@@ -194,13 +194,7 @@ public static class Curl
                 request.Body = new RequestBody
                 {
                     Mode = BodyMode.FormUrlEncoded,
-                    FormFields = body.Split('&', StringSplitOptions.RemoveEmptyEntries).Select(pair =>
-                    {
-                        var eq = pair.IndexOf('=');
-                        return eq < 0
-                            ? new KeyValueItem(Uri.UnescapeDataString(pair), "")
-                            : new KeyValueItem(Uri.UnescapeDataString(pair[..eq].Replace('+', ' ')), Uri.UnescapeDataString(pair[(eq + 1)..].Replace('+', ' ')));
-                    }).ToList()
+                    FormFields = QueryString.ParseForm(body)
                 };
             else
                 request.Body = new RequestBody { Mode = BodyMode.Text, Content = body };

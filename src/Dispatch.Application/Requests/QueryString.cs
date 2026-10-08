@@ -41,6 +41,26 @@ public static class QueryString
             .ToList();
     }
 
+    /// <summary>
+    /// Parses an <c>application/x-www-form-urlencoded</c> body into decoded fields (<c>+</c> → space, <c>%XX</c> unescaped),
+    /// since the sender re-encodes form fields; keeping the escapes would double-encode them.
+    /// </summary>
+    public static List<KeyValueItem> ParseForm(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return [];
+
+        static string Decode(string s) => Uri.UnescapeDataString(s.Replace('+', ' '));
+        return body.Trim()
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Select(pair =>
+            {
+                var eq = pair.IndexOf('=');
+                return eq < 0 ? new KeyValueItem(Decode(pair), string.Empty) : new KeyValueItem(Decode(pair[..eq]), Decode(pair[(eq + 1)..]));
+            })
+            .ToList();
+    }
+
     /// <summary>Rebuilds <paramref name="url"/> with the query replaced by the enabled parameters.</summary>
     public static string WithParams(string? url, IEnumerable<KeyValueItem> parameters)
     {

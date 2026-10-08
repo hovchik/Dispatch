@@ -18,6 +18,10 @@ public static class ImpactCommand
     public static async Task<int> ExecuteAsync(string[] rawArgs, CancellationToken cancellationToken)
     {
         var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["e"] = "env", ["o"] = "out", ["r"] = "reporter" });
+        SingleRequest.ValidateReporters(args);
+        var failOn = (args.Option("fail-on") ?? "breaks").ToLowerInvariant();
+        if (failOn is not ("breaks" or "possible" or "never"))
+            throw new UsageException($"--fail-on expects breaks, possible or never, got '{failOn}'.");
         await using var services = Program.BuildServices(args.Option("db"));
         var workspace = new Workspace(services);
         var (collection, request, environment) = await SingleRequest.LoadAsync(workspace, args, Usage);
@@ -59,7 +63,6 @@ public static class ImpactCommand
                 _ => null
             });
 
-        var failOn = (args.Option("fail-on") ?? "breaks").ToLowerInvariant();
         var failed = failOn switch
         {
             "breaks" => report.HasBreakingImpact,
