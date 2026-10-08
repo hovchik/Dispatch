@@ -261,6 +261,73 @@ public class OtherFormatTests
     }
 
     [Fact]
+    public void Har_and_http_file_imports_decode_form_bodies()
+    {
+        var har = JsonNode.Parse("""
+            {"log":{"entries":[
+              {"request":{"method":"POST","url":"https://a.test/api/login","headers":[{"name":"Content-Type","value":"application/x-www-form-urlencoded"}],
+                          "postData":{"mimeType":"application/x-www-form-urlencoded","text":"user=ann%40x.io&note=a+b%26c"}},
+               "response":{"status":200,"content":{}}}
+            ]}}
+            """)!;
+        var fromHar = Har.Import(har).Collections.Single().Requests.Single();
+        Assert.Equal(BodyMode.FormUrlEncoded, fromHar.Body.Mode);
+        Assert.Equal("ann@x.io", fromHar.Body.FormFields.Single(f => f.Key == "user").Value);
+        Assert.Equal("a b&c", fromHar.Body.FormFields.Single(f => f.Key == "note").Value);
+
+        const string http = """
+            POST https://a.test/login
+            Content-Type: application/x-www-form-urlencoded
+
+            user=ann%40x.io&note=a+b%26c
+            """;
+        var fromHttp = HttpFile.Import(http).Collections.Single().Requests.Single();
+        Assert.Equal(BodyMode.FormUrlEncoded, fromHttp.Body.Mode);
+        Assert.Equal("ann@x.io", fromHttp.Body.FormFields.Single(f => f.Key == "user").Value);
+        Assert.Equal("a b&c", fromHttp.Body.FormFields.Single(f => f.Key == "note").Value);
+    }
+
+    [Fact]
+    public void Insomnia_graphql_body_that_is_not_json_is_kept_as_the_query()
+    {
+        var export = JsonNode.Parse("""
+            {"_type":"export","resources":[
+              {"_id":"wrk_1","_type":"workspace","name":"GQL"},
+              {"_id":"req_1","_type":"request","parentId":"wrk_1","name":"Raw","method":"POST","url":"https://g.test/graphql",
+               "body":{"mimeType":"application/graphql","text":"query { me { id } }"}},
+              {"_id":"req_2","_type":"request","parentId":"wrk_1","name":"Empty","method":"POST","url":"https://g.test/graphql",
+               "body":{"mimeType":"application/graphql","text":""}},
+              {"_id":"req_3","_type":"request","parentId":"wrk_1","name":"Envelope","method":"POST","url":"https://g.test/graphql",
+               "body":{"mimeType":"application/graphql","text":"{\"query\":\"query { me { id } }\",\"variables\":{\"a\":1}}"}}
+            ]}
+            """)!;
+
+        var requests = Insomnia.Import(export).Collections.Single().Requests;
+
+        Assert.Equal(3, requests.Count);
+        Assert.All(requests, r => Assert.Equal(RequestKind.GraphQl, r.Kind));
+        Assert.Equal("query { me { id } }", requests[0].Protocol.GraphQl.Query);
+        Assert.Equal("", requests[1].Protocol.GraphQl.Query);
+        Assert.Equal("query { me { id } }", requests[2].Protocol.GraphQl.Query);
+        Assert.Equal("""{"a":1}""", requests[2].Protocol.GraphQl.Variables);
+    }
+
+    [Fact]
+    public void Http_file_export_tolerates_non_json_graphql_variables()
+    {
+        var collection = new RequestCollection { Name = "G" };
+        collection.Requests.Add(new ApiRequest
+        {
+            Name = "Me", Kind = RequestKind.GraphQl, Url = "https://g.test/graphql",
+            Protocol = new ProtocolSettings { GraphQl = new GraphQlSettings { Query = "query { me { id } }", Variables = "{{vars}}" } }
+        });
+
+        var exported = HttpFile.Export(collection);
+
+        Assert.Contains("\"variables\":\"{{vars}}\"", exported);
+    }
+
+    [Fact]
     public void Insomnia_import_with_folders_templates_and_environment()
     {
         var export = JsonNode.Parse("""

@@ -101,8 +101,8 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="tools:TimelineBar">
                   <Panel VerticalAlignment="Bottom" ToolTip.Tip="{Binding Tooltip}">
-                    <Rectangle Width="5" Height="{Binding Height}" Fill="#2F6BFF" RadiusX="1" RadiusY="1" IsVisible="{Binding !HasErrors}" />
-                    <Rectangle Width="5" Height="{Binding Height}" Fill="#EF4444" RadiusX="1" RadiusY="1" IsVisible="{Binding HasErrors}" />
+                    <Rectangle Width="5" Height="{Binding Height}" Fill="{DynamicResource AccentBrush}" RadiusX="1" RadiusY="1" IsVisible="{Binding !HasErrors}" />
+                    <Rectangle Width="5" Height="{Binding Height}" Fill="{DynamicResource DangerBrush}" RadiusX="1" RadiusY="1" IsVisible="{Binding HasErrors}" />
                   </Panel>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
@@ -129,7 +129,7 @@
                 <ItemsControl ItemsSource="{Binding Errors}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="x:String">
-                      <SelectableTextBlock Text="{Binding}" Foreground="#EF4444" FontSize="12" TextWrapping="Wrap" />
+                      <SelectableTextBlock Text="{Binding}" Foreground="{DynamicResource DangerBrush}" FontSize="12" TextWrapping="Wrap" />
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -229,8 +229,8 @@
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="tools:TimelineBar">
                         <Panel VerticalAlignment="Bottom" Margin="1,0" MaxWidth="28" ToolTip.Tip="{Binding Tooltip}" Background="Transparent">
-                          <Rectangle Height="{Binding Height}" Fill="#2F6BFF" RadiusX="1" RadiusY="1" IsVisible="{Binding !HasErrors}" />
-                          <Rectangle Height="{Binding Height}" Fill="#EF4444" RadiusX="1" RadiusY="1" IsVisible="{Binding HasErrors}" />
+                          <Rectangle Height="{Binding Height}" Fill="{DynamicResource AccentBrush}" RadiusX="1" RadiusY="1" IsVisible="{Binding !HasErrors}" />
+                          <Rectangle Height="{Binding Height}" Fill="{DynamicResource DangerBrush}" RadiusX="1" RadiusY="1" IsVisible="{Binding HasErrors}" />
                         </Panel>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -262,7 +262,7 @@
                               <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" ToolTip.Tip="{Binding Name}" />
                               <TextBlock Grid.Column="1" Text="{Binding Count}" TextAlignment="Right" />
                               <TextBlock Grid.Column="2" Text="{Binding Errors}" TextAlignment="Right" />
-                              <TextBlock Grid.Column="3" Text="{Binding ErrorRate}" TextAlignment="Right" Foreground="#EF4444" IsVisible="{Binding HasErrors}" />
+                              <TextBlock Grid.Column="3" Text="{Binding ErrorRate}" TextAlignment="Right" Foreground="{DynamicResource DangerBrush}" IsVisible="{Binding HasErrors}" />
                               <TextBlock Grid.Column="3" Text="{Binding ErrorRate}" TextAlignment="Right" Classes="muted" IsVisible="{Binding !HasErrors}" />
                               <TextBlock Grid.Column="4" Text="{Binding Mean}" TextAlignment="Right" />
                               <TextBlock Grid.Column="5" Text="{Binding P50}" TextAlignment="Right" />
@@ -286,7 +286,7 @@
                   <ItemsControl ItemsSource="{Binding Errors}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="x:String">
-                        <SelectableTextBlock Text="{Binding}" Foreground="#EF4444" FontSize="12" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap" Margin="0,2" />
+                        <SelectableTextBlock Text="{Binding}" Foreground="{DynamicResource DangerBrush}" FontSize="12" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap" Margin="0,2" />
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>

@@ -363,10 +363,14 @@ public sealed class FlowRunner(IRequestSender sender)
     }
 
     private static bool NumberOrString(string a, string b, Func<double, double, bool> numeric, Func<string, string, bool> text) =>
-        double.TryParse(a, out var x) && double.TryParse(b, out var y) ? numeric(x, y) : text(a, b);
+        TryNumber(a, out var x) && TryNumber(b, out var y) ? numeric(x, y) : text(a, b);
 
     private static bool Numeric(string a, string b, Func<double, double, bool> compare) =>
-        double.TryParse(a, out var x) && double.TryParse(b, out var y) && compare(x, y);
+        TryNumber(a, out var x) && TryNumber(b, out var y) && compare(x, y);
+
+    // Culture-invariant: "1.5" must mean one and a half regardless of the OS locale.
+    private static bool TryNumber(string text, out double value) =>
+        double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value);
 
     private static bool IsTruthy(string value) =>
         value.Length > 0 && !value.Equals("false", StringComparison.OrdinalIgnoreCase) && value is not ("0" or "null" or "[]" or "{}");

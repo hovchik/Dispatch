@@ -53,6 +53,23 @@ public class JsonPathTests
     }
 
     [Fact]
+    public void Negated_parenthesised_filter_inverts_the_inner_result()
+    {
+        Assert.Equal(["A"], JsonPath.Select(Doc, "$.store.books[?(!(@.price > 10))].title").Select(JsonPath.ToText));
+        Assert.Equal(["A", "C"], JsonPath.Select(Doc, "$.store.books[?(!(@.isbn))].title").Select(JsonPath.ToText));
+        Assert.Equal(["B"], JsonPath.Select(Doc, "$.store.books[?((@.isbn))].title").Select(JsonPath.ToText));
+    }
+
+    [Fact]
+    public void Regex_filter_matches_with_a_timeout_instead_of_hanging()
+    {
+        Assert.Equal(["A", "B"], JsonPath.Select(Doc, "$.store.books[?(@.title =~ /^[ab]$/i)].title").Select(JsonPath.ToText));
+        // A catastrophic pattern must come back (false) rather than run unbounded.
+        var doc = JsonNode.Parse("""[{"s":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"}]""")!;
+        Assert.Empty(JsonPath.Select(doc, "$[?(@.s =~ '^(a+)+$')].s"));
+    }
+
+    [Fact]
     public void Missing_path_returns_nothing() => Assert.Empty(JsonPath.Select(Doc, "$.store.nope.x"));
 }
 
@@ -75,6 +92,19 @@ public class JsonSchemaValidatorTests
           }
         }
         """;
+
+    [Fact]
+    public void Pattern_keywords_are_evaluated_with_a_timeout()
+    {
+        const string schema = """
+            {"type":"object","properties":{"code":{"type":"string","pattern":"^[A-Z]{3}$"}},
+             "patternProperties":{"^x-":{"type":"integer"}}}
+            """;
+        Assert.Empty(JsonSchemaValidator.Validate("""{"code":"ABC","x-n":1}""", schema));
+        var errors = JsonSchemaValidator.Validate("""{"code":"abc","x-n":"no"}""", schema);
+        Assert.Contains(errors, e => e.Contains("does not match pattern"));
+        Assert.Contains(errors, e => e.Contains("x-n"));
+    }
 
     [Fact]
     public void Valid_document_has_no_errors() =>
@@ -215,6 +245,29 @@ public class VariableTests
     }
 
     [Fact]
+    public void Unset_records_environment_and_runtime_removals()
+    {
+        var env = new ApiEnvironment { Variables = [new("token", "old"), new("keep", "1")] };
+        var ctx = VariableContext.For(env, runtime: new Dictionary<string, string> { ["tmp"] = "x", ["direct"] = "y" });
+
+        ctx.Set("token", "new", VariableScope.Environment);
+        ctx.Unset("token");
+        ctx.UnsetRuntime("tmp");
+        ctx.Runtime.Remove("direct"); // scripts may remove from the dictionary directly
+
+        Assert.Null(ctx.Get("token"));
+        Assert.Contains("token", ctx.EnvironmentRemovals);
+        Assert.False(ctx.EnvironmentUpdates.ContainsKey("token"));
+        Assert.Equal(["direct", "tmp"], ctx.RuntimeRemovals.Order());
+
+        // Setting the variable again cancels the pending removal.
+        ctx.Set("token", "again", VariableScope.Environment);
+        ctx.Set("tmp", "back", VariableScope.Runtime);
+        Assert.DoesNotContain("token", ctx.EnvironmentRemovals);
+        Assert.Equal(["direct"], ctx.RuntimeRemovals);
+    }
+
+    [Fact]
     public void Request_resolver_resolves_every_protocol_field_but_not_scripts()
     {
         var request = new ApiRequest
@@ -272,6 +325,17 @@ public class AwsSigV4Tests
             "SignedHeaders=content-type;host;x-amz-date, " +
             "Signature=5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7",
             authorization);
+    }
+
+    [Fact]
+    public void Canonical_path_is_double_encoded_except_for_s3()
+    {
+        var uri = new Uri("https://execute-api.us-east-1.amazonaws.com/prod/my file/a%2Fb");
+
+        // Non-S3 services: the (already URI-encoded) segments are encoded a second time.
+        Assert.Equal("/prod/my%2520file/a%252Fb", AwsSigV4Signer.CanonicalPath(uri, "execute-api"));
+        // S3: the path is used as-is.
+        Assert.Equal("/prod/my%20file/a%2Fb", AwsSigV4Signer.CanonicalPath(uri, "s3"));
     }
 }
 

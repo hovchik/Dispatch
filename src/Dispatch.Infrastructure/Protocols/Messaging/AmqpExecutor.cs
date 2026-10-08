@@ -97,8 +97,7 @@ public sealed class AmqpExecutor : IProtocolExecutor
 
                 if (consume)
                 {
-                    if (context.Outgoing is not null)
-                        _ = PumpOutgoingAsync(channel, s, request, context, log);
+                    var pump = context.Outgoing is null ? Task.CompletedTask : PumpOutgoingAsync(channel, s, request, context, log);
                     try
                     {
                         await Task.Delay(Timeout.Infinite, log.Token).ConfigureAwait(false);
@@ -106,6 +105,8 @@ public sealed class AmqpExecutor : IProtocolExecutor
                     catch (OperationCanceledException)
                     {
                     }
+                    // Not fire-and-forget: a publish in flight must finish (or fail visibly) before the channel is closed.
+                    await pump.ConfigureAwait(false);
                 }
             }
             catch (OperationInterruptedException ex)
@@ -152,8 +153,12 @@ public sealed class AmqpExecutor : IProtocolExecutor
                 log.Sent(text, $"{s.Exchange}/{s.RoutingKey}");
             }
         }
-        catch (Exception ex) when (ex is OperationCanceledException or OperationInterruptedException or ObjectDisposedException)
+        catch (OperationCanceledException)
         {
+        }
+        catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or ObjectDisposedException)
+        {
+            log.Failure("Not sent: " + Describe(ex));
         }
     }
 

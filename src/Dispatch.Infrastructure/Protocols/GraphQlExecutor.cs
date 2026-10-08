@@ -139,12 +139,17 @@ public sealed partial class GraphQlExecutor(HttpProtocolExecutor http, WebSocket
                 await Send(init).ConfigureAwait(false);
 
                 var subscribed = false;
-                while (!log.Token.IsCancellationRequested)
+                // Stopping ends the subscription ("complete"/"stop") and sends a Close frame; the loop ends with the server's reply.
+                using var closeOnStop = WebSocketConnector.CloseOnStop(socket, log.Token,
+                    () => socket.State == WebSocketState.Open
+                        ? Send(new JsonObject { ["id"] = "1", ["type"] = legacy ? "stop" : "complete" })
+                        : Task.CompletedTask);
+                while (true)
                 {
-                    var received = await WebSocketConnector.ReceiveAsync(socket, log.Token).ConfigureAwait(false);
+                    var received = await WebSocketConnector.ReceiveAsync(socket, CancellationToken.None).ConfigureAwait(false);
                     if (received is null)
                     {
-                        log.Info("Server closed the connection");
+                        log.Info(log.Token.IsCancellationRequested ? "Connection closed" : "Server closed the connection");
                         break;
                     }
 
@@ -189,6 +194,10 @@ public sealed partial class GraphQlExecutor(HttpProtocolExecutor http, WebSocket
             }
             catch (OperationCanceledException)
             {
+            }
+            catch (WebSocketException) when (log.Token.IsCancellationRequested)
+            {
+                // The server dropped the connection instead of answering our Close frame: we were leaving anyway.
             }
             catch (Exception ex) when (ex is WebSocketException or JsonException)
             {

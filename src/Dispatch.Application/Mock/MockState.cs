@@ -149,7 +149,9 @@ public sealed class MockState(MockRouteTable routes, Func<ApiRequest, ResponseEx
     {
         var ids = resource.Items.Select(i => i[idKey]).Where(v => v is not null).ToList();
         if (ids.Count > 0 && ids.All(v => v is JsonValue j && j.GetValueKind() == JsonValueKind.Number))
-            return JsonValue.Create(ids.Max(v => v!.GetValue<double>()) is var max ? (long)max + 1 : 1);
+            // Ids may be JsonElement-backed (from parsed examples) or JsonValue<long> (from an earlier POST);
+            // GetValue<double>() throws for the latter, so go through the JSON text.
+            return JsonValue.Create((long)ids.Max(v => double.Parse(v!.ToJsonString(), System.Globalization.CultureInfo.InvariantCulture)) + 1);
         if (ids.Count > 0)
             return JsonValue.Create(Guid.NewGuid().ToString());
         return JsonValue.Create(1L);

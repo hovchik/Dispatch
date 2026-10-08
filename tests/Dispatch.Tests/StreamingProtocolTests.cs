@@ -239,3 +239,81 @@ internal sealed class SyncProgress<T>(Action<T> handler) : IProgress<T>
             handler(value);
     }
 }
+
+public sealed class WebSocketCloseTests : IDisposable
+{
+    private readonly HttpClientPool _pool = new();
+
+    public void Dispose() => _pool.Dispose();
+
+    [Fact]
+    public async Task Stopping_sends_a_close_frame_and_records_the_servers_close_status()
+    {
+        var serverSawClose = new TaskCompletionSource<WebSocketCloseStatus?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = await TestServer.StartAsync(app => app.Map("/ws", async (HttpContext ctx) =>
+        {
+            using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+            var buffer = new byte[8192];
+            while (true)
+            {
+                var result = await ws.ReceiveAsync(buffer, CancellationToken.None);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    serverSawClose.TrySetResult(result.CloseStatus);
+                    await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "bye from server", CancellationToken.None);
+                    return;
+                }
+                await ws.SendAsync(buffer.AsMemory(0, result.Count), WebSocketMessageType.Text, true, CancellationToken.None);
+            }
+        }));
+        var request = new ApiRequest
+        {
+            Kind = RequestKind.WebSocket,
+            Url = server.BaseUrl + "/ws",
+            Protocol = new ProtocolSettings
+            {
+                Stream = new StreamSettings { InitialMessages = [new("hello", "hi")], MaxMessages = 1, ListenSeconds = 10 }
+            }
+        };
+
+        var response = await new WebSocketExecutor(new WebSocketConnector(_pool))
+            .ExecuteAsync(request, new ExecutionContext(), CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(response.IsSuccess, response.Error);
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, await serverSawClose.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Closed (1000 NormalClosure)", response.ReasonPhrase);
+        Assert.Contains(response.Messages, m => m.Direction == MessageDirection.Info && m.Content.Contains("bye from server"));
+        Assert.DoesNotContain(response.Messages, m => m.Direction == MessageDirection.Error);
+    }
+
+    [Fact]
+    public async Task User_cancel_still_ends_the_session_when_the_server_never_answers_the_close()
+    {
+        var holdServer = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = await TestServer.StartAsync(app => app.Map("/ws", async (HttpContext ctx) =>
+        {
+            using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+            await holdServer.Task; // never reads, never replies to the Close frame
+        }));
+        var request = new ApiRequest
+        {
+            Kind = RequestKind.WebSocket,
+            Url = server.BaseUrl + "/ws",
+            Protocol = new ProtocolSettings { Stream = new StreamSettings { ListenSeconds = 60 } }
+        };
+        using var cts = new CancellationTokenSource();
+        var cancelledAt = DateTime.MaxValue;
+        // The user disconnects as soon as the session is up (a timer could fire before the connect completes on a busy machine).
+        var context = new ExecutionContext { Interactive = true, Listening = () => { cancelledAt = DateTime.UtcNow; cts.Cancel(); } };
+
+        var response = await new WebSocketExecutor(new WebSocketConnector(_pool))
+            .ExecuteAsync(request, context, cts.Token)
+            .WaitAsync(TimeSpan.FromSeconds(10));
+        holdServer.SetResult();
+
+        Assert.True(response.IsSuccess, response.Error);
+        Assert.InRange(DateTime.UtcNow - cancelledAt, TimeSpan.Zero, TimeSpan.FromSeconds(6)); // the 2 s abort fallback, with slack
+        Assert.Contains(response.Messages, m => m.Content == "Disconnected");
+    }
+}

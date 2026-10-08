@@ -29,6 +29,14 @@ internal static class SingleRequest
         return (collection, request, environment);
     }
 
+    /// <summary>Rejects unknown <c>--reporter</c> names up front, before the (slow) work runs.</summary>
+    public static void ValidateReporters(Arguments args)
+    {
+        var unknown = args.Options("reporter").Select(r => r.ToLowerInvariant()).Except(["cli", "html", "json"]).ToList();
+        if (unknown.Count > 0)
+            throw new UsageException($"Unknown reporter(s): {string.Join(", ", unknown)}. Use cli, html or json.");
+    }
+
     public static async Task WriteReportsAsync(Arguments args, string baseName, Func<string, (string Ext, string Content)?> render)
     {
         var outDir = args.Option("out") ?? "dispatch-reports";
@@ -57,6 +65,7 @@ public static class MinimizeCommand
     public static async Task<int> ExecuteAsync(string[] rawArgs, CancellationToken cancellationToken)
     {
         var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["e"] = "env", ["o"] = "out", ["r"] = "reporter" });
+        SingleRequest.ValidateReporters(args);
         await using var services = Program.BuildServices(args.Option("db"));
         var (collection, request, environment) = await SingleRequest.LoadAsync(new Workspace(services), args, Usage);
 
@@ -121,6 +130,7 @@ public static class RateLimitCommand
     public static async Task<int> ExecuteAsync(string[] rawArgs, CancellationToken cancellationToken)
     {
         var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["e"] = "env", ["o"] = "out", ["r"] = "reporter" });
+        SingleRequest.ValidateReporters(args);
         await using var services = Program.BuildServices(args.Option("db"));
         var (collection, request, environment) = await SingleRequest.LoadAsync(new Workspace(services), args, Usage);
 

@@ -59,12 +59,18 @@ public sealed class SecretProtector : ISecretProtector
         if (OperatingSystem.IsWindows())
             return WindowsKey(dataDirectory);
 
+        // Once secrets were encrypted with a file key, keep using it: switching to the credential store on a later start
+        // (because it happened to be available then) would make the existing secrets unreadable.
+        if (File.Exists(Path.Combine(dataDirectory, FileKeyName)))
+            return FileKey(dataDirectory);
+
         if (OperatingSystem.IsMacOS())
         {
             if (CommandKey("security", ["find-generic-password", "-a", AccountName, "-s", ServiceName, "-w"]) is { } existing)
                 return existing;
             var key = RandomNumberGenerator.GetBytes(32);
-            if (Capture("security", ["add-generic-password", "-U", "-a", AccountName, "-s", ServiceName, "-w", Convert.ToBase64String(key)], null) is not null)
+            // Without -U: if the item exists but could not be read (locked keychain), it must not be overwritten.
+            if (Capture("security", ["add-generic-password", "-a", AccountName, "-s", ServiceName, "-w", Convert.ToBase64String(key)], null) is not null)
                 return key;
         }
 
@@ -95,9 +101,11 @@ public sealed class SecretProtector : ISecretProtector
         return key;
     }
 
+    internal const string FileKeyName = "secrets.key";
+
     private static byte[] FileKey(string dataDirectory)
     {
-        var path = Path.Combine(dataDirectory, "secrets.key");
+        var path = Path.Combine(dataDirectory, FileKeyName);
         if (File.Exists(path))
             return Convert.FromBase64String(File.ReadAllText(path).Trim());
         Directory.CreateDirectory(dataDirectory);

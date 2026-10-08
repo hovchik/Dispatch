@@ -82,6 +82,9 @@ public sealed class ApiResponse
     /// <summary>The subset of <see cref="VariableUpdates"/> written to the environment (to be persisted by the caller).</summary>
     public IReadOnlyDictionary<string, string> EnvironmentUpdates { get; set; } = new Dictionary<string, string>();
 
+    /// <summary>Environment variables removed during this send (pm.environment.unset), to be persisted by the caller.</summary>
+    public IReadOnlyList<string> EnvironmentRemovals { get; set; } = [];
+
     /// <summary>Snapshots recorded during this send, by assertion index (the caller stores them on the request).</summary>
     public IReadOnlyDictionary<int, string> SnapshotUpdates { get; set; } = new Dictionary<int, string>();
 

@@ -63,6 +63,18 @@ public class QueryStringTests
     [Fact]
     public void Removes_question_mark_when_no_params() =>
         Assert.Equal("https://x.io/a", QueryString.WithParams("https://x.io/a?x=1", []));
+
+    [Fact]
+    public void ParseForm_decodes_plus_and_percent_escapes()
+    {
+        var fields = QueryString.ParseForm("user=ann%40x.io&note=a+b%26c&flag");
+
+        Assert.Equal(["user", "note", "flag"], fields.Select(f => f.Key));
+        Assert.Equal("ann@x.io", fields[0].Value);
+        Assert.Equal("a b&c", fields[1].Value);
+        Assert.Equal("", fields[2].Value);
+        Assert.Empty(QueryString.ParseForm(" "));
+    }
 }
 
 public class RequestMessageBuilderTests
@@ -82,6 +94,41 @@ public class RequestMessageBuilderTests
         using var message = _builder.Build(request, Vars);
 
         Assert.Equal("https://api.test/items?page=1&q=a%20b", message.RequestUri!.AbsoluteUri);
+    }
+
+    [Fact]
+    public void Encodes_param_values_that_would_break_the_query_but_keeps_existing_escapes()
+    {
+        var request = new ApiRequest
+        {
+            Url = "{{base}}/search",
+            QueryParams =
+            [
+                new("lang", "C#"),           // '#' would start a fragment
+                new("q", "a&b=c"),           // '&' and '=' would split into extra params
+                new("phone", "+1 555"),      // '+' would be read as a space by the server
+                new("pre", "x%20y"),         // already encoded: must not become x%2520y
+                new("city", "Zürich"),       // non-ASCII
+                new("pct", "100%")           // bare '%' is not an escape
+            ]
+        };
+
+        using var message = _builder.Build(request, Vars);
+
+        Assert.Equal(
+            "https://api.test/search?lang=C%23&q=a%26b%3Dc&phone=%2B1%20555&pre=x%20y&city=Z%C3%BCrich&pct=100%25",
+            message.RequestUri!.AbsoluteUri);
+    }
+
+    [Fact]
+    public void Rejects_unresolved_variables_in_params_table()
+    {
+        var request = new ApiRequest { Url = "{{base}}/items", QueryParams = [new("token", "{{missing}}"), new("off", "{{alsoMissing}}", enabled: false)] };
+
+        var error = Assert.Throws<RequestBuildException>(() => _builder.Build(request, Vars));
+
+        Assert.Contains("{{missing}}", error.Message);
+        Assert.DoesNotContain("alsoMissing", error.Message); // disabled rows are ignored
     }
 
     [Fact]

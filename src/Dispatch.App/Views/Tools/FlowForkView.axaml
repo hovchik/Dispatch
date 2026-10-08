@@ -58,7 +58,7 @@
       <ItemsControl Grid.Row="1" ItemsSource="{Binding Changes}" Margin="0,6,0,0">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="flows:FlowDivergence">
-            <Border Classes="card" Padding="10,5" Margin="0,0,0,4" BorderBrush="#9A6700" BorderThickness="3,0,0,0">
+            <Border Classes="card" Padding="10,5" Margin="0,0,0,4" BorderBrush="{DynamicResource WarningBrush}" BorderThickness="3,0,0,0">
               <TextBlock TextWrapping="Wrap">
                 <Run Text="{Binding Step}" FontWeight="SemiBold" /><Run Text="   " /><Run Text="{Binding Before}" Foreground="{DynamicResource MutedTextBrush}" /><Run Text="  →  " /><Run Text="{Binding After}" FontWeight="SemiBold" />
               </TextBlock>

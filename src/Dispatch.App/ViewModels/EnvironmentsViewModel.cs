@@ -24,16 +24,28 @@ public sealed partial class EnvironmentsViewModel(
 
     public ApiEnvironment? ActiveModel => Active.IsNone ? null : Active.ToModel();
 
+    /// <summary>Set while LoadAsync rebuilds the lists so transient Active changes aren't persisted.</summary>
+    private bool _loading;
+
     public async Task LoadAsync()
     {
         var envs = await repository.GetAllAsync();
-        Items.Clear();
-        foreach (var e in envs)
-            Items.Add(new EnvironmentItemViewModel(this, e));
-        RebuildChoices();
-
         var activeId = await settings.GetAsync(SettingKeys.ActiveEnvironmentId);
-        Active = Items.FirstOrDefault(i => i.Id.ToString() == activeId) ?? None;
+        _loading = true;
+        try
+        {
+            Items.Clear();
+            foreach (var e in envs)
+                Items.Add(new EnvironmentItemViewModel(this, e));
+            // Sync the picker first (an item that is not in the picker's list cannot be selected), then pick the
+            // wanted one; _loading keeps the transient None the picker pushes meanwhile from being persisted.
+            RebuildChoices();
+            Active = Items.FirstOrDefault(i => i.Id.ToString() == activeId) ?? None;
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     partial void OnActiveChanged(EnvironmentItemViewModel value)
@@ -46,6 +58,8 @@ public sealed partial class EnvironmentsViewModel(
             Avalonia.Threading.Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(Active)));
             return;
         }
+        if (_loading)
+            return;
         _ = settings.SetAsync(SettingKeys.ActiveEnvironmentId, value.IsNone ? null : value.Id.ToString());
     }
 
@@ -63,14 +77,18 @@ public sealed partial class EnvironmentsViewModel(
     [ObservableProperty] private string? _error;
 
     /// <summary>Writes variables set by extraction rules / scripts into the active environment and saves it.</summary>
-    public async Task ApplyUpdatesAsync(IReadOnlyDictionary<string, string> updates)
+    public async Task ApplyUpdatesAsync(IReadOnlyDictionary<string, string> updates, IReadOnlyList<string>? removals = null)
     {
-        if (updates.Count == 0 || Active.IsNone)
+        removals ??= [];
+        if ((updates.Count == 0 && removals.Count == 0) || Active.IsNone)
             return;
         var model = Active.ToModel();
         var changed = false;
         foreach (var (name, value) in updates)
             changed |= model.SetVariable(name, value);
+        // pm.environment.unset(name): drop the variable for good, not just for this send.
+        foreach (var name in removals)
+            changed |= model.Variables.RemoveAll(v => v.Key.Trim() == name) > 0;
         if (!changed)
             return;
         Active.Variables.Load(model.Variables);

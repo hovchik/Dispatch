@@ -63,6 +63,7 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
     private MockServerOptions _options = new();
     private MockState? _state;
     private SchemaFaker _schemaFaker = new();
+    private readonly Lock _fakerGate = new();
 
     public event Action<MockLogEntry>? RequestHandled;
 
@@ -136,10 +137,14 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
             try
             {
                 JsonNode? generated = null;
-                if (example.Schema.Trim().Length > 0)
-                    generated = _schemaFaker.Generate(JsonNode.Parse(example.Schema));
-                else if (body.TrimStart() is ['{', ..] or ['[', ..])
-                    generated = _schemaFaker.GenerateLike(JsonNode.Parse(body));
+                // Kestrel handles requests concurrently, but a seeded System.Random (shared by the faker) is not thread-safe.
+                lock (_fakerGate)
+                {
+                    if (example.Schema.Trim().Length > 0)
+                        generated = _schemaFaker.Generate(JsonNode.Parse(example.Schema));
+                    else if (body.TrimStart() is ['{', ..] or ['[', ..])
+                        generated = _schemaFaker.GenerateLike(JsonNode.Parse(body));
+                }
                 if (generated is not null)
                     body = generated.ToJsonString();
             }

@@ -63,11 +63,23 @@ public sealed class RequestMessageBuilder : IRequestMessageBuilder
 
         // The Params table is the source of truth for the query (it knows which params are disabled).
         // Fall back to the URL's own query when the table is empty (e.g. requests created in code).
-        var parameters = (request.QueryParams.Count > 0 ? request.QueryParams : QueryString.Parse(request.Url))
+        var tableParams = (request.QueryParams.Count > 0 ? request.QueryParams : QueryString.Parse(request.Url)).Where(p => p.Enabled).ToList();
+
+        var unresolvedParams = tableParams
+            .SelectMany(p => VariableResolver.FindUnresolved(p.Key, variables).Concat(VariableResolver.FindUnresolved(p.Value, variables)))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (unresolvedParams.Count > 0)
+            throw new RequestBuildException(
+                $"Unresolved variable(s) in query parameters: {string.Join(", ", unresolvedParams.Select(v => $"{{{{{v}}}}}"))}. " +
+                "Select an environment that defines them.");
+
+        // Encode what would break the query (space, #, &, +, = inside a key or value, non-ASCII) while leaving
+        // already percent-encoded text alone, so pre-encoded values are not encoded twice.
+        var parameters = tableParams
             .Select(p => new KeyValueItem(
-                VariableResolver.Resolve(p.Key, variables),
-                VariableResolver.Resolve(p.Value, variables),
-                p.Enabled))
+                EncodeQueryComponent(VariableResolver.Resolve(p.Key, variables)),
+                EncodeQueryComponent(VariableResolver.Resolve(p.Value, variables))))
             .ToList();
 
         if (request.Auth is { Mode: AuthMode.ApiKey, ApiKeyLocation: ApiKeyLocation.QueryParam }
@@ -92,6 +104,49 @@ public sealed class RequestMessageBuilder : IRequestMessageBuilder
 
         return uri;
     }
+
+    /// <summary>
+    /// Percent-encodes a query key or value conservatively: valid <c>%XX</c> escapes and query-safe ASCII pass through
+    /// untouched; everything else (space, <c>#</c>, <c>&amp;</c>, <c>+</c>, <c>=</c>, quotes, braces, non-ASCII, bare <c>%</c>)
+    /// is UTF-8 percent-encoded.
+    /// </summary>
+    internal static string EncodeQueryComponent(string text)
+    {
+        if (text.All(IsQuerySafe))
+            return text;
+
+        var sb = new StringBuilder(text.Length + 8);
+        for (var i = 0; i < text.Length;)
+        {
+            var c = text[i];
+            if (c == '%' && i + 2 < text.Length && Uri.IsHexDigit(text[i + 1]) && Uri.IsHexDigit(text[i + 2]))
+            {
+                sb.Append(text, i, 3);
+                i += 3;
+                continue;
+            }
+            if (IsQuerySafe(c))
+            {
+                sb.Append(c);
+                i++;
+                continue;
+            }
+            if (!Rune.TryGetRuneAt(text, i, out var rune))
+                rune = Rune.ReplacementChar;
+            Span<byte> utf8 = stackalloc byte[4];
+            var count = rune.EncodeToUtf8(utf8);
+            foreach (var b in utf8[..count])
+                sb.Append('%').Append(b.ToString("X2"));
+            i += char.IsSurrogatePair(text, i) ? 2 : 1;
+        }
+        return sb.ToString();
+    }
+
+    // RFC 3986 unreserved + the sub-delims and pchar extras that are legal in a query, minus the delimiters that
+    // would be misread by the server ('&', '=', '+', '#').
+    private static bool IsQuerySafe(char c) =>
+        c is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9')
+            or '-' or '.' or '_' or '~' or '!' or '$' or '\'' or '(' or ')' or '*' or ',' or ';' or ':' or '@' or '/' or '?';
 
     private static HttpContent? BuildContent(RequestBody body, Func<string, string> resolve) => body.Mode switch
     {

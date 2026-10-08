@@ -164,6 +164,25 @@ public class FlowRunnerTests
     }
 
     [Fact]
+    public void Numeric_conditions_ignore_the_os_culture()
+    {
+        var vars = Dispatch.Application.Variables.VariableContext.For(null);
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            // de-DE reads "1.5" as 15 (thousands separator); conditions must use the invariant culture.
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            Assert.False(FlowRunner.Evaluate(new FlowCondition { Left = "1.5", Comparison = FlowComparison.GreaterThan, Right = "10" }, vars));
+            Assert.True(FlowRunner.Evaluate(new FlowCondition { Left = "1.5", Comparison = FlowComparison.LessThan, Right = "2" }, vars));
+            Assert.True(FlowRunner.Evaluate(new FlowCondition { Left = "1.50", Comparison = FlowComparison.Equals, Right = "1.5" }, vars));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Fact]
     public async Task Step_limit_guards_against_runaway_loops()
     {
         var req = new ApiRequest { Id = Guid.NewGuid(), Name = "x", Url = "http://x" };

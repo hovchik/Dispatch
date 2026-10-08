@@ -290,7 +290,7 @@ public static class HelpCatalog
             [
                 "Save a listener in the same collection: a streaming request that subscribes to the channel, e.g. Kafka in Subscribe mode on orders.created, MQTT on orders/#, AMQP on a queue or exchange, or a WebSocket / SSE / Socket.IO URL. A broker request in Publish mode is switched to subscribe automatically.",
                 "Open the request that should cause the message (e.g. POST /orders), and in Extract save what you need from the response, e.g. orderId from $.id.",
-                "In the Messages tab click Add, pick the listener, and describe the message: a JSONPath (empty = the whole message), an operator and the expected value, e.g. $.orderId == {{orderId}}.",
+                "In the Checks tab click Add, pick the listener, and describe the message: a JSONPath (empty = the whole message), an operator and the expected value, e.g. $.orderId == {{orderId}}.",
                 "Optionally filter by topic / routing key / event name, set the time limit, or tick none to require that no matching message arrives (e.g. no payment.failed event).",
                 "Send. Listeners subscribe before the request goes out, and each check shows ✓ or ✗ in the Tests results, with how long the message took or what arrived instead."
             ]),

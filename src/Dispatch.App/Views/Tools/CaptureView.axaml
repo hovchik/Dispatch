@@ -35,8 +35,8 @@
       <TextBlock Text="Capture proxy" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
       <Border Grid.Column="1" Classes="pill" Classes.running="{Binding IsRunning}" Classes.stopped="{Binding !IsRunning}">
         <StackPanel Orientation="Horizontal" Spacing="6">
-          <Ellipse Width="8" Height="8" Fill="#22A06B" VerticalAlignment="Center" IsVisible="{Binding IsRunning}" />
-          <Ellipse Width="8" Height="8" Fill="#8B949E" VerticalAlignment="Center" IsVisible="{Binding !IsRunning}" />
+          <Ellipse Width="8" Height="8" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding IsRunning}" />
+          <Ellipse Width="8" Height="8" Fill="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsRunning}" />
           <TextBlock Text="{Binding StateText}" FontSize="12" FontWeight="SemiBold" />
         </StackPanel>
       </Border>
@@ -67,7 +67,7 @@
       <!-- Settings -->
       <ScrollViewer>
         <StackPanel Spacing="10" Margin="0,0,6,0">
-          <Border Background="#26D97706" CornerRadius="6" Padding="10,6" IsVisible="{Binding IsRunning}">
+          <Border Background="{DynamicResource WarningSoftBrush}" CornerRadius="6" Padding="10,6" IsVisible="{Binding IsRunning}">
             <TextBlock Classes="hint" Text="Stop the proxy to change these settings." />
           </Border>
 
@@ -181,7 +181,7 @@
                           <StackPanel Grid.Column="1">
                             <TextBlock Text="{Binding Path}" FontSize="12.5" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Url}" />
                             <StackPanel Orientation="Horizontal" Spacing="5">
-                              <PathIcon Data="{StaticResource IconLock}" Width="9" Height="9" Foreground="#22A06B" IsVisible="{Binding Secure}" VerticalAlignment="Center"
+                              <PathIcon Data="{StaticResource IconLock}" Width="9" Height="9" Foreground="{DynamicResource SuccessBrush}" IsVisible="{Binding Secure}" VerticalAlignment="Center"
                                         ToolTip.Tip="HTTPS" />
                               <TextBlock Text="{Binding Host}" Classes="muted" FontSize="10.5" TextTrimming="CharacterEllipsis" />
                               <TextBlock Text="{Binding ElapsedMs, StringFormat='· {0:0} ms'}" Classes="muted" FontSize="10.5" />
@@ -216,7 +216,7 @@
                         <Run Text="  ·  " Foreground="{DynamicResource MutedTextBrush}" /><Run Text="{Binding Selected.ResponseSize, Converter={x:Static tools:BytesConverter.Instance}}" Foreground="{DynamicResource MutedTextBrush}" />
                         <Run Text="  ·  " Foreground="{DynamicResource MutedTextBrush}" /><Run Text="{Binding Selected.Timestamp, StringFormat='{}{0:HH:mm:ss}'}" Foreground="{DynamicResource MutedTextBrush}" />
                       </TextBlock>
-                      <SelectableTextBlock Text="{Binding Selected.Error}" Foreground="#EF4444" FontSize="12" TextWrapping="Wrap"
+                      <SelectableTextBlock Text="{Binding Selected.Error}" Foreground="{DynamicResource DangerBrush}" FontSize="12" TextWrapping="Wrap"
                                            IsVisible="{Binding Selected.Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
                     <TabControl Classes="compact" Margin="0,6,0,0">
@@ -427,7 +427,7 @@
                               <TextBlock Grid.Column="1" Text="{Binding Method}" Classes="method" Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
                               <StackPanel Grid.Column="2">
                                 <TextBlock Text="{Binding Url}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Url}" />
-                                <TextBlock Text="{Binding Error}" Foreground="#EF4444" FontSize="11" TextWrapping="Wrap"
+                                <TextBlock Text="{Binding Error}" Foreground="{DynamicResource DangerBrush}" FontSize="11" TextWrapping="Wrap"
                                            IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                               </StackPanel>
                               <TextBlock Grid.Column="3" FontWeight="SemiBold" VerticalAlignment="Center"

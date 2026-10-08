@@ -74,13 +74,14 @@ public static class AwsSigV4Signer
             $"{Algorithm} Credential={auth.AwsAccessKey}/{scope}, SignedHeaders={signedHeaders}, Signature={signature}");
     }
 
-    private static string CanonicalPath(Uri uri, string service)
+    internal static string CanonicalPath(Uri uri, string service)
     {
         var path = uri.AbsolutePath.Length == 0 ? "/" : uri.AbsolutePath;
-        // S3 uses the path as-is; every other service double-encodes each segment.
+        // S3 uses the path as-is; every other service double-encodes each segment: AbsolutePath is already
+        // URI-encoded once, and SigV4 encodes those segments a second time (botocore: quote(path, safe='/~')).
         if (service == "s3")
             return path;
-        return string.Join("/", path.Split('/').Select(segment => Uri.EscapeDataString(Uri.UnescapeDataString(segment))));
+        return string.Join("/", path.Split('/').Select(Uri.EscapeDataString));
     }
 
     private static string CanonicalQuery(Uri uri)

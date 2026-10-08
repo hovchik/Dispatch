@@ -22,7 +22,42 @@ public sealed class CertificateAuthority : IDisposable
     public X509Certificate2 CaCertificate => _ca;
 
     /// <summary>Creates a self-signed CA valid for 5 years.</summary>
-    public static X509Certificate2 Create()
+    public static X509Certificate2 Create() => X509CertificateLoader.LoadPkcs12(CreatePkcs12(), null);
+
+    /// <summary>
+    /// The CA stored at <paramref name="path"/> (PKCS#12, user-only file), created on first use. Trusting the CA only
+    /// sticks if the same one is used on every launch. A file that cannot be read or has (nearly) expired is replaced.
+    /// </summary>
+    public static X509Certificate2 LoadOrCreate(string path)
+    {
+        if (File.Exists(path))
+        {
+            try
+            {
+                var existing = X509CertificateLoader.LoadPkcs12FromFile(path, null);
+                if (existing.HasPrivateKey && existing.NotAfter.ToUniversalTime() > DateTime.UtcNow.AddDays(30))
+                    return existing;
+                existing.Dispose();
+            }
+            catch (CryptographicException)
+            {
+                // Corrupt or foreign file: regenerate below.
+            }
+        }
+
+        var pkcs12 = CreatePkcs12();
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        Directory.CreateDirectory(directory);
+        var temp = Path.Combine(directory, Path.GetRandomFileName());
+        File.WriteAllBytes(temp, pkcs12);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        File.Move(temp, path, overwrite: true);
+        return X509CertificateLoader.LoadPkcs12(pkcs12, null);
+    }
+
+    /// <summary>A new self-signed CA with its private key, as PKCS#12 bytes (no password).</summary>
+    private static byte[] CreatePkcs12()
     {
         using var rsa = RSA.Create(2048);
         var request = new CertificateRequest("CN=Dispatch Capture CA, O=Dispatch", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -30,9 +65,9 @@ public sealed class CertificateAuthority : IDisposable
         request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, critical: true));
         request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, critical: false));
         var now = DateTimeOffset.UtcNow;
-        var cert = request.CreateSelfSigned(now.AddDays(-1), now.AddYears(5));
-        // Re-import so the key is persisted with the cert (needed to sign leaves).
-        return X509CertificateLoader.LoadPkcs12(cert.Export(X509ContentType.Pkcs12), null);
+        using var cert = request.CreateSelfSigned(now.AddDays(-1), now.AddYears(5));
+        // Re-imported from PKCS#12 so the key is persisted with the cert (needed to sign leaves).
+        return cert.Export(X509ContentType.Pkcs12);
     }
 
     /// <summary>A leaf certificate for <paramref name="host"/>, signed by the CA, cached per host.</summary>

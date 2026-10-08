@@ -178,6 +178,19 @@ public class JwtTests
         Assert.True(info.IsExpired(DateTimeOffset.UtcNow));
         Assert.Equal("Ann", JsonNode.Parse(info.PayloadJson)!["name"]!.GetValue<string>());
     }
+
+    [Fact]
+    public void Millisecond_and_out_of_range_time_claims_do_not_throw()
+    {
+        static string Part(string json) => Convert.ToBase64String(Encoding.UTF8.GetBytes(json)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+        var ms = Jwt.Decode($"{Part("""{"alg":"HS256"}""")}.{Part("""{"exp":1700000000000,"iat":1600000000000}""")}.sig");
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1700000000), ms.ExpiresAt);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1600000000), ms.IssuedAt);
+
+        var absurd = Jwt.Decode($"{Part("""{"alg":"HS256"}""")}.{Part("""{"exp":1e30}""")}.sig");
+        Assert.Null(absurd.ExpiresAt);
+    }
 }
 
 public sealed class DigestAuthTests

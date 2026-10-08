@@ -43,8 +43,19 @@ public sealed record MainServices(
     GrpcSchemaProvider GrpcSchemas,
     Infrastructure.Auth.SystemBrowserInteraction OAuth);
 
+/// <summary>The panels the activity rail can show in the sidebar.</summary>
+public enum SidebarSection
+{
+    Collections,
+    History,
+    Environments
+}
+
 public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IHelpActions
 {
+    /// <summary>Settings key for the request / response layout ("rows" or "columns").</summary>
+    private const string LayoutSetting = "layout";
+
     private readonly MainServices _services;
     private HelpViewModel? _help;
 
@@ -82,6 +93,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     private RequestTabViewModel? _selectedTab;
 
     [ObservableProperty] private bool _isDarkTheme = true;
+
+    /// <summary>Which sidebar panel the activity rail shows.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCollectionsActive), nameof(IsHistoryActive), nameof(IsEnvironmentsActive), nameof(SidebarTitle))]
+    private SidebarSection _sidebar = SidebarSection.Collections;
+
+    /// <summary>False when the sidebar is collapsed to give the workspace the full width.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCollectionsActive), nameof(IsHistoryActive), nameof(IsEnvironmentsActive))]
+    private bool _isSidebarOpen = true;
+
+    /// <summary>Request editor and response side by side (true) or stacked (false).</summary>
+    [ObservableProperty] private bool _isSideBySide;
+
     [ObservableProperty] private string? _errorMessage;
     [ObservableProperty] private string? _infoMessage;
 
@@ -89,6 +114,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     [ObservableProperty] private bool _isWelcomeOpen;
 
     public bool HasTabs => Tabs.Count > 0;
+    public bool IsCollectionsActive => IsSidebarOpen && Sidebar == SidebarSection.Collections;
+    public bool IsHistoryActive => IsSidebarOpen && Sidebar == SidebarSection.History;
+    public bool IsEnvironmentsActive => IsSidebarOpen && Sidebar == SidebarSection.Environments;
+    public string SidebarTitle => Sidebar switch
+    {
+        SidebarSection.History => "History",
+        SidebarSection.Environments => "Environments",
+        _ => "Collections"
+    };
     private IDialogService Dialogs => _services.Tabs.Dialogs;
 
     // ---- ITabHost ------------------------------------------------------------------------------
@@ -103,10 +137,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     public async Task OnRequestSentAsync(ApiResponse response)
     {
         await SafeAsync(History.LoadAsync);
-        if (response.EnvironmentUpdates.Count > 0)
+        if (response.EnvironmentUpdates.Count > 0 || response.EnvironmentRemovals.Count > 0)
         {
-            await Environments.ApplyUpdatesAsync(response.EnvironmentUpdates);
-            ShowInfo($"Saved {string.Join(", ", response.EnvironmentUpdates.Keys)} to environment \"{Environments.Active.Name}\".");
+            await Environments.ApplyUpdatesAsync(response.EnvironmentUpdates, response.EnvironmentRemovals);
+            var parts = new List<string>();
+            if (response.EnvironmentUpdates.Count > 0)
+                parts.Add($"saved {string.Join(", ", response.EnvironmentUpdates.Keys)}");
+            if (response.EnvironmentRemovals.Count > 0)
+                parts.Add($"removed {string.Join(", ", response.EnvironmentRemovals)}");
+            ShowInfo($"Environment \"{Environments.Active.Name}\": {string.Join("; ", parts)}.");
         }
     }
 
@@ -214,6 +253,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
             await _services.Database.InitializeAsync();
             var theme = await _services.Settings.GetAsync(SettingKeys.Theme);
             IsDarkTheme = theme != "light";
+            _isSideBySide = await _services.Settings.GetAsync(LayoutSetting) == "columns";
+            OnPropertyChanged(nameof(IsSideBySide));
             _services.Cookies.Import(await _services.Settings.GetAsync(SettingKeys.Cookies));
 
             await Task.WhenAll(Collections.LoadAsync(), History.LoadAsync(), Environments.LoadAsync());
@@ -328,6 +369,28 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     [RelayCommand]
     private void ToggleTheme() => IsDarkTheme = !IsDarkTheme;
 
+    /// <summary>Shows a sidebar panel; clicking the active one collapses the sidebar.</summary>
+    [RelayCommand]
+    private void ShowSidebar(SidebarSection section)
+    {
+        if (IsSidebarOpen && Sidebar == section)
+        {
+            IsSidebarOpen = false;
+            return;
+        }
+        Sidebar = section;
+        IsSidebarOpen = true;
+    }
+
+    [RelayCommand]
+    private void ToggleSidebar() => IsSidebarOpen = !IsSidebarOpen;
+
+    [RelayCommand]
+    private void ToggleLayout() => IsSideBySide = !IsSideBySide;
+
+    partial void OnIsSideBySideChanged(bool value) =>
+        _ = _services.Settings.SetAsync(LayoutSetting, value ? "columns" : "rows");
+
     [RelayCommand]
     private void DismissError() => ErrorMessage = null;
 
@@ -401,7 +464,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         {
             case CollectionAction.Run:
                 Dialogs.ShowTool(new RunnerViewModel(collection, _services.Runner, Dialogs, () => ActiveEnvironment,
-                    Environments.ApplyUpdatesAsync));
+                    updates => Environments.ApplyUpdatesAsync(updates)));
                 break;
             case CollectionAction.LoadTest:
                 Dialogs.ShowTool(new LoadTestViewModel(collection, _services.LoadTester, Dialogs, () => ActiveEnvironment));
@@ -570,6 +633,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
             yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
                 () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));
         yield return new PaletteItem("Toggle theme", "Light / dark", ToggleTheme);
+        yield return new PaletteItem("Toggle sidebar", "Show or hide the sidebar (Ctrl+B)", ToggleSidebar);
+        yield return new PaletteItem("Toggle layout", "Request and response side by side or stacked", ToggleLayout);
+        yield return new PaletteItem("Show collections", "Sidebar", () => ShowSidebar(SidebarSection.Collections));
+        yield return new PaletteItem("Show history", "Sidebar", () => ShowSidebar(SidebarSection.History));
+        yield return new PaletteItem("Show environments", "Sidebar", () => ShowSidebar(SidebarSection.Environments));
         yield return new PaletteItem("Help", "User guide (F1)", () => ShowHelp(null));
         yield return new PaletteItem("Load example collection", "Ready-made requests that show each feature", () => _ = LoadSamplesAsync());
         yield return new PaletteItem("Show welcome screen", "Getting started", ShowWelcome);

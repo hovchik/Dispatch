@@ -91,10 +91,22 @@ public static class Jwt
         }
     }
 
-    private static DateTimeOffset? Time(JsonNode? node) =>
-        node is JsonValue v && double.TryParse(v.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
-            ? DateTimeOffset.FromUnixTimeMilliseconds((long)(seconds * 1000))
-            : null;
+    private static DateTimeOffset? Time(JsonNode? node)
+    {
+        if (node is not JsonValue v || !double.TryParse(v.ToJsonString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
+            return null;
+        // Some issuers emit millisecond timestamps (e.g. exp 1700000000000); anything beyond year ~5138 in seconds is treated as ms.
+        if (Math.Abs(seconds) > 1e11)
+            seconds /= 1000;
+        try
+        {
+            return DateTimeOffset.FromUnixTimeMilliseconds((long)(seconds * 1000));
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+    }
 
     public static byte[] Base64Url(string text)
     {

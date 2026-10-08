@@ -337,3 +337,28 @@ public sealed class CliTests
         }
     }
 }
+
+public sealed class SecretKeyStorageTests
+{
+    [Fact]
+    public void An_existing_file_key_keeps_being_used()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"dispatch-key-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var key = Enumerable.Range(0, 32).Select(i => (byte)i).ToArray();
+            File.WriteAllText(Path.Combine(dir, SecretProtector.FileKeyName), Convert.ToBase64String(key));
+
+            // Even when a credential store is available, secrets encrypted with the file key must stay readable.
+            var encrypted = new SecretProtector(dir).Protect("hunter2");
+
+            Assert.Equal("hunter2", new SecretProtector(() => key).Unprotect(encrypted));
+            Assert.Equal(Convert.ToBase64String(key), File.ReadAllText(Path.Combine(dir, SecretProtector.FileKeyName)));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+}

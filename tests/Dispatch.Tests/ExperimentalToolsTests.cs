@@ -194,6 +194,17 @@ public class RateLimitHeaderTests
     }
 
     [Fact]
+    public void Oversized_structured_values_are_ignored_instead_of_throwing()
+    {
+        var info = RateLimitHeaders.Read(H(("RateLimit", "limit=99999999999, remaining=5, reset=170000000000000")));
+
+        Assert.NotNull(info);
+        Assert.Equal(5, info!.Remaining);
+        Assert.Null(info.Limit);
+        Assert.Null(info.ResetSeconds);
+    }
+
+    [Fact]
     public void Reads_retry_after_seconds_and_dates()
     {
         Assert.Equal(5, RateLimitHeaders.RetryAfterSeconds(H(("Retry-After", "5"))));

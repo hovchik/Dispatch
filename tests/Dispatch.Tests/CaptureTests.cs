@@ -34,6 +34,21 @@ public class CaptureConverterTests
     }
 
     [Fact]
+    public void Captured_form_body_is_decoded_so_it_is_not_encoded_twice_on_send()
+    {
+        var exchange = new CapturedExchange
+        {
+            Method = "POST", Url = "https://api.example.com/login",
+            RequestBody = "user=ann%40x.io&note=a+b%26c", RequestContentType = "application/x-www-form-urlencoded"
+        };
+        var request = CaptureConverter.ToRequest(exchange);
+
+        Assert.Equal(BodyMode.FormUrlEncoded, request.Body.Mode);
+        Assert.Equal("ann@x.io", request.Body.FormFields.Single(f => f.Key == "user").Value);
+        Assert.Equal("a b&c", request.Body.FormFields.Single(f => f.Key == "note").Value);
+    }
+
+    [Fact]
     public void Har_export_is_valid_and_contains_entries()
     {
         var har = CaptureConverter.ToHar(
@@ -188,5 +203,119 @@ public class CliCaptureTests
             }
         }
         Assert.Contains("BEGIN CERTIFICATE", pem);
+    }
+}
+
+[Collection("Console")]
+public class CaptureProxyRelayTests
+{
+    private static HttpClient ProxyClient(int port) => new(new HttpClientHandler
+    {
+        Proxy = new WebProxy($"http://127.0.0.1:{port}"),
+        UseProxy = true,
+        UseCookies = false
+    }) { Timeout = TimeSpan.FromSeconds(15) };
+
+    [Fact]
+    public async Task Multi_valued_response_headers_are_relayed_one_per_line()
+    {
+        await using var origin = await TestServer.StartAsync(app => app.MapGet("/cookies", (HttpContext ctx) =>
+        {
+            ctx.Response.Headers.Append("Set-Cookie", "a=1; Path=/; Expires=Wed, 21 Oct 2026 07:28:00 GMT");
+            ctx.Response.Headers.Append("Set-Cookie", "b=2; Path=/; HttpOnly");
+            return "ok";
+        }));
+        using var ca = new CertificateAuthority();
+        await using var proxy = new CaptureProxy(ca);
+        CapturedExchange? captured = null;
+        proxy.Captured += e => captured = e;
+        await proxy.StartAsync(new CaptureProxyOptions { Port = 0 });
+
+        using var client = ProxyClient(proxy.Port);
+        using var response = await client.GetAsync($"{origin.BaseUrl}/cookies");
+
+        var setCookies = response.Headers.GetValues("Set-Cookie").ToList();
+        Assert.Equal(2, setCookies.Count);
+        Assert.Contains(setCookies, c => c.StartsWith("a=1; Path=/; Expires=Wed, 21 Oct 2026"));
+        Assert.Contains(setCookies, c => c.StartsWith("b=2"));
+        Assert.NotNull(captured);
+        Assert.Equal(2, captured!.ResponseHeaders.Count(h => h.Key.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public async Task Large_request_bodies_are_forwarded_whole_and_only_the_recording_is_capped()
+    {
+        await using var origin = await TestServer.StartAsync(app => app.MapPost("/upload", async (HttpContext ctx) =>
+        {
+            using var ms = new MemoryStream();
+            await ctx.Request.Body.CopyToAsync(ms);
+            return Results.Json(new { length = ms.Length });
+        }));
+        using var ca = new CertificateAuthority();
+        await using var proxy = new CaptureProxy(ca);
+        CapturedExchange? captured = null;
+        proxy.Captured += e => captured = e;
+        await proxy.StartAsync(new CaptureProxyOptions { Port = 0, MaxBodyBytes = 1024 });
+
+        var payload = new string('x', 10_000); // > MaxBodyBytes * 4
+        using var client = ProxyClient(proxy.Port);
+        using var response = await client.PostAsync($"{origin.BaseUrl}/upload", new StringContent(payload, System.Text.Encoding.UTF8, "text/plain"));
+        var json = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(10_000, json["length"]!.GetValue<long>());
+        Assert.NotNull(captured);
+        Assert.Equal(1024, captured!.RequestBody.Length);
+    }
+
+    [Theory]
+    [InlineData("api.example.com:8443", "api.example.com", 8443)]
+    [InlineData("api.example.com", "api.example.com", 443)]
+    [InlineData("[::1]:8443", "::1", 8443)]
+    [InlineData("[2001:db8::1]", "2001:db8::1", 443)]
+    [InlineData("10.0.0.5:443", "10.0.0.5", 443)]
+    public void Connect_authority_parsing_keeps_ipv6_literals_intact(string authority, string host, int port)
+    {
+        Assert.True(CaptureProxy.TryParseConnectAuthority(authority, out var parsedHost, out var parsedPort));
+        Assert.Equal(host, parsedHost);
+        Assert.Equal(port, parsedPort);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("host:notaport")]
+    [InlineData("host/path")]
+    public void Connect_authority_parsing_rejects_garbage(string authority) =>
+        Assert.False(CaptureProxy.TryParseConnectAuthority(authority, out _, out _));
+}
+
+public class PersistedCertificateAuthorityTests
+{
+    [Fact]
+    public void Persisted_ca_is_reused_across_loads_and_a_corrupt_file_is_regenerated()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"dispatch-ca-{Guid.NewGuid():N}");
+        var path = Path.Combine(dir, "capture-ca.pfx");
+        try
+        {
+            using var first = CertificateAuthority.LoadOrCreate(path);
+            using var second = CertificateAuthority.LoadOrCreate(path);
+            Assert.True(File.Exists(path));
+            Assert.Equal(first.Thumbprint, second.Thumbprint);
+            Assert.True(second.HasPrivateKey);
+            using (var ca = new CertificateAuthority(CertificateAuthority.LoadOrCreate(path)))
+                Assert.Equal(first.Subject, ca.GetCertificate("example.test").Issuer); // the loaded key can sign leaves
+
+            File.WriteAllText(path, "this is not a pkcs#12 file");
+            using var regenerated = CertificateAuthority.LoadOrCreate(path);
+            Assert.NotEqual(first.Thumbprint, regenerated.Thumbprint);
+            using var reloaded = CertificateAuthority.LoadOrCreate(path);
+            Assert.Equal(regenerated.Thumbprint, reloaded.Thumbprint); // the bad file was replaced by a valid one
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+                Directory.Delete(dir, recursive: true);
+        }
     }
 }

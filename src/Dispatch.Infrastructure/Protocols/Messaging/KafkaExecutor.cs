@@ -31,6 +31,7 @@ public sealed class KafkaExecutor : IProtocolExecutor
 
         IConsumer<string?, string>? consumer = null;
         Task consuming = Task.CompletedTask;
+        string? consumeError = null;
         try
         {
             if (consume)
@@ -45,7 +46,7 @@ public sealed class KafkaExecutor : IProtocolExecutor
                     .Build();
                 consumer.Subscribe(s.Topic);
                 log.Info($"Subscribed to {s.Topic} as group '{s.GroupId}' ({s.AutoOffsetReset})");
-                consuming = Task.Run(() => ConsumeLoop(consumer, log), CancellationToken.None);
+                consuming = Task.Run(() => consumeError = ConsumeLoop(consumer, log), CancellationToken.None);
             }
 
             if (produce)
@@ -134,6 +135,11 @@ public sealed class KafkaExecutor : IProtocolExecutor
             }
         }
 
+        if (consumeError is not null && !failed)
+        {
+            failed = true;
+            reason = consumeError;
+        }
         lock (errors)
         {
             if (errors.Count > 0 && log.ReceivedCount == 0 && !failed)
@@ -157,17 +163,30 @@ public sealed class KafkaExecutor : IProtocolExecutor
         };
     }
 
-    private static void ConsumeLoop(IConsumer<string?, string> consumer, MessageLog log)
+    /// <summary>Consumes until the log stops. Returns the reason when consuming ended early because of a fatal error.</summary>
+    private static string? ConsumeLoop(IConsumer<string?, string> consumer, MessageLog log)
     {
         try
         {
             while (!log.Token.IsCancellationRequested)
             {
-                var result = consumer.Consume(TimeSpan.FromMilliseconds(250));
+                ConsumeResult<string?, string>? result;
+                try
+                {
+                    result = consumer.Consume(TimeSpan.FromMilliseconds(250));
+                }
+                catch (ConsumeException ex)
+                {
+                    // Most consume errors (a transient broker error, an undecodable record) are per-message: report and go on.
+                    log.Failure(ex.Error.Reason);
+                    if (ex.Error.IsFatal)
+                        return ex.Error.Reason;
+                    continue;
+                }
                 if (result?.Message is null)
                     continue;
                 var headers = result.Message.Headers is { Count: > 0 } h
-                    ? " " + string.Join(" ", h.Select(x => $"{x.Key}={Encoding.UTF8.GetString(x.GetValueBytes())}"))
+                    ? " " + string.Join(" ", h.Select(x => $"{x.Key}={(x.GetValueBytes() is { } b ? Encoding.UTF8.GetString(b) : "")}"))
                     : "";
                 log.Received(result.Message.Value ?? "",
                     $"{result.Topic}[{result.Partition.Value}]@{result.Offset.Value}" +
@@ -175,13 +194,10 @@ public sealed class KafkaExecutor : IProtocolExecutor
                     Encoding.UTF8.GetByteCount(result.Message.Value ?? ""));
             }
         }
-        catch (ConsumeException ex)
-        {
-            log.Failure(ex.Error.Reason);
-        }
         catch (ObjectDisposedException)
         {
         }
+        return null;
     }
 
     internal static string BootstrapServers(string url)

@@ -20,6 +20,7 @@ public static class LawsCommand
         var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["e"] = "env", ["o"] = "out", ["r"] = "reporter" });
         if (args.Positionals.Count != 1)
             throw new UsageException(Usage);
+        SingleRequest.ValidateReporters(args);
         var source = args.Positionals[0];
         var options = new LawOptions { MinSamples = Math.Max(2, args.Int("min-samples", 3)) };
         await using var services = Program.BuildServices(args.Option("db"));

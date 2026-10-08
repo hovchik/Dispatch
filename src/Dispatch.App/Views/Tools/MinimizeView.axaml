@@ -14,7 +14,7 @@
         <TextBlock Classes="muted" FontSize="12">
           <Run Text="{Binding PartCount}" /><Run Text=" top-level part(s) to try" />
         </TextBlock>
-        <Border CornerRadius="6" Padding="10,6" Background="#339A6700" IsVisible="{Binding HasSideEffects}">
+        <Border CornerRadius="6" Padding="10,6" Background="{DynamicResource WarningSoftBrush}" IsVisible="{Binding HasSideEffects}">
           <TextBlock TextWrapping="Wrap" FontSize="12"
                      Text="This method can change data, and every probe is a real request. Use a test environment." />
         </Border>
@@ -68,7 +68,7 @@
       <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding HasResult}">
         <Border Classes="card" Padding="12">
           <DockPanel>
-            <TextBlock DockPanel.Dock="Top" Classes="section" Text="REQUIRED" Foreground="#22A06B" Margin="0,0,0,6" />
+            <TextBlock DockPanel.Dock="Top" Classes="section" Text="REQUIRED" Foreground="{DynamicResource SuccessBrush}" Margin="0,0,0,6" />
             <ScrollViewer>
               <ItemsControl ItemsSource="{Binding Required}">
                 <ItemsControl.ItemTemplate>

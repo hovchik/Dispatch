@@ -6,10 +6,16 @@
              x:DataType="vm:HistoryViewModel">
 
   <DockPanel>
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="10,10,10,6">
-      <TextBox Text="{Binding Filter}" Watermark="Filter by URL, status or name" />
-      <Button Grid.Column="1" Content="Clear" Command="{Binding ClearCommand}" Padding="10,4" Margin="6,0,0,0"
-              IsVisible="{Binding !IsEmpty}" ToolTip.Tip="Delete all history" />
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="10,0,10,8">
+      <TextBox Text="{Binding Filter}" Watermark="Filter by URL, status or name" MinHeight="30" FontSize="12.5">
+        <TextBox.InnerLeftContent>
+          <PathIcon Data="{StaticResource IconFilter}" Width="12" Height="12" Margin="8,0,0,0" Foreground="{DynamicResource MutedTextBrush}" />
+        </TextBox.InnerLeftContent>
+      </TextBox>
+      <Button Grid.Column="1" Classes="icon" Command="{Binding ClearCommand}" Margin="4,0,0,0"
+              IsVisible="{Binding !IsEmpty}" ToolTip.Tip="Delete all history">
+        <PathIcon Data="{StaticResource IconTrash}" />
+      </Button>
     </Grid>
 
     <Border DockPanel.Dock="Top" Classes="card" Margin="10,0,10,6" Padding="10,6"
@@ -23,14 +29,20 @@
       </Grid>
     </Border>
 
-    <TextBlock DockPanel.Dock="Top" Text="{Binding Error}" Foreground="#EF4444" TextWrapping="Wrap" Margin="12,0"
+    <TextBlock DockPanel.Dock="Top" Classes="error" Text="{Binding Error}" Margin="12,0,12,6"
                IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
     <Panel>
-      <TextBlock Classes="muted" TextWrapping="Wrap" Margin="16" TextAlignment="Center"
-                 Text="Requests you send will appear here." IsVisible="{Binding IsEmpty}" />
+      <StackPanel Margin="16,28" Spacing="8" IsVisible="{Binding IsEmpty}">
+        <Border Width="40" Height="40" CornerRadius="12" Background="{DynamicResource SurfaceAltBrush}" HorizontalAlignment="Center"
+                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1">
+          <PathIcon Data="{StaticResource IconClock}" Width="16" Height="16" Foreground="{DynamicResource MutedTextBrush}" />
+        </Border>
+        <TextBlock Text="No history yet" FontWeight="SemiBold" TextAlignment="Center" />
+        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Text="Requests you send will appear here." />
+      </StackPanel>
 
-      <ListBox Classes="plain" ItemsSource="{Binding Items}">
+      <ListBox Classes="plain" ItemsSource="{Binding Items}" Margin="6,0">
         <ListBox.Styles>
           <Style Selector="ListBoxItem" x:DataType="vm:HistoryItemViewModel">
             <Setter Property="IsVisible" Value="{Binding IsVisible}" />
@@ -38,7 +50,7 @@
         </ListBox.Styles>
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="vm:HistoryItemViewModel">
-            <Grid ColumnDefinitions="44,*,Auto" RowDefinitions="Auto,Auto" Background="Transparent"
+            <Grid ColumnDefinitions="40,*,Auto" RowDefinitions="Auto,Auto" Background="Transparent"
                   Tapped="OnItemTapped" ToolTip.Tip="{Binding Url}">
               <Grid.ContextMenu>
                 <ContextMenu>
@@ -63,7 +75,7 @@
                           Margin="0,2,0,0">
                 <TextBlock Text="{Binding WhenText}" Classes="muted" FontSize="11" />
                 <TextBlock Text="{Binding ElapsedText}" Classes="muted" FontSize="11" />
-                <TextBlock Text="◆ compare base" FontSize="11" Foreground="#2F6BFF"
+                <TextBlock Text="◆ compare base" FontSize="11" Foreground="{DynamicResource AccentBrush}"
                            IsVisible="{Binding IsCompareBase}" />
               </StackPanel>
             </Grid>

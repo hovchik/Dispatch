@@ -23,11 +23,12 @@ public sealed class SseExecutor(IRequestMessageBuilder builder, IHttpClientSourc
         message.Headers.TryAddWithoutValidation("Cache-Control", "no-cache");
 
         using var log = new MessageLog(context, settings.ListenSeconds, settings.MaxMessages, cancellationToken);
-        var client = clients.GetClient(request.Settings);
 
         HttpResponseMessage response;
         try
         {
+            // Inside the try: a missing client certificate or an invalid proxy URL is an error response, not a crash.
+            var client = clients.GetClient(request.Settings);
             using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(log.Token);
             connectTimeout.CancelAfter(request.Settings.TimeoutMs > 0 ? request.Settings.TimeoutMs : 30_000);
             response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, connectTimeout.Token)
@@ -46,6 +47,12 @@ public sealed class SseExecutor(IRequestMessageBuilder builder, IHttpClientSourc
         {
             return ApiResponse.Failed(HttpRequestExecutor.Describe(ex), log.Stopwatch.Elapsed, message.RequestUri?.ToString(),
                 RequestKind.Sse);
+        }
+        catch (Exception ex) when (ex is IOException or FileNotFoundException or UriFormatException
+                                       or System.Security.Authentication.AuthenticationException
+                                       or System.Security.Cryptography.CryptographicException)
+        {
+            return ApiResponse.Failed(ex.Message, log.Stopwatch.Elapsed, message.RequestUri?.ToString(), RequestKind.Sse);
         }
 
         using (response)

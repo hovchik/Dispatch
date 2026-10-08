@@ -9,11 +9,11 @@
   <DockPanel Margin="18">
     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,*" Margin="0,0,0,10">
       <StackPanel Spacing="2">
-        <TextBlock Text="{Binding LeftTitle}" FontWeight="SemiBold" Foreground="#EF4444" />
+        <TextBlock Text="{Binding LeftTitle}" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}" />
         <TextBlock Text="{Binding LeftStatus}" Classes="muted" FontSize="12" />
       </StackPanel>
       <StackPanel Grid.Column="1" Spacing="2">
-        <TextBlock Text="{Binding RightTitle}" FontWeight="SemiBold" Foreground="#22A06B" />
+        <TextBlock Text="{Binding RightTitle}" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}" />
         <TextBlock Text="{Binding RightStatus}" Classes="muted" FontSize="12" />
       </StackPanel>
     </Grid>
@@ -40,9 +40,9 @@
                         <TextBlock Text="{Binding Kind, Converter={x:Static conv:EnumLabelConverter.Instance}}" FontWeight="SemiBold" FontSize="12" />
                         <StackPanel Grid.Column="1" Spacing="2">
                           <SelectableTextBlock Text="{Binding Path}" FontFamily="{StaticResource MonoFont}" FontSize="12" />
-                          <SelectableTextBlock Text="{Binding Left, StringFormat='− {0}'}" Foreground="#EF4444" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                          <SelectableTextBlock Text="{Binding Left, StringFormat='− {0}'}" Foreground="{DynamicResource DangerBrush}" FontFamily="{StaticResource MonoFont}" FontSize="12"
                                                TextWrapping="Wrap" IsVisible="{Binding Left, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                          <SelectableTextBlock Text="{Binding Right, StringFormat='+ {0}'}" Foreground="#22A06B" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                          <SelectableTextBlock Text="{Binding Right, StringFormat='+ {0}'}" Foreground="{DynamicResource SuccessBrush}" FontFamily="{StaticResource MonoFont}" FontSize="12"
                                                TextWrapping="Wrap" IsVisible="{Binding Right, Converter={x:Static ObjectConverters.IsNotNull}}" />
                         </StackPanel>
                       </Grid>

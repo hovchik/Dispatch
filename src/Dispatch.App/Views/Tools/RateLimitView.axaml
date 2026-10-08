@@ -57,15 +57,15 @@
             <TextBlock Text="Sent" Classes="muted" FontSize="11" />
           </StackPanel>
         </Border>
-        <Border CornerRadius="8" Padding="12,6" Background="#3322A06B">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SuccessSoftBrush}">
           <StackPanel>
-            <TextBlock Text="{Binding Accepted}" FontSize="22" FontWeight="Bold" Foreground="#22A06B" />
+            <TextBlock Text="{Binding Accepted}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SuccessBrush}" />
             <TextBlock Text="Accepted" Classes="muted" FontSize="11" />
           </StackPanel>
         </Border>
-        <Border CornerRadius="8" Padding="12,6" Background="#33CF222E">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource DangerSoftBrush}">
           <StackPanel>
-            <TextBlock Text="{Binding Throttled}" FontSize="22" FontWeight="Bold" Foreground="#CF222E" />
+            <TextBlock Text="{Binding Throttled}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource DangerBrush}" />
             <TextBlock Text="Throttled" Classes="muted" FontSize="11" />
           </StackPanel>
         </Border>

@@ -500,6 +500,13 @@ public sealed class ProtoJson(ProtoSchema schema)
         double.IsNegativeInfinity(value) ? JsonValue.Create("-Infinity")! :
         JsonValue.Create(value);
 
+    /// <summary>Single-precision values keep their shortest round-trip text (0.1f → 0.1, not 0.10000000149011612).</summary>
+    private static JsonNode Number(float value) =>
+        float.IsNaN(value) ? JsonValue.Create("NaN")! :
+        float.IsPositiveInfinity(value) ? JsonValue.Create("Infinity")! :
+        float.IsNegativeInfinity(value) ? JsonValue.Create("-Infinity")! :
+        JsonValue.Create(double.Parse(value.ToString("R", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture));
+
     private JsonNode? ReadAny(ReadOnlySpan<byte> data, int depth)
     {
         var reader = new ProtoReader(data);

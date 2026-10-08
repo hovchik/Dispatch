@@ -224,3 +224,22 @@ public class BrokerConfigTests
         Assert.Contains("Could not connect", response.Error);
     }
 }
+
+public class BrokerAddressTests
+{
+    [Theory]
+    [InlineData("ws://broker.local/mqtt", "ws", 80)]
+    [InlineData("wss://broker.local", "wss", 443)]
+    [InlineData("ws://broker.local:9001/mqtt", "ws", 9001)]
+    [InlineData("broker.local", "mqtt", 1883)]
+    [InlineData("mqtt://broker.local", "mqtt", 1883)]
+    [InlineData("mqtt://broker.local:1884", "mqtt", 1884)]
+    public void Scheme_default_ports_win_over_the_broker_default_when_the_port_is_omitted(string url, string scheme, int port)
+    {
+        var address = BrokerAddress.Parse(url, "mqtt", 1883);
+
+        Assert.Equal(scheme, address.Scheme);
+        Assert.Equal("broker.local", address.Host);
+        Assert.Equal(port, address.Port);
+    }
+}

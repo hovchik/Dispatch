@@ -42,21 +42,21 @@
 
     <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
       <StackPanel Orientation="Horizontal" Spacing="10">
-        <Border CornerRadius="8" Padding="12,6" Background="#33CF222E">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource DangerSoftBrush}">
           <StackPanel>
-            <TextBlock Text="{Binding HighCount}" FontSize="22" FontWeight="Bold" Foreground="#CF222E" />
+            <TextBlock Text="{Binding HighCount}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource DangerBrush}" />
             <TextBlock Text="High" Classes="muted" FontSize="11" />
           </StackPanel>
         </Border>
-        <Border CornerRadius="8" Padding="12,6" Background="#339A6700">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource WarningSoftBrush}">
           <StackPanel>
-            <TextBlock Text="{Binding MediumCount}" FontSize="22" FontWeight="Bold" Foreground="#9A6700" />
+            <TextBlock Text="{Binding MediumCount}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource WarningBrush}" />
             <TextBlock Text="Medium" Classes="muted" FontSize="11" />
           </StackPanel>
         </Border>
-        <Border CornerRadius="8" Padding="12,6" Background="#330969DA">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource InfoSoftBrush}">
           <StackPanel>
-            <TextBlock Text="{Binding LowCount}" FontSize="22" FontWeight="Bold" Foreground="#0969DA" />
+            <TextBlock Text="{Binding LowCount}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource InfoBrush}" />
             <TextBlock Text="Low" Classes="muted" FontSize="11" />
           </StackPanel>
         </Border>
@@ -88,7 +88,7 @@
                     <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="13" />
                     <SelectableTextBlock Text="{Binding Evidence}" FontFamily="{StaticResource MonoFont}" FontSize="11" Classes="muted"
                                          TextWrapping="Wrap" IsVisible="{Binding Evidence, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <TextBlock FontSize="12" Foreground="#22A06B" TextWrapping="Wrap"
+                    <TextBlock FontSize="12" Foreground="{DynamicResource SuccessBrush}" TextWrapping="Wrap"
                                IsVisible="{Binding Remediation, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                       <Run Text="Fix:" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Remediation}" />
                     </TextBlock>

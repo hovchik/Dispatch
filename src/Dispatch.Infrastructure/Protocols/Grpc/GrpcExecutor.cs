@@ -75,15 +75,19 @@ public sealed class GrpcExecutor(IHttpClientSource clients, GrpcSchemaProvider s
         using var log = new MessageLog(context, method.ServerStreaming || method.ClientStreaming ? streamSettings.ListenSeconds : 0,
             streamSettings.MaxMessages, cancellationToken);
         var fullMethod = $"{service.FullName}/{method.Name}";
+        var streaming = method.ServerStreaming || method.ClientStreaming;
         var deadline = settings.DeadlineSeconds > 0
             ? TimeSpan.FromSeconds(settings.DeadlineSeconds)
-            : request.Settings.TimeoutMs > 0 ? TimeSpan.FromMilliseconds(request.Settings.TimeoutMs) : (TimeSpan?)null;
+            : request.Settings.TimeoutMs > 0 ? TimeSpan.FromMilliseconds(request.Settings.TimeoutMs)
+            // Streams listen for as long as the user wants; a unary call must not hang forever on a silent server.
+            : !streaming ? HttpRequestExecutor.DefaultTimeout : (TimeSpan?)null;
 
         await using var call = GrpcCall.Start(clients, request.Settings, baseUri, fullMethod, AuthHeaders.Combined(request),
             deadline, log.Token);
 
         var responses = new List<JsonNode?>();
         string? transportError = null;
+        var stoppedByUs = false;
         try
         {
             foreach (var message in initial)
@@ -105,6 +109,8 @@ public sealed class GrpcExecutor(IHttpClientSource clients, GrpcSchemaProvider s
                 log.Received(json?.ToJsonString(Indented) ?? "null", "response", bytes.Length);
             }
             call.CompleteRequests();
+            // The server has finished; stop waiting for messages typed in the UI, or the call would never return.
+            log.Stop();
             await pump.ConfigureAwait(false);
         }
         catch (GrpcException ex)
@@ -117,6 +123,7 @@ public sealed class GrpcExecutor(IHttpClientSource clients, GrpcSchemaProvider s
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             // Listen window over / message limit reached: end the call on our side.
+            stoppedByUs = true;
             call.Cancel();
             log.Info("Stopped listening");
         }
@@ -139,6 +146,9 @@ public sealed class GrpcExecutor(IHttpClientSource clients, GrpcSchemaProvider s
         IReadOnlyList<ResponseHeader> trailers;
         if (call.IsDeadline)
             (code, statusMessage, trailers) = (4, "Deadline exceeded", []);
+        else if (stoppedByUs && !call.HasGrpcStatus)
+            // We ended the stream on purpose before the server sent its status: that is not a failure.
+            (code, statusMessage, trailers) = (0, "", []);
         else
             (code, statusMessage, trailers) = call.GetStatus();
         if (transportError is not null && code == 0)
@@ -208,6 +218,11 @@ public sealed class GrpcExecutor(IHttpClientSource clients, GrpcSchemaProvider s
         }
         catch (OperationCanceledException)
         {
+        }
+        catch (ChannelClosedException)
+        {
+            // The call was already half-closed (the server finished first); a message typed after that is dropped.
+            log.Info("Not sent: the call has ended");
         }
         finally
         {

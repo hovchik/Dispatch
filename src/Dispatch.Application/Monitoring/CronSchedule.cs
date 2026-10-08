@@ -81,7 +81,7 @@ public sealed class CronSchedule
             var slash = part.IndexOf('/');
             if (slash >= 0)
             {
-                step = int.Parse(part[(slash + 1)..], CultureInfo.InvariantCulture);
+                step = ParseInt(part[(slash + 1)..]);
                 body = part[..slash];
                 if (step <= 0)
                     throw new FormatException("Step must be positive.");
@@ -95,12 +95,12 @@ public sealed class CronSchedule
             else if (body.Contains('-'))
             {
                 var range = body.Split('-');
-                from = int.Parse(range[0], CultureInfo.InvariantCulture);
-                to = int.Parse(range[1], CultureInfo.InvariantCulture);
+                from = ParseInt(range[0]);
+                to = ParseInt(range[1]);
             }
             else
             {
-                from = to = int.Parse(body, CultureInfo.InvariantCulture);
+                from = to = ParseInt(body);
             }
 
             if (from < min || to > max || from > to)
@@ -109,6 +109,12 @@ public sealed class CronSchedule
                 set[i] = true;
         }
     }
+
+    /// <summary>int.Parse that reports overflow as a <see cref="FormatException"/>, so TryParse rejects it instead of crashing.</summary>
+    private static int ParseInt(string text) =>
+        int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
+            ? n
+            : throw new FormatException($"Invalid number: '{text}'.");
 
     private static void FillDaysOfWeek(string field, bool[] set)
     {

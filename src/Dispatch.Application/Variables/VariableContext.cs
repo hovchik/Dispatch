@@ -17,6 +17,29 @@ public sealed class VariableContext
     /// <summary>Environment variables changed during this send; the caller persists them.</summary>
     public Dictionary<string, string> EnvironmentUpdates { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Environment variables removed during this send (pm.environment.unset); the caller persists the removal.</summary>
+    public HashSet<string> EnvironmentRemovals { get; } = new(StringComparer.Ordinal);
+
+    private readonly HashSet<string> _runtimeRemovals = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _initialRuntimeKeys = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Runtime variables removed during this send: explicit <see cref="UnsetRuntime"/> calls plus any key the context
+    /// started with that is no longer in <see cref="Runtime"/> (scripts may remove from the dictionary directly).
+    /// </summary>
+    public IReadOnlySet<string> RuntimeRemovals
+    {
+        get
+        {
+            var removed = new HashSet<string>(_runtimeRemovals, StringComparer.Ordinal);
+            foreach (var key in _initialRuntimeKeys)
+                if (!Runtime.ContainsKey(key))
+                    removed.Add(key);
+            removed.ExceptWith(Runtime.Keys);
+            return removed;
+        }
+    }
+
     /// <summary>Zero-based iteration of a collection run (0 outside a run).</summary>
     public int Iteration { get; set; }
 
@@ -38,7 +61,10 @@ public sealed class VariableContext
                 context.Environment[k] = v;
         if (runtime is not null)
             foreach (var (k, v) in runtime)
+            {
                 context.Runtime[k] = v;
+                context._initialRuntimeKeys.Add(k);
+            }
         return context;
     }
 
@@ -66,12 +92,14 @@ public sealed class VariableContext
         {
             Environment[name] = value;
             EnvironmentUpdates[name] = value;
+            EnvironmentRemovals.Remove(name);
             // A runtime value would shadow the environment one; drop it so the new value is visible.
             Runtime.Remove(name);
         }
         else
         {
             Runtime[name] = value;
+            _runtimeRemovals.Remove(name);
         }
     }
 
@@ -81,10 +109,21 @@ public sealed class VariableContext
         GlobalUpdates[name] = value;
     }
 
+    /// <summary>pm.environment.unset: removes the variable from the environment (and any runtime shadow) and records the removal.</summary>
     public void Unset(string name)
     {
-        Runtime.Remove(name);
+        UnsetRuntime(name);
         if (Environment.Remove(name))
+        {
             EnvironmentUpdates.Remove(name);
+            EnvironmentRemovals.Add(name);
+        }
+    }
+
+    /// <summary>pm.variables.unset: removes a runtime variable and records the removal so the session forgets it too.</summary>
+    public void UnsetRuntime(string name)
+    {
+        if (Runtime.Remove(name))
+            _runtimeRemovals.Add(name);
     }
 }
