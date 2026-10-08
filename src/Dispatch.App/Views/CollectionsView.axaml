@@ -6,8 +6,8 @@
              x:DataType="vm:CollectionsViewModel">
 
   <DockPanel>
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="10,10,10,6">
-      <TextBox Text="{Binding Filter}" Watermark="Search collections and requests">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="10,0,10,8">
+      <TextBox Text="{Binding Filter}" Watermark="Search collections and requests" MinHeight="30" FontSize="12.5">
         <TextBox.InnerLeftContent>
           <PathIcon Data="{StaticResource IconSearch}" Width="13" Height="13" Margin="8,0,0,0"
                     Foreground="{DynamicResource MutedTextBrush}" />
@@ -22,20 +22,25 @@
           <KeyBinding Gesture="Escape" Command="{Binding ClearFilterCommand}" />
         </TextBox.KeyBindings>
       </TextBox>
-      <Button Grid.Column="1" Classes="icon" Margin="6,0,0,0" Command="{Binding NewCollectionCommand}"
+      <Button Grid.Column="1" Classes="icon" Margin="4,0,0,0" Command="{Binding NewCollectionCommand}"
               ToolTip.Tip="New collection">
         <PathIcon Data="{StaticResource IconPlus}" />
       </Button>
     </Grid>
 
-    <TextBlock DockPanel.Dock="Top" Text="{Binding Error}" Foreground="#EF4444" TextWrapping="Wrap" Margin="12,0"
+    <TextBlock DockPanel.Dock="Top" Classes="error" Text="{Binding Error}" Margin="12,0,12,6"
                IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
     <Panel>
-      <StackPanel Margin="16" Spacing="10" IsVisible="{Binding Items.Count, Converter={x:Static conv:IsZeroConverter.Instance}}">
-        <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
-                   Text="No collections yet. Click + to create one, save a request, or import a Postman / OpenAPI / HAR file." />
-        <Button HorizontalAlignment="Center" Content="Add example collection"
+      <StackPanel Margin="16,28" Spacing="10" IsVisible="{Binding Items.Count, Converter={x:Static conv:IsZeroConverter.Instance}}">
+        <Border Width="40" Height="40" CornerRadius="12" Background="{DynamicResource SurfaceAltBrush}" HorizontalAlignment="Center"
+                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1">
+          <PathIcon Data="{StaticResource IconCollections}" Width="16" Height="16" Foreground="{DynamicResource MutedTextBrush}" />
+        </Border>
+        <TextBlock Text="No collections yet" FontWeight="SemiBold" TextAlignment="Center" />
+        <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                   Text="Click + to create one, save a request, or import a Postman / OpenAPI / HAR file." />
+        <Button HorizontalAlignment="Center" Classes="compact" Content="Add example collection"
                 Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).LoadSamplesCommand}"
                 ToolTip.Tip="Ready-made requests that show tests, variables, chaining, scripts and auth" />
       </StackPanel>
@@ -52,6 +57,9 @@
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Margin" Value="0,1" />
           </Style>
+          <Style Selector="TreeViewItem /template/ Border#PART_LayoutRoot">
+            <Setter Property="CornerRadius" Value="6" />
+          </Style>
           <!-- Quick actions on collection rows only show on hover / selection to keep the list calm. -->
           <Style Selector="Grid.collrow StackPanel.quick">
             <Setter Property="Opacity" Value="0" />
@@ -62,7 +70,7 @@
           <Style Selector="TreeViewItem" x:DataType="vm:TreeNodeViewModel">
             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
             <Setter Property="IsVisible" Value="{Binding IsVisible}" />
-            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="MinHeight" Value="28" />
           </Style>
         </TreeView.Styles>
 
@@ -128,8 +136,8 @@
                 </ContextMenu>
               </Grid.ContextMenu>
 
-              <PathIcon Data="{StaticResource IconFolder}" Width="14" Height="14" Margin="0,0,8,0"
-                        Foreground="{DynamicResource MutedTextBrush}" />
+              <PathIcon Data="{StaticResource IconCollections}" Width="14" Height="14" Margin="0,0,8,0"
+                        Foreground="{DynamicResource AccentBrush}" />
               <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" FontWeight="SemiBold"
                          TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsRenaming}" />
               <TextBox Grid.Column="1" Classes="rename" Text="{Binding EditName}" IsVisible="{Binding IsRenaming}"
@@ -149,9 +157,8 @@
                   <PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" />
                 </Button>
               </StackPanel>
-              <Border Grid.Column="3" CornerRadius="8" Padding="6,1" Margin="4,0,4,0" VerticalAlignment="Center"
-                      Background="{DynamicResource DividerBrush}" ToolTip.Tip="Requests in this collection">
-                <TextBlock Text="{Binding RequestCount}" FontSize="11" Foreground="{DynamicResource MutedTextBrush}" />
+              <Border Grid.Column="3" Classes="count" Margin="4,0,4,0" ToolTip.Tip="Requests in this collection">
+                <TextBlock Text="{Binding RequestCount}" />
               </Border>
             </Grid>
           </TreeDataTemplate>
@@ -179,7 +186,7 @@
           </TreeDataTemplate>
 
           <DataTemplate DataType="vm:RequestNodeViewModel">
-            <Grid ColumnDefinitions="44,*" Background="Transparent" Tapped="OnRequestTapped"
+            <Grid ColumnDefinitions="46,*" Background="Transparent" Tapped="OnRequestTapped"
                   ToolTip.Tip="{Binding Model.Url}">
               <Grid.ContextMenu>
                 <ContextMenu>

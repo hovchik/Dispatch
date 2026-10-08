@@ -23,8 +23,8 @@
       <TextBlock Text="Client fuzzing" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
       <Border Grid.Column="1" Classes="pill" Classes.running="{Binding IsRunning}" Classes.stopped="{Binding !IsRunning}">
         <StackPanel Orientation="Horizontal" Spacing="6">
-          <Ellipse Width="8" Height="8" Fill="#22A06B" VerticalAlignment="Center" IsVisible="{Binding IsRunning}" />
-          <Ellipse Width="8" Height="8" Fill="#8B949E" VerticalAlignment="Center" IsVisible="{Binding !IsRunning}" />
+          <Ellipse Width="8" Height="8" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding IsRunning}" />
+          <Ellipse Width="8" Height="8" Fill="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsRunning}" />
           <TextBlock Text="{Binding StateText}" FontSize="12" FontWeight="SemiBold" />
         </StackPanel>
       </Border>
@@ -58,7 +58,7 @@
           <TextBlock Classes="hint"
                      Text="Tests the app, not the API: one response at a time is varied (null fields, empty lists, 500s, …) and Dispatch watches whether the app retries in a loop, sends broken values like /users/undefined, reports an error or stops working." />
 
-          <Border Background="#26D97706" CornerRadius="6" Padding="10,6" IsVisible="{Binding IsRunning}">
+          <Border Background="{DynamicResource WarningSoftBrush}" CornerRadius="6" Padding="10,6" IsVisible="{Binding IsRunning}">
             <TextBlock Classes="hint" Text="Stop fuzzing to change these settings." />
           </Border>
 
@@ -157,13 +157,13 @@
           </Border>
           <Border Classes="stat">
             <StackPanel>
-              <TextBlock Classes="statvalue" Text="{Binding Breaks}" Foreground="#CF222E" />
+              <TextBlock Classes="statvalue" Text="{Binding Breaks}" Foreground="{DynamicResource DangerBrush}" />
               <TextBlock Text="Broke the app" Classes="muted" FontSize="11" />
             </StackPanel>
           </Border>
           <Border Classes="stat">
             <StackPanel>
-              <TextBlock Classes="statvalue" Text="{Binding Copes}" Foreground="#22A06B" />
+              <TextBlock Classes="statvalue" Text="{Binding Copes}" Foreground="{DynamicResource SuccessBrush}" />
               <TextBlock Text="Handled fine" Classes="muted" FontSize="11" />
             </StackPanel>
           </Border>

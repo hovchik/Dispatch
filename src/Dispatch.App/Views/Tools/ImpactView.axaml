@@ -51,15 +51,15 @@
     <!-- What is affected -->
     <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
       <StackPanel Orientation="Horizontal" Spacing="10">
-        <Border CornerRadius="8" Padding="12,6" Background="#33CF222E">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource DangerSoftBrush}">
           <StackPanel>
-            <TextBlock Text="{Binding BreakCount}" FontSize="22" FontWeight="Bold" Foreground="#CF222E" />
+            <TextBlock Text="{Binding BreakCount}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource DangerBrush}" />
             <TextBlock Text="Breaks" Classes="muted" FontSize="11" />
           </StackPanel>
         </Border>
-        <Border CornerRadius="8" Padding="12,6" Background="#339A6700">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource WarningSoftBrush}">
           <StackPanel>
-            <TextBlock Text="{Binding PossibleCount}" FontSize="22" FontWeight="Bold" Foreground="#9A6700" />
+            <TextBlock Text="{Binding PossibleCount}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource WarningBrush}" />
             <TextBlock Text="Worth checking" Classes="muted" FontSize="11" />
           </StackPanel>
         </Border>
@@ -91,7 +91,7 @@
                         <TextBlock Text="{Binding Location}" Classes="muted" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                       </StackPanel>
                       <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="13" />
-                      <TextBlock FontSize="12" Foreground="#22A06B" TextWrapping="Wrap"
+                      <TextBlock FontSize="12" Foreground="{DynamicResource SuccessBrush}" TextWrapping="Wrap"
                                  IsVisible="{Binding Suggestion, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                         <Run Text="Fix:" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Suggestion}" />
                       </TextBlock>

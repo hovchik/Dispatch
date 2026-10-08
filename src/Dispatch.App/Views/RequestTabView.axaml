@@ -9,7 +9,9 @@
              xmlns:sys="using:System"
              xmlns:soap="using:Dispatch.Application.Soap"
              x:Class="Dispatch.App.Views.RequestTabView"
-             x:DataType="vm:RequestTabViewModel">
+             x:Name="Root"
+             x:DataType="vm:RequestTabViewModel"
+             IsSideBySide="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsSideBySide}">
 
   <UserControl.Resources>
     <!-- Shared item templates for enum combo boxes -->
@@ -18,15 +20,14 @@
     </DataTemplate>
   </UserControl.Resources>
 
-  <Grid RowDefinitions="Auto,*" Margin="20,14,20,12">
+  <Grid RowDefinitions="Auto,*" Margin="16,12,16,12">
 
-    <!-- Request line: PROTOCOL | METHOD | URL | Send | Code -->
+    <!-- Address bar: PROTOCOL | METHOD | URL  [Send]  [layout] [code] [tools] -->
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
-      <Border Classes="card" CornerRadius="6" Padding="0">
+      <Border Classes="card" CornerRadius="8" Padding="0" Background="{DynamicResource SurfaceSunkenBrush}" ClipToBounds="True">
         <Grid ColumnDefinitions="Auto,1,Auto,Auto,*">
-          <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.Kinds}" SelectedItem="{Binding Kind}"
-                    MinWidth="96" BorderThickness="0" Background="Transparent" VerticalAlignment="Stretch"
-                    ToolTip.Tip="Protocol">
+          <ComboBox Classes="bare" ItemsSource="{x:Static vm:RequestTabViewModel.Kinds}" SelectedItem="{Binding Kind}"
+                    MinWidth="100" VerticalAlignment="Stretch" ToolTip.Tip="Protocol">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="domain:RequestKind">
                 <StackPanel Orientation="Horizontal" Spacing="8">
@@ -41,25 +42,24 @@
               <DataTemplate x:DataType="domain:RequestKind">
                 <TextBlock Text="{Binding Converter={x:Static conv:MethodTextConverter.Instance}}"
                            Foreground="{Binding Converter={x:Static conv:BadgeBrushConverter.Instance}}"
-                           FontWeight="Bold" FontFamily="{StaticResource MonoFont}" />
+                           FontWeight="Bold" FontFamily="{StaticResource MonoFont}" FontSize="12" />
               </DataTemplate>
             </ComboBox.SelectionBoxItemTemplate>
           </ComboBox>
           <Border Grid.Column="1" Background="{DynamicResource DividerBrush}" />
-          <ComboBox Grid.Column="2" ItemsSource="{x:Static vm:RequestTabViewModel.Methods}" SelectedItem="{Binding Method}"
-                    IsVisible="{Binding ShowMethod}"
-                    MinWidth="110" BorderThickness="0" Background="Transparent" VerticalAlignment="Stretch">
+          <ComboBox Grid.Column="2" Classes="bare" ItemsSource="{x:Static vm:RequestTabViewModel.Methods}" SelectedItem="{Binding Method}"
+                    IsVisible="{Binding ShowMethod}" MinWidth="112" VerticalAlignment="Stretch" ToolTip.Tip="Method">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="domain:HttpVerb">
                 <TextBlock Text="{Binding Converter={x:Static conv:MethodFullTextConverter.Instance}}"
                            Foreground="{Binding Converter={x:Static conv:MethodBrushConverter.Instance}}"
-                           FontWeight="Bold" FontFamily="{StaticResource MonoFont}" />
+                           FontWeight="Bold" FontFamily="{StaticResource MonoFont}" FontSize="12" />
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
           <Border Grid.Column="3" Width="1" Background="{DynamicResource DividerBrush}" IsVisible="{Binding ShowMethod}" />
-          <TextBox Grid.Column="4" Classes="mono" Text="{Binding Url}" BorderThickness="0" Background="Transparent"
-                   Watermark="{Binding UrlWatermark}" VerticalContentAlignment="Center" MinHeight="38">
+          <TextBox Grid.Column="4" Classes="mono bare" Text="{Binding Url}" Watermark="{Binding UrlWatermark}"
+                   VerticalContentAlignment="Center" MinHeight="38" Padding="12,0" FontSize="13">
             <TextBox.KeyBindings>
               <KeyBinding Gesture="Enter" Command="{Binding SendOrStopCommand}" />
             </TextBox.KeyBindings>
@@ -67,16 +67,23 @@
         </Grid>
       </Border>
 
-      <Button Grid.Column="1" Margin="10,0,0,0" MinWidth="120" Classes.accent="{Binding !IsSending}"
+      <Button Grid.Column="1" Margin="10,0,0,0" MinWidth="118" Classes.accent="{Binding !IsSending}" Classes.danger="{Binding IsSending}"
               Command="{Binding SendOrStopCommand}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-              VerticalAlignment="Stretch" ToolTip.Tip="Send (Ctrl+Enter)">
+              VerticalAlignment="Stretch" CornerRadius="8" ToolTip.Tip="Send (Ctrl+Enter)">
         <StackPanel Orientation="Horizontal" Spacing="8">
           <PathIcon Data="{StaticResource IconSend}" Width="13" Height="13" IsVisible="{Binding !IsSending}" />
           <PathIcon Data="{StaticResource IconStop}" Width="11" Height="11" IsVisible="{Binding IsSending}" />
           <TextBlock Text="{Binding SendLabel}" FontWeight="SemiBold" />
         </StackPanel>
       </Button>
-      <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="6,0,0,0" Spacing="2">
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="6,0,0,0" Spacing="2" VerticalAlignment="Center">
+        <Button Classes="icon" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ToggleLayoutCommand}"
+                ToolTip.Tip="Switch between stacked and side-by-side request / response (Ctrl+Shift+L)">
+          <Panel>
+            <PathIcon Data="{StaticResource IconLayoutColumns}" Width="15" Height="15" IsVisible="{Binding !#Root.IsSideBySide}" />
+            <PathIcon Data="{StaticResource IconLayoutRows}" Width="15" Height="15" IsVisible="{Binding #Root.IsSideBySide}" />
+          </Panel>
+        </Button>
         <Button Classes="icon" Command="{Binding ShowCodeCommand}"
                 ToolTip.Tip="Generate code (cURL, Python, C#, JavaScript, Go, grpcurl…)">
           <PathIcon Data="{StaticResource IconCode}" Width="16" Height="16" />
@@ -103,8 +110,8 @@
       </StackPanel>
     </Grid>
 
-    <!-- Request editors / response, split vertically -->
-    <Grid Grid.Row="1" RowDefinitions="*,6,1.3*">
+    <!-- Request editors / response: stacked by default, side by side with the layout toggle (see code-behind). -->
+    <Grid x:Name="SplitGrid" Grid.Row="1" RowDefinitions="*,8,1.25*">
       <TabControl x:Name="EditorTabs" Grid.Row="0" Padding="0">
 
         <!-- ===== Protocol-specific main tabs (first so they are selected by default) ===== -->
@@ -261,7 +268,7 @@
               </WrapPanel>
             </StackPanel>
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
-              <TextBlock Text="{Binding BodyError}" Foreground="#EF4444" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding BodyError}" Foreground="{DynamicResource DangerBrush}" VerticalAlignment="Center" />
               <Button Grid.Column="1" Content="Beautify" Padding="10,3" FontSize="12" Command="{Binding BeautifyEnvelopeCommand}" />
             </Grid>
             <views:CodeEditor Text="{Binding BodyText}" Format="Xml" />
@@ -418,8 +425,7 @@
           <TabItem.Header>
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="Params" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding Params.ActiveCount}" Classes="muted" FontSize="11" VerticalAlignment="Center"
-                         IsVisible="{Binding Params.HasActive}" />
+              <Border Classes="count" IsVisible="{Binding Params.HasActive}"><TextBlock Text="{Binding Params.ActiveCount}" /></Border>
             </StackPanel>
           </TabItem.Header>
           <views:KeyValueEditor DataContext="{Binding Params}" Margin="0,8,0,0" />
@@ -429,8 +435,7 @@
           <TabItem.Header>
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="{Binding HeadersLabel}" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding Headers.ActiveCount}" Classes="muted" FontSize="11" VerticalAlignment="Center"
-                         IsVisible="{Binding Headers.HasActive}" />
+              <Border Classes="count" IsVisible="{Binding Headers.HasActive}"><TextBlock Text="{Binding Headers.ActiveCount}" /></Border>
             </StackPanel>
           </TabItem.Header>
           <views:KeyValueEditor DataContext="{Binding Headers}" Margin="0,8,0,0" />
@@ -441,7 +446,7 @@
             <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
               <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.BodyModes}" SelectedItem="{Binding BodyMode}" MinWidth="200"
                         ItemTemplate="{StaticResource EnumLabel}" />
-              <TextBlock Grid.Column="1" Text="{Binding BodyError}" Foreground="#EF4444" Margin="12,0"
+              <TextBlock Grid.Column="1" Text="{Binding BodyError}" Foreground="{DynamicResource DangerBrush}" Margin="12,0"
                          VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
               <Button Grid.Column="2" Content="Beautify" Command="{Binding BeautifyCommand}" IsVisible="{Binding CanBeautify}" />
             </Grid>
@@ -567,8 +572,7 @@
           <TabItem.Header>
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="Tests" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding Assertions.Count}" Classes="muted" FontSize="11" VerticalAlignment="Center"
-                         IsVisible="{Binding Assertions.HasRows}" />
+              <Border Classes="count" IsVisible="{Binding Assertions.HasRows}"><TextBlock Text="{Binding Assertions.Count}" /></Border>
             </StackPanel>
           </TabItem.Header>
           <Grid RowDefinitions="Auto,*,6,*" Margin="0,8,0,0">
@@ -658,8 +662,7 @@
           <TabItem.Header>
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="Extract" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding Extractions.Count}" Classes="muted" FontSize="11" VerticalAlignment="Center"
-                         IsVisible="{Binding Extractions.HasRows}" />
+              <Border Classes="count" IsVisible="{Binding Extractions.HasRows}"><TextBlock Text="{Binding Extractions.Count}" /></Border>
             </StackPanel>
           </TabItem.Header>
           <DockPanel Margin="0,8,0,0">
@@ -697,12 +700,11 @@
           </DockPanel>
         </TabItem>
 
-        <TabItem ToolTip.Tip="Messages this request must cause on Kafka, MQTT, RabbitMQ, WebSocket, SSE or Socket.IO">
+        <TabItem ToolTip.Tip="Message checks: messages this request must cause on Kafka, MQTT, RabbitMQ, WebSocket, SSE or Socket.IO">
           <TabItem.Header>
             <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="Messages" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding Expectations.Count}" Classes="muted" FontSize="11" VerticalAlignment="Center"
-                         IsVisible="{Binding Expectations.HasRows}" />
+              <TextBlock Text="Checks" VerticalAlignment="Center" />
+              <Border Classes="count" IsVisible="{Binding Expectations.HasRows}"><TextBlock Text="{Binding Expectations.Count}" /></Border>
             </StackPanel>
           </TabItem.Header>
           <DockPanel Margin="0,8,0,0">
@@ -841,7 +843,7 @@
           <TabItem.Header>
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock Text="Examples" VerticalAlignment="Center" />
-              <TextBlock Text="{Binding Examples.Count}" Classes="muted" FontSize="11" VerticalAlignment="Center" IsVisible="{Binding Examples.HasRows}" />
+              <Border Classes="count" IsVisible="{Binding Examples.HasRows}"><TextBlock Text="{Binding Examples.Count}" /></Border>
             </StackPanel>
           </TabItem.Header>
           <Grid ColumnDefinitions="220,8,*" Margin="0,8,0,0" DataContext="{Binding Examples}" x:DataType="ed:ExamplesEditor">
@@ -875,7 +877,7 @@
                   <DataTemplate x:DataType="ed:ExampleRow">
                     <Grid RowDefinitions="Auto,*,Auto">
                       <WrapPanel ItemSpacing="8" LineSpacing="6" Margin="0,0,0,6">
-                        <Border Classes="card" Padding="8,4" IsVisible="{Binding HasSession}" BorderBrush="#22A06B" BorderThickness="3,0,0,0">
+                        <Border Classes="card" Padding="8,4" IsVisible="{Binding HasSession}" BorderBrush="{DynamicResource SuccessBrush}" BorderThickness="3,0,0,0">
                           <TextBlock Text="{Binding SessionSummary}" FontSize="12" TextWrapping="Wrap" MaxWidth="700" />
                         </Border>
                         <TextBox Text="{Binding Name}" Watermark="Name" MinWidth="200" />
@@ -903,18 +905,22 @@
         </TabItem>
       </TabControl>
 
-      <GridSplitter Grid.Row="1" Background="Transparent" ResizeDirection="Rows" />
-      <Border Grid.Row="1" Height="1" Background="{DynamicResource DividerBrush}" VerticalAlignment="Center"
+      <GridSplitter x:Name="Splitter" Grid.Row="1" Background="Transparent" ResizeDirection="Rows" />
+      <Border x:Name="SplitLine" Grid.Row="1" Height="1" Background="{DynamicResource DividerBrush}" VerticalAlignment="Center"
               IsHitTestVisible="False" />
 
       <!-- Response / live session -->
-      <Panel Grid.Row="2" Margin="0,6,0,0">
+      <Panel x:Name="ResponsePane" Grid.Row="2" Margin="0,6,0,0">
         <!-- Live session: streaming protocols show messages as they arrive, with a composer. -->
         <DockPanel IsVisible="{Binding ShowLiveSession}">
           <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
             <StackPanel Orientation="Horizontal" Spacing="8">
-              <Ellipse Width="8" Height="8" Fill="#22A06B" VerticalAlignment="Center" />
-              <TextBlock Text="Connected" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <Border Classes="pill" Background="{DynamicResource SuccessSoftBrush}" Padding="8,2">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Ellipse Width="7" Height="7" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
+                  <TextBlock Text="Connected" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource SuccessBrush}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Border>
               <TextBlock Text="{Binding LiveMessages.Count, StringFormat='{}{0} messages'}" Classes="muted" FontSize="12" VerticalAlignment="Center" />
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
@@ -959,24 +965,30 @@
               <Binding Path="!IsStreamingKind" />
             </MultiBinding>
           </StackPanel.IsVisible>
-          <ProgressBar IsIndeterminate="True" Width="220" />
-          <TextBlock Text="Sending request…" Classes="muted" HorizontalAlignment="Center" />
+          <ProgressBar IsIndeterminate="True" Width="200" />
+          <TextBlock Text="Waiting for the response…" Classes="muted" HorizontalAlignment="Center" />
         </StackPanel>
 
-        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="420">
           <StackPanel.IsVisible>
             <MultiBinding Converter="{x:Static BoolConverters.And}">
               <Binding Path="!IsSending" />
               <Binding Path="Response" Converter="{x:Static ObjectConverters.IsNull}" />
             </MultiBinding>
           </StackPanel.IsVisible>
-          <TextBlock Text="Response" FontWeight="SemiBold" HorizontalAlignment="Center" />
-          <TextBlock Classes="muted" HorizontalAlignment="Center"
-                     Text="Pick a protocol, enter an address and click Send (Ctrl+Enter)." />
-          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
+          <Border Width="40" Height="40" CornerRadius="12" Background="{DynamicResource SurfaceAltBrush}" HorizontalAlignment="Center"
+                  BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1">
+            <PathIcon Data="{StaticResource IconBolt}" Width="16" Height="16" Foreground="{DynamicResource MutedTextBrush}" />
+          </Border>
+          <TextBlock Text="No response yet" FontWeight="SemiBold" HorizontalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+            <TextBlock Classes="muted" FontSize="12" Text="Enter an address and press" VerticalAlignment="Center" />
+            <Border Classes="kbd"><TextBlock Text="Ctrl Enter" /></Border>
+            <TextBlock Classes="muted" FontSize="12" Text="to send." VerticalAlignment="Center" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
             <TextBlock Classes="muted" FontSize="12" Text="New here?" VerticalAlignment="Center" />
             <Button Classes="link" Content="Read the getting-started guide" Command="{Binding ShowHelpCommand}" CommandParameter="getting-started" />
-            <TextBlock Classes="muted" FontSize="12" Text="(F1)" VerticalAlignment="Center" />
           </StackPanel>
         </StackPanel>
 
@@ -988,11 +1000,20 @@
               <Binding Path="Response" Converter="{x:Static ObjectConverters.IsNotNull}" />
             </MultiBinding>
           </DockPanel.IsVisible>
-          <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right" Margin="0,6,0,0">
-            <Button Content="Compare with previous" Padding="8,2" FontSize="12" Command="{Binding CompareWithPreviousCommand}"
-                    IsVisible="{Binding HasPreviousResponse}" />
-            <Button Content="Save as example" Padding="8,2" FontSize="12" Command="{Binding SaveResponseAsExampleCommand}"
-                    ToolTip.Tip="Keep this response as documentation and for the mock server" />
+          <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" Margin="0,6,0,0">
+            <Button Classes="ghost compact" Command="{Binding CompareWithPreviousCommand}" IsVisible="{Binding HasPreviousResponse}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Data="{StaticResource IconDiff}" Width="12" Height="12" />
+                <TextBlock Text="Compare with previous" />
+              </StackPanel>
+            </Button>
+            <Button Classes="ghost compact" Command="{Binding SaveResponseAsExampleCommand}"
+                    ToolTip.Tip="Keep this response as documentation and for the mock server">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Data="{StaticResource IconSave}" Width="12" Height="12" />
+                <TextBlock Text="Save as example" />
+              </StackPanel>
+            </Button>
           </StackPanel>
           <views:ResponseView DataContext="{Binding Response}" />
         </DockPanel>

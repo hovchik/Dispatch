@@ -36,8 +36,8 @@
       <TextBlock Text="Mock server" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
       <Border Grid.Column="1" Classes="pill" Classes.running="{Binding IsRunning}" Classes.stopped="{Binding !IsRunning}">
         <StackPanel Orientation="Horizontal" Spacing="6">
-          <Ellipse Width="8" Height="8" Fill="#22A06B" VerticalAlignment="Center" IsVisible="{Binding IsRunning}" />
-          <Ellipse Width="8" Height="8" Fill="#8B949E" VerticalAlignment="Center" IsVisible="{Binding !IsRunning}" />
+          <Ellipse Width="8" Height="8" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding IsRunning}" />
+          <Ellipse Width="8" Height="8" Fill="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsRunning}" />
           <TextBlock Text="{Binding StateText}" FontSize="12" FontWeight="SemiBold" />
         </StackPanel>
       </Border>
@@ -71,7 +71,7 @@
       <!-- Settings -->
       <ScrollViewer>
         <StackPanel Spacing="10" Margin="0,0,6,0">
-          <Border Background="#26D97706" CornerRadius="6" Padding="10,6" IsVisible="{Binding IsRunning}">
+          <Border Background="{DynamicResource WarningSoftBrush}" CornerRadius="6" Padding="10,6" IsVisible="{Binding IsRunning}">
             <TextBlock Classes="hint" Text="Stop the server to change these settings." />
           </Border>
 
@@ -98,7 +98,7 @@
             <StackPanel Spacing="10">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="panelTitle" Text="Simulate problems" Margin="0" />
-                <Border Grid.Column="1" CornerRadius="4" Padding="6,1" Background="#D97706" IsVisible="{Binding HasFaultSimulation}" VerticalAlignment="Center">
+                <Border Grid.Column="1" CornerRadius="4" Padding="6,1" Background="{DynamicResource WarningBrush}" IsVisible="{Binding HasFaultSimulation}" VerticalAlignment="Center">
                   <TextBlock Text="ON" FontSize="10.5" FontWeight="Bold" Foreground="White" />
                 </Border>
               </Grid>
@@ -166,7 +166,7 @@
 
       <!-- Activity -->
       <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
-        <Border Background="#26D97706" BorderBrush="#D97706" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,10"
+        <Border Background="{DynamicResource WarningSoftBrush}" BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,10"
                 IsVisible="{Binding HasNoExamples}">
           <TextBlock Text="{Binding Hint}" TextWrapping="Wrap" FontSize="12.5" />
         </Border>
@@ -202,7 +202,7 @@
                               </StackPanel>
                               <TextBlock Grid.Column="2" Text="{Binding ExamplesText}" FontSize="12" TextAlignment="Right" VerticalAlignment="Center" Classes="muted"
                                          IsVisible="{Binding HasExamples}" />
-                              <TextBlock Grid.Column="2" Text="{Binding ExamplesText}" FontSize="12" TextAlignment="Right" VerticalAlignment="Center" Foreground="#D97706"
+                              <TextBlock Grid.Column="2" Text="{Binding ExamplesText}" FontSize="12" TextAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource WarningBrush}"
                                          IsVisible="{Binding !HasExamples}" ToolTip.Tip="Answers 501 until you save an example" />
                               <TextBlock Grid.Column="3" Text="{Binding Hits}" FontWeight="SemiBold" TextAlignment="Right" VerticalAlignment="Center" />
                               <Button Grid.Column="4" Classes="icon" Padding="4" ToolTip.Tip="Copy full URL"
@@ -261,7 +261,7 @@
                                   <TextBlock Text="{Binding Path}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Path}" />
                                   <TextBlock Text="{Binding Matched, StringFormat='→ {0}'}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis"
                                              IsVisible="{Binding Matched, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                  <TextBlock Text="{Binding Note}" Foreground="#D97706" FontSize="11" TextTrimming="CharacterEllipsis"
+                                  <TextBlock Text="{Binding Note}" Foreground="{DynamicResource WarningBrush}" FontSize="11" TextTrimming="CharacterEllipsis"
                                              IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                 </StackPanel>
                                 <TextBlock Grid.Column="3" Text="{Binding Status}" FontWeight="SemiBold" VerticalAlignment="Center" TextAlignment="Right"

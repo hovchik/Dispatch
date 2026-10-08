@@ -69,7 +69,7 @@ must be a message on the Kafka topic `orders.created` with `$.orderId == {{order
 collection. It subscribes *before* the request is sent, so nothing is missed, and only messages that arrive afterwards
 count. Expected values can use variables extracted from the response. The checks appear as normal test results in the
 app, the collection runner, flows, monitors and `dispatch run`, with how long the message took or what arrived instead.
-Edit them in a request's **Messages** tab.
+Edit them in a request's **Checks** tab.
 
 ### Client fuzzing
 
@@ -254,6 +254,16 @@ dotnet run --project src/Dispatch.App
 
 Requires the .NET 10 SDK. The Kafka and RabbitMQ integration tests run when `DISPATCH_KAFKA` (e.g.
 `localhost:9092`) and `DISPATCH_AMQP` (e.g. `amqp://guest:guest@localhost:5672/`) are set.
+
+### UI screenshots without a display
+
+```bash
+dotnet run --project tools/UiShot -- shots        # dark theme
+dotnet run --project tools/UiShot -- shots light  # light theme
+```
+
+Renders the main window and the tool windows with the headless Avalonia platform (an isolated data directory and a
+tiny local API are used) and writes PNGs to the given folder, so UI changes can be reviewed on a CI box or over SSH.
 
 ### Windows installer
 

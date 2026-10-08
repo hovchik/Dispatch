@@ -45,15 +45,15 @@
       <ScrollViewer>
         <StackPanel Spacing="10">
           <StackPanel Spacing="6" IsVisible="{Binding HasAnomalies}">
-            <TextBlock Classes="section" Text="ANOMALIES · held except a few times" Foreground="#CF222E" />
+            <TextBlock Classes="section" Text="ANOMALIES · held except a few times" Foreground="{DynamicResource DangerBrush}" />
             <ItemsControl ItemsSource="{Binding Anomalies}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="tools:LawItemViewModel">
-                  <Border Classes="card" Padding="12,8" Margin="0,0,0,6" BorderBrush="#CF222E" BorderThickness="3,0,0,0">
+                  <Border Classes="card" Padding="12,8" Margin="0,0,0,6" BorderBrush="{DynamicResource DangerBrush}" BorderThickness="3,0,0,0">
                     <StackPanel Spacing="3">
                       <TextBlock FontSize="12" Classes="muted" Text="{Binding Endpoint}" FontFamily="{StaticResource MonoFont}" />
                       <TextBlock Text="{Binding Description}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                      <SelectableTextBlock Text="{Binding Counterexamples}" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="#9A6700" TextWrapping="Wrap" />
+                      <SelectableTextBlock Text="{Binding Counterexamples}" FontFamily="{StaticResource MonoFont}" FontSize="11" Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap" />
                     </StackPanel>
                   </Border>
                 </DataTemplate>
@@ -73,10 +73,10 @@
                       <TextBlock FontSize="11" Classes="muted" TextWrapping="Wrap">
                         <Run Text="{Binding Endpoint}" FontFamily="{StaticResource MonoFont}" /><Run Text=" · " /><Run Text="{Binding Meta}" />
                       </TextBlock>
-                      <TextBlock Text="{Binding Advice}" FontSize="11" Foreground="#22A06B" TextWrapping="Wrap"
+                      <TextBlock Text="{Binding Advice}" FontSize="11" Foreground="{DynamicResource SuccessBrush}" TextWrapping="Wrap"
                                  IsVisible="{Binding Advice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
-                    <TextBlock Grid.Column="2" Text="added ✓" Foreground="#22A06B" FontSize="12" IsVisible="{Binding IsAdded}" VerticalAlignment="Top" />
+                    <TextBlock Grid.Column="2" Text="added ✓" Foreground="{DynamicResource SuccessBrush}" FontSize="12" IsVisible="{Binding IsAdded}" VerticalAlignment="Top" />
                   </Grid>
                 </Border>
               </DataTemplate>
