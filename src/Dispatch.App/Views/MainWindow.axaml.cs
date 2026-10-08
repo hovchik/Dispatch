@@ -52,6 +52,24 @@ public partial class MainWindow : Window
         TabStrip.AddHandler(ScrollViewer.ScrollChangedEvent, (_, _) => UpdateTabOverflow());
     }
 
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        // Coming back from the taskbar after a long time, the window could show up as an empty frame because the
+        // renderer stopped while it was hidden and nothing told it the content is stale. Repaint everything once
+        // the restore has gone through, so the UI never looks asleep.
+        if (change.Property == WindowStateProperty &&
+            change.GetOldValue<WindowState>() == WindowState.Minimized &&
+            change.GetNewValue<WindowState>() != WindowState.Minimized)
+            Dispatcher.UIThread.Post(RepaintAll, DispatcherPriority.Render);
+    }
+
+    private void RepaintAll()
+    {
+        foreach (var visual in this.GetSelfAndVisualDescendants())
+            visual.InvalidateVisual();
+    }
+
     /// <summary>Tabs that are scrolled out of (or clipped by) the visible part of the tab strip.</summary>
     private List<RequestTabViewModel> HiddenTabs()
     {
