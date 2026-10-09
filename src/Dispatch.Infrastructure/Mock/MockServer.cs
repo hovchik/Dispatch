@@ -102,7 +102,16 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
         var app = builder.Build();
         app.UseWebSockets();
         app.Run(HandleAsync);
-        await app.StartAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await app.StartAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // A port in use, or cancellation: release the host so the next Start can bind.
+            await app.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
         _app = app;
 
         var urls = app.Urls.Select(u => new Uri(u.Replace("[::]", "localhost").Replace("0.0.0.0", "localhost").Replace("127.0.0.1", "localhost"))).ToList();
@@ -125,11 +134,18 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
     /// <summary>Forgets items created by stateful mocks.</summary>
     public void ResetState() => _state?.Reset();
 
+    /// <summary>The stateful store as JSON (<c>{"/pets":[…]}</c>), or null when the server is not stateful.</summary>
+    public JsonObject? ExportState() => _state?.Export();
+
+    /// <summary>Loads collections into the stateful store (json-server style <c>{"pets":[…]}</c>); returns how many were loaded.</summary>
+    public int ImportState(JsonObject data) => _state?.Import(data) ?? throw new InvalidOperationException("The mock server is not stateful.");
+
     /// <summary>
     /// The example body to send: generated from its schema (or its own shape) in dynamic mode, then with
     /// <c>{{placeholders}}</c> resolved. Hand-written templates (bodies containing <c>{{</c>) are never replaced.
     /// </summary>
-    private string RenderBody(ResponseExample example, IReadOnlyDictionary<string, string> variables)
+    private string RenderBody(ResponseExample example, IReadOnlyDictionary<string, string> variables,
+        IReadOnlyList<KeyValuePair<string, string>>? pathVariables = null)
     {
         var body = example.Body;
         if (_options.DynamicData && !body.Contains("{{", StringComparison.Ordinal))
@@ -145,6 +161,8 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
                     else if (body.TrimStart() is ['{', ..] or ['[', ..])
                         generated = _schemaFaker.GenerateLike(JsonNode.Parse(body));
                 }
+                if (generated is JsonObject obj && pathVariables is { Count: > 0 })
+                    ReflectPath(obj, pathVariables);
                 if (generated is not null)
                     body = generated.ToJsonString();
             }
@@ -154,6 +172,41 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
             }
         }
         return VariableResolver.Resolve(body, variables);
+    }
+
+    /// <summary>
+    /// Generated data agrees with the URL: <c>GET /users/42</c> answers <c>{"id":42,…}</c>, and <c>/users/7/orders/3</c>
+    /// sets <c>userId</c> and <c>id</c>. A path parameter lands on the property of the same name, or on <c>id</c>
+    /// when the parameter is id-like (<c>orderId</c>) and no property matches its name.
+    /// </summary>
+    private static void ReflectPath(JsonObject obj, IReadOnlyList<KeyValuePair<string, string>> pathVariables)
+    {
+        foreach (var (name, value) in pathVariables)
+        {
+            var key = obj.ContainsKey(name) ? name
+                : name.EndsWith("id", StringComparison.OrdinalIgnoreCase) && obj.ContainsKey("id") ? "id"
+                : null;
+            if (key is null)
+                continue;
+            var numeric = obj[key] is JsonValue existing && existing.GetValueKind() == System.Text.Json.JsonValueKind.Number;
+            obj[key] = numeric && long.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var number)
+                ? JsonValue.Create(number)
+                : JsonValue.Create(value);
+        }
+    }
+
+    /// <summary>
+    /// Header values Kestrel accepts: it rejects non-ASCII and control characters, and request or example names
+    /// ("Créer un utilisateur") end up in <c>X-Mock-Match</c>.
+    /// </summary>
+    internal static string HeaderSafe(string value)
+    {
+        if (value.All(c => c >= 0x20 && c < 0x7F || c == '\t'))
+            return value;
+        var sb = new StringBuilder(value.Length);
+        foreach (var c in value)
+            sb.Append(c >= 0x20 && c < 0x7F || c == '\t' ? c : '?');
+        return sb.ToString();
     }
 
     /// <summary>Path and query parameters, plus <c>{{body.field}}</c>, <c>{{header.name}}</c> and <c>{{method}}</c> of the request.</summary>
@@ -298,10 +351,12 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
             return;
         }
 
-        if (_state?.Handle(request.Method, match, body) is { } reply)
+        if (_state?.Handle(request.Method, match, body, query, path) is { } reply)
         {
             response.StatusCode = reply.Status;
-            response.Headers["X-Mock-Match"] = $"{match.Request.Name} / {reply.Note}";
+            response.Headers["X-Mock-Match"] = HeaderSafe($"{match.Request.Name} / {reply.Note}");
+            foreach (var (key, value) in reply.Headers ?? new Dictionary<string, string>())
+                response.Headers[key] = HeaderSafe(value);
             if (reply.Body.Length > 0 && !HttpMethods.IsHead(request.Method))
             {
                 response.ContentType = "application/json";
@@ -325,13 +380,13 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
         response.StatusCode = example.StatusCode;
         foreach (var header in example.Headers.Where(h => h.IsActive && !h.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)
                                                           && !h.Key.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)))
-            response.Headers[header.Key] = VariableResolver.Resolve(header.Value, variables);
+            response.Headers[header.Key] = HeaderSafe(VariableResolver.Resolve(header.Value, variables));
         if (!string.IsNullOrEmpty(example.ContentType))
             response.ContentType = example.ContentType;
-        response.Headers["X-Mock-Match"] = $"{match.Request.Name} / {example.Name}";
+        response.Headers["X-Mock-Match"] = HeaderSafe($"{match.Request.Name} / {example.Name}");
 
-        if (!HttpMethods.IsHead(request.Method) && (example.Body.Length > 0 || (_options.DynamicData && example.Schema.Length > 0)))
-            await response.WriteAsync(RenderBody(example, variables)).ConfigureAwait(false);
+        if (!HttpMethods.IsHead(request.Method) && (example.Body.Length > 0 || (_options.DynamicData && example.Schema.Trim().Length > 0)))
+            await response.WriteAsync(RenderBody(example, variables, match.PathVariables)).ConfigureAwait(false);
         Log(request.Method, path, example.StatusCode, $"{match.Request.Name} / {example.Name}", stopwatch);
     }
 
@@ -419,7 +474,7 @@ public sealed class MockServer(GrpcSchemaProvider? grpcSchemas = null) : IAsyncD
         response.StatusCode = 200;
         response.ContentType = "text/event-stream";
         response.Headers.CacheControl = "no-cache";
-        response.Headers["X-Mock-Match"] = $"{request.Name} / {example.Name}";
+        response.Headers["X-Mock-Match"] = HeaderSafe($"{request.Name} / {example.Name}");
         await response.Body.FlushAsync(context.RequestAborted).ConfigureAwait(false);
 
         var events = new SessionPlayer(example.Session, SessionReplayOptions).Opening();

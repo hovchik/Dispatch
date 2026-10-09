@@ -15,8 +15,8 @@ public static class MockCommand
         var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["p"] = "port" });
         if (args.Positionals.Count != 1)
             throw new UsageException("Usage: dispatch mock <collection> [--port 3000] [--grpc-port 50051] [--latency 100] [--jitter 50] " +
-                                     "[--error-rate 0.1] [--error-status 503] [--drop-rate 0.05] [--public] [--no-cors] [--dynamic] [--stateful] [--seed n] " +
-                                     "[--session-speed 1]");
+                                     "[--error-rate 0.1] [--error-status 503] [--drop-rate 0.05] [--public] [--no-cors] [--dynamic] [--stateful] " +
+                                     "[--state db.json] [--seed n] [--session-speed 1]");
 
         await using var services = Program.BuildServices(args.Option("db"));
         var workspace = new Workspace(services);
@@ -39,13 +39,25 @@ public static class MockCommand
             DropRate = Rate(args, "drop-rate"),
             Cors = !args.Flag("no-cors"),
             DynamicData = args.Flag("dynamic"),
-            Stateful = args.Flag("stateful"),
+            Stateful = args.Flag("stateful") || args.Option("state") is not null,
             Seed = args.Option("seed") is null ? null : args.Int("seed", 0),
             SessionSpeed = SessionSpeed(args)
         }, cancellationToken);
 
+        // --state db.json: seed the stateful store from a json-server style file ({"pets":[…],"users":[…]}).
+        var loaded = 0;
+        if (args.Option("state") is { } stateFile)
+        {
+            if (!File.Exists(stateFile))
+                throw new UsageException($"--state: '{stateFile}' does not exist.");
+            if (System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(stateFile, cancellationToken)) is not System.Text.Json.Nodes.JsonObject data)
+                throw new UsageException("--state: the file must be a JSON object of arrays, e.g. {\"pets\":[…]}.");
+            loaded = server.ImportState(data);
+        }
+
         Console.WriteLine($"Mocking {collection.Name} at {server.BaseUrl}" + (server.GrpcUrl is null ? "" : $" (gRPC at {server.GrpcUrl})") +
-                          (args.Flag("dynamic") ? " · dynamic data" : "") + (args.Flag("stateful") ? " · stateful" : ""));
+                          (args.Flag("dynamic") ? " · dynamic data" : "") + (args.Flag("stateful") || loaded > 0 ? " · stateful" : "") +
+                          (loaded > 0 ? $" · {loaded} collection(s) from {args.Option("state")}" : ""));
         foreach (var route in server.Routes)
             Console.WriteLine($"  {route.Method,-7} {route.Template}  ({route.Request.Examples.Count} example(s))");
         foreach (var route in server.GrpcRoutes)

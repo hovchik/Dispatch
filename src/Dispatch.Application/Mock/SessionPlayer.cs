@@ -45,7 +45,8 @@ public static class SessionRecording
 /// Replays a recorded WebSocket / SSE session for one connection. The recording is split into an opening (server
 /// messages before the client's first message) and segments: each recorded client message followed by the server
 /// messages that answered it. A live client message plays the segment whose recorded trigger matches it — exactly, or as
-/// JSON with the same fields and values apart from ids — or else the next segment not yet played. Ids the client sends
+/// JSON with the same fields and values apart from ids — then a matching segment already played (so a second ping gets
+/// its pong again), or else the next segment not yet played. Ids the client sends
 /// (id, requestId, correlationId, …) are substituted into the replies where the recording echoed them, and replies may
 /// use <c>{{message.path}}</c> to copy values from the client's message.
 /// </summary>
@@ -117,6 +118,12 @@ public sealed partial class SessionPlayer
             how = "exact match";
         else if (live is not null && (index = FindUnplayed(s => Parse(s.Trigger.Content) is { } recorded && SameExceptIds(recorded, live))) >= 0)
             how = "matched ignoring ids";
+        // A message the recording already answered (a second ping, a re-subscribe) gets the same answer again rather
+        // than the next unrelated segment.
+        else if ((index = FindPlayed(s => s.Trigger.Content == text)) >= 0)
+            how = "exact match (repeated)";
+        else if (live is not null && (index = FindPlayed(s => Parse(s.Trigger.Content) is { } recorded && SameExceptIds(recorded, live))) >= 0)
+            how = "matched ignoring ids (repeated)";
         else if ((index = FindUnplayed(_ => true)) >= 0)
             how = "next in recorded order";
         else
@@ -128,10 +135,14 @@ public sealed partial class SessionPlayer
             $"{how} → {segment.Replies.Count} message(s)");
     }
 
-    private int FindUnplayed(Func<Segment, bool> predicate)
+    private int FindUnplayed(Func<Segment, bool> predicate) => Find(played: false, predicate);
+
+    private int FindPlayed(Func<Segment, bool> predicate) => Find(played: true, predicate);
+
+    private int Find(bool played, Func<Segment, bool> predicate)
     {
         for (var i = 0; i < _segments.Count; i++)
-            if (!_played[i] && predicate(_segments[i]))
+            if (_played[i] == played && predicate(_segments[i]))
                 return i;
         return -1;
     }

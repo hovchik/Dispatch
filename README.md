@@ -36,7 +36,10 @@ headless CLI, a mock server, response diffs, contract checks and load tests.
   every failure and the slowest calls; export **HTML, JUnit XML or JSON reports**.
 * **Mock server**: serves the saved examples of a collection over HTTP and gRPC, with latency, jitter, error-rate
   and dropped-connection simulation, CORS and path parameters. Routes are listed before you start, with live hit counts,
-  and the request log can be filtered to unmatched requests and simulated faults.
+  and the request log can be filtered to unmatched requests and simulated faults. Match rules pick an example by
+  query, path parameter, header or body; clients can also ask for one with `Prefer: code=404` or
+  `Prefer: example=Not found`. Requests that share a path contribute their examples together, GraphQL operations on
+  one endpoint are told apart by operation name or root field, and `HEAD` is answered by the `GET` route.
   **Recorded sessions:** save a WebSocket or SSE session as an example and the mock server replays it with the original
   timing. On WebSocket, each client message plays the part of the recording that answered the matching recorded
   message (exact, same JSON apart from ids, or the next part in order), with the client's ids put into the replies.
@@ -164,8 +167,13 @@ Two investigative tools that go beyond what API clients usually offer. Open them
   redacted) or Markdown from a collection. Request descriptions are Markdown. `dispatch docs` generates from the CLI.
 * **Rich responses**: a sortable **table** view for JSON arrays (with CSV export), inline image preview, HTML as text,
   PDF / binary opened externally, **Save to file**, and `pm.visualizer.set(template, data)` custom views.
-* **Smart mocks**: beyond saved examples, the mock server can generate fresh, schema-driven fake data per request and
-  remember **stateful CRUD** (POST / GET / PUT / PATCH / DELETE), with `{{body.x}}`, `{{header.x}}` templating.
+* **Smart mocks**: beyond saved examples, the mock server can generate fresh, schema-driven fake data per request
+  (agreeing with the URL: `GET /users/42` answers `id: 42`) and remember **stateful CRUD** (POST / GET / PUT / PATCH /
+  DELETE), with `{{body.x}}`, `{{header.x}}` templating. Stateful lists understand filters (`?status=sold`,
+  `price_gte=10`, `name_like=re`, `q=text`), sorting (`sort=-price,name`) and paging (`page`/`limit`, `_page`/`_limit`,
+  `offset`) and report `X-Total-Count`; nested resources belong to their parent (`POST /users/7/orders` stamps
+  `userId: 7`); creates answer with `Location` and refuse duplicate ids with 409. Seed the store from a json-server
+  style file with `dispatch mock … --state db.json`.
 * **Variables**: layered scopes (globals < collection < environment < data row < runtime), `{{$guid}}`,
   `{{$timestamp}}`, `{{$randomInt}}` and other dynamic values. **Secret** variables are encrypted at rest with a key
   kept in the OS keychain (DPAPI / Keychain / Secret Service).
@@ -205,6 +213,7 @@ Two investigative tools that go beyond what API clients usually offer. Open them
 dotnet run --project src/Dispatch.Cli -- run tests/api.dispatch.json -e staging.json -r cli,junit,html -o reports
 dotnet run --project src/Dispatch.Cli -- run "My Collection" --data users.csv --bail
 dotnet run --project src/Dispatch.Cli -- mock petstore.yaml --port 4010 --latency 200 --error-rate 5%
+dotnet run --project src/Dispatch.Cli -- mock petstore.yaml --dynamic --state db.json
 dotnet run --project src/Dispatch.Cli -- load "My Collection" --users 50 --duration 60s --max-p95 300
 dotnet run --project src/Dispatch.Cli -- run tests/api.dispatch.json --update-snapshots
 dotnet run --project src/Dispatch.Cli -- flow "My Collection" --name "Login smoke"
