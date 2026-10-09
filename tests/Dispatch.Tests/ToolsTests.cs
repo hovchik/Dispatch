@@ -56,6 +56,53 @@ public class MockRouteTableTests
         Assert.Equal("Admin", admin.Example!.Name);
 
         Assert.Null(table.Match("POST", "/users/42", empty, empty, ""));
+        Assert.Equal("Default", table.Match("HEAD", "/users/42", empty, empty, "")!.Example!.Name);
+    }
+
+    [Fact]
+    public void Requests_sharing_a_method_and_path_contribute_their_examples()
+    {
+        var happy = new ApiRequest { Name = "Login", Method = HttpVerb.Post, Url = "{{baseUrl}}/login", Examples = [new ResponseExample { Name = "OK" }] };
+        var locked = new ApiRequest
+        {
+            Name = "Login (locked account)", Method = HttpVerb.Post, Url = "{{baseUrl}}/login",
+            Examples = [new ResponseExample { Name = "Locked", StatusCode = 423, MatchBodyContains = "\"locked\"" }]
+        };
+        var table = MockRouteTable.Build([happy, locked]);
+        var empty = new Dictionary<string, string>();
+
+        Assert.Equal("OK", table.Match("POST", "/login", empty, empty, """{"user":"ann"}""")!.Example!.Name);
+        var match = table.Match("POST", "/login", empty, empty, """{"user":"locked"}""")!;
+        Assert.Equal("Locked", match.Example!.Name);
+        Assert.Same(locked, match.Request);
+    }
+
+    [Theory]
+    [InlineData("query GetUser($id: ID!) { user(id: $id) { name } }", "", "GetUser")]
+    [InlineData("{ users { id } }", "", "users")]
+    [InlineData("mutation { createUser(name: \"x\") { id } }", "", "createUser")]
+    [InlineData("query { alias: users { id } }", "", "users")]
+    [InlineData("{ users { id } }", "Explicit", "Explicit")]
+    [InlineData("", "", null)]
+    public void Identifies_graphql_operations(string query, string operationName, string? expected) =>
+        Assert.Equal(expected, MockRouteTable.GraphQlOperation(operationName, query));
+
+    [Fact]
+    public void Routes_graphql_operations_sharing_one_endpoint_by_operation()
+    {
+        static ApiRequest GraphQl(string name, string query) => new()
+        {
+            Name = name, Kind = RequestKind.GraphQl, Url = "{{baseUrl}}/graphql",
+            Protocol = new ProtocolSettings { GraphQl = new GraphQlSettings { Query = query } },
+            Examples = [new ResponseExample { Name = name }]
+        };
+        var table = MockRouteTable.Build([GraphQl("Users", "query Users { users { id } }"), GraphQl("Create", "mutation { createUser(name: \"a\") { id } }")]);
+        var empty = new Dictionary<string, string>();
+
+        Assert.Equal("Create", table.Match("POST", "/graphql", empty, empty, """{"query":"mutation { createUser(name: \"b\") { id } }"}""")!.Example!.Name);
+        Assert.Equal("Users", table.Match("POST", "/graphql", empty, empty, """{"query":"{ users { name } }","operationName":"Users"}""")!.Example!.Name);
+        // An unknown operation still gets an answer (the first route), as before.
+        Assert.Equal("Users", table.Match("POST", "/graphql", empty, empty, """{"query":"{ posts { id } }"}""")!.Example!.Name);
     }
 }
 

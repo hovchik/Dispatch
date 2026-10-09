@@ -360,7 +360,8 @@ public sealed partial class MockRouteItem : ObservableObject
 
     public bool Matches(string method, string path) => IsGrpc
         ? method == "gRPC" && string.Equals(path, Template, StringComparison.Ordinal)
-        : Method.Equals(method, StringComparison.OrdinalIgnoreCase) && _pattern is not null &&
+        : (Method.Equals(method, StringComparison.OrdinalIgnoreCase) || method.Equals("HEAD", StringComparison.OrdinalIgnoreCase) && Method == "GET")
+          && _pattern is not null &&
           _pattern.IsMatch(path.TrimEnd('/') is { Length: > 0 } p ? p : "/");
 }
 

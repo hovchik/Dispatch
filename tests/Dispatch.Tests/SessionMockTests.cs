@@ -67,6 +67,23 @@ public class SessionPlayerTests
     }
 
     [Fact]
+    public void A_message_answered_before_gets_the_same_answer_again_instead_of_the_next_segment()
+    {
+        var player = new SessionPlayer(Ticker(), new SessionReplayOptions { Speed = 0 });
+        Assert.Equal("pong", Assert.Single(player.OnClientMessage("ping").Messages).Content);
+
+        var again = player.OnClientMessage("ping");
+        Assert.StartsWith("exact match (repeated)", again.How);
+        Assert.Equal("pong", Assert.Single(again.Messages).Content);
+
+        // The subscribe segment is still unplayed and answers a re-subscribe with a new id, now and later.
+        Assert.StartsWith("matched ignoring ids", player.OnClientMessage("""{"op":"subscribe","channel":"ticker","id":1}""").How);
+        var resubscribe = player.OnClientMessage("""{"op":"subscribe","channel":"ticker","id":2}""");
+        Assert.StartsWith("matched ignoring ids (repeated)", resubscribe.How);
+        Assert.Equal("""{"id":2,"ok":true,"channel":"ticker"}""", resubscribe.Messages[0].Content);
+    }
+
+    [Fact]
     public void A_greeting_recorded_after_a_message_sent_on_connect_moves_to_the_opening()
     {
         var player = new SessionPlayer(

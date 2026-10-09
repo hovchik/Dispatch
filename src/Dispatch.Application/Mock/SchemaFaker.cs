@@ -18,7 +18,9 @@ public sealed partial class SchemaFaker(Faker? faker = null, Random? random = nu
     private readonly Random _r = random ?? Random.Shared;
     private int _sequence;
 
-    public JsonNode? Generate(JsonNode? schema) => Generate(schema, null, 0);
+    /// <summary>Generates a value for a schema. Local <c>$ref</c>s (<c>#/components/…</c>, <c>#/$defs/…</c>) are resolved against the schema itself.</summary>
+    public JsonNode? Generate(JsonNode? schema) =>
+        Generate(schema is JsonObject && schema.ToJsonString().Contains("\"$ref\"", StringComparison.Ordinal) ? Inline(schema, schema) : schema, null, 0);
 
     /// <summary>Generates a value shaped like <paramref name="sample"/> (types and keys) with fresh data.</summary>
     public JsonNode? GenerateLike(JsonNode? sample) => Generate(InferSchema(sample), null, 0);
@@ -92,7 +94,8 @@ public sealed partial class SchemaFaker(Faker? faker = null, Random? random = nu
             case "null":
                 return null;
             default:
-                return ByName(name) ?? (s["example"]?.DeepClone() ?? JsonValue.Create(_faker.Word()));
+                return ByName(name) ?? s["example"]?.DeepClone() ?? (s["examples"] as JsonArray)?.FirstOrDefault()?.DeepClone()
+                       ?? s["default"]?.DeepClone() ?? JsonValue.Create(_faker.Word());
         }
     }
 
@@ -327,7 +330,6 @@ public sealed partial class SchemaFaker(Faker? faker = null, Random? random = nu
                 var copy = new JsonObject();
                 foreach (var (k, v) in obj)
                     copy[k] = k is "example" or "examples" or "enum" or "const" or "default" ? v?.DeepClone() : Inline(root, v, depth + 1);
-                // OpenAPI 3.0 "nullable: true" → JSON Schema union type.
                 return copy;
             case JsonArray array:
                 return new JsonArray(array.Select(n => Inline(root, n, depth + 1)).ToArray());

@@ -77,6 +77,18 @@ public class SchemaFakerTests
     }
 
     [Fact]
+    public void Local_refs_in_a_hand_written_schema_are_resolved()
+    {
+        var schema = JsonNode.Parse("""
+            {"type":"object","required":["owner","tags"],"properties":{"owner":{"$ref":"#/$defs/Person"},"tags":{"type":"array","minItems":1,"items":{"$ref":"#/$defs/Tag"}}},
+             "$defs":{"Person":{"type":"object","required":["email"],"properties":{"email":{"type":"string","format":"email"}}},"Tag":{"type":"string","enum":["a","b"]}}}
+            """);
+        var generated = new SchemaFaker(new Faker(new Random(3)), new Random(3)).Generate(schema)!;
+        Assert.Contains("@", generated["owner"]!["email"]!.GetValue<string>());
+        Assert.All(generated["tags"]!.AsArray(), t => Assert.Contains(t!.GetValue<string>(), new[] { "a", "b" }));
+    }
+
+    [Fact]
     public void OpenApi_import_keeps_response_schemas_with_refs_inlined()
     {
         var spec = JsonNode.Parse("""
@@ -120,14 +132,144 @@ public sealed class SmartMockServerTests
             new MockServerOptions { Port = HttpProtocolExecutorTests.FreePort(), DynamicData = true });
 
         var bodies = new HashSet<string>();
-        for (var i = 0; i < 5; i++)
+        for (var i = 1; i <= 5; i++)
         {
             var (status, json) = await SendAsync(HttpMethod.Get, $"{server.BaseUrl}users/{i}");
             Assert.Equal(HttpStatusCode.OK, status);
             Assert.Empty(JsonSchemaValidator.Validate(json!.ToJsonString(), schema));
+            Assert.Equal(i, json["id"]!.GetValue<long>()); // generated data agrees with the URL
             bodies.Add(json.ToJsonString());
         }
         Assert.True(bodies.Count >= 4);
+    }
+
+    [Fact]
+    public async Task Dynamic_data_reflects_every_path_parameter()
+    {
+        await using var server = new MockServer();
+        await server.StartAsync([Route(HttpVerb.Get, "{{baseUrl}}/users/{{userId}}/orders/{{orderId}}", """{"id":1,"userId":5,"ref":"A1","total":9.5}""")],
+            new MockServerOptions { Port = HttpProtocolExecutorTests.FreePort(), DynamicData = true });
+
+        var (_, order) = await SendAsync(HttpMethod.Get, $"{server.BaseUrl}users/42/orders/7");
+        Assert.Equal(42, order!["userId"]!.GetValue<long>());
+        Assert.Equal(7, order["id"]!.GetValue<long>()); // orderId has no property of its own, so it lands on id
+        Assert.NotEqual("A1", order["ref"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Request_and_example_names_with_non_ascii_characters_are_served()
+    {
+        await using var server = new MockServer();
+        await server.StartAsync([new ApiRequest
+        {
+            Name = "Créer un utilisateur 🚀", Method = HttpVerb.Get, Url = "/users",
+            Examples = [new ResponseExample { Name = "Réponse", Body = "[]", Headers = [new("X-Note", "Café {{$guid}}")] }]
+        }], new MockServerOptions { Port = HttpProtocolExecutorTests.FreePort() });
+
+        using var response = await Http.GetAsync($"{server.BaseUrl}users");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode); // Kestrel would otherwise fail the response with a 500
+        Assert.Equal("Cr?er un utilisateur ?? / R?ponse", response.Headers.GetValues("X-Mock-Match").Single());
+        Assert.StartsWith("Caf? ", response.Headers.GetValues("X-Note").Single());
+    }
+
+    [Fact]
+    public async Task Clients_pick_an_example_with_prefer_headers_and_rules_see_path_parameters()
+    {
+        await using var server = new MockServer();
+        await server.StartAsync([new ApiRequest
+        {
+            Name = "Get user", Method = HttpVerb.Get, Url = "{{baseUrl}}/users/{{id}}",
+            Examples =
+            [
+                new ResponseExample { Name = "Found", StatusCode = 200, Body = """{"id":"{{id}}"}""" },
+                new ResponseExample { Name = "Not found", StatusCode = 404, Body = """{"error":"nope"}""" },
+                new ResponseExample { Name = "Banned", StatusCode = 403, Body = """{"error":"banned"}""", MatchQuery = [new("id", "666")] }
+            ]
+        }], new MockServerOptions { Port = HttpProtocolExecutorTests.FreePort() });
+
+        var (plain, _) = await SendAsync(HttpMethod.Get, $"{server.BaseUrl}users/1");
+        Assert.Equal(HttpStatusCode.OK, plain);
+
+        var (banned, _) = await SendAsync(HttpMethod.Get, $"{server.BaseUrl}users/666"); // rule on a path parameter
+        Assert.Equal(HttpStatusCode.Forbidden, banned);
+
+        using var byCode = new HttpRequestMessage(HttpMethod.Get, $"{server.BaseUrl}users/1");
+        byCode.Headers.Add("Prefer", "code=404");
+        using var notFound = await Http.SendAsync(byCode);
+        Assert.Equal(HttpStatusCode.NotFound, notFound.StatusCode);
+        Assert.Equal("Get user / Not found", notFound.Headers.GetValues("X-Mock-Match").Single());
+
+        using var byName = new HttpRequestMessage(HttpMethod.Get, $"{server.BaseUrl}users/1");
+        byName.Headers.Add("X-Mock-Example", "not found");
+        using var named = await Http.SendAsync(byName);
+        Assert.Equal(HttpStatusCode.NotFound, named.StatusCode);
+
+        using var head = await Http.SendAsync(new HttpRequestMessage(HttpMethod.Head, $"{server.BaseUrl}users/1"));
+        Assert.Equal(HttpStatusCode.OK, head.StatusCode); // HEAD is answered by the GET route
+    }
+
+    [Fact]
+    public async Task Stateful_lists_filter_sort_and_page_and_nested_resources_belong_to_their_parent()
+    {
+        await using var server = new MockServer();
+        await server.StartAsync(
+        [
+            Route(HttpVerb.Get, "{{baseUrl}}/pets", """{"data":[{"id":1,"name":"Rex","kind":"dog","price":20},{"id":2,"name":"Tom","kind":"cat","price":5},{"id":3,"name":"Rio","kind":"dog","price":12}],"total":3}"""),
+            Route(HttpVerb.Post, "{{baseUrl}}/pets", "{}", 201),
+            Route(HttpVerb.Get, "{{baseUrl}}/users/{{userId}}/orders", "[]"),
+            Route(HttpVerb.Post, "{{baseUrl}}/users/{{userId}}/orders", "{}", 201),
+            Route(HttpVerb.Get, "{{baseUrl}}/users/{{userId}}/orders/{{orderId}}", "{}")
+        ], new MockServerOptions { Port = HttpProtocolExecutorTests.FreePort(), Stateful = true });
+        var baseUrl = server.BaseUrl!.ToString().TrimEnd('/');
+
+        var (_, dogs) = await SendAsync(HttpMethod.Get, $"{baseUrl}/pets?kind=dog&sort=-price");
+        Assert.Equal(["Rex", "Rio"], dogs!["data"]!.AsArray().Select(p => p!["name"]!.GetValue<string>()));
+        Assert.Equal(2, dogs["total"]!.GetValue<int>());
+
+        var (_, cheap) = await SendAsync(HttpMethod.Get, $"{baseUrl}/pets?price_lte=12&name_like=r");
+        Assert.Equal(["Rio"], cheap!["data"]!.AsArray().Select(p => p!["name"]!.GetValue<string>()));
+
+        using var paged = await Http.GetAsync($"{baseUrl}/pets?_sort=name&_page=2&_limit=2");
+        var page = JsonNode.Parse(await paged.Content.ReadAsStringAsync())!;
+        Assert.Equal(["Tom"], page["data"]!.AsArray().Select(p => p!["name"]!.GetValue<string>()));
+        Assert.Equal("3", paged.Headers.GetValues("X-Total-Count").Single());
+
+        var (_, search) = await SendAsync(HttpMethod.Get, $"{baseUrl}/pets?q=TOM&expand=1"); // unknown keys are ignored
+        Assert.Single(search!["data"]!.AsArray());
+
+        using var create = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/users/7/orders") { Content = new StringContent("""{"item":"ball"}""", Encoding.UTF8, "application/json") };
+        using var created = await Http.SendAsync(create);
+        var order = JsonNode.Parse(await created.Content.ReadAsStringAsync())!;
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal(7, order["userId"]!.GetValue<long>());
+        Assert.Equal("/users/7/orders/1", created.Headers.Location!.ToString());
+
+        var (_, mine) = await SendAsync(HttpMethod.Get, $"{baseUrl}/users/7/orders");
+        Assert.Single(mine!.AsArray());
+        var (_, theirs) = await SendAsync(HttpMethod.Get, $"{baseUrl}/users/8/orders");
+        Assert.Empty(theirs!.AsArray());
+        var (wrongParent, _) = await SendAsync(HttpMethod.Get, $"{baseUrl}/users/8/orders/1");
+        Assert.Equal(HttpStatusCode.NotFound, wrongParent);
+
+        var (duplicate, _) = await SendAsync(HttpMethod.Post, $"{baseUrl}/pets", """{"id":1,"name":"Again"}""");
+        Assert.Equal(HttpStatusCode.Conflict, duplicate);
+    }
+
+    [Fact]
+    public async Task State_can_be_exported_and_imported()
+    {
+        await using var server = new MockServer();
+        await server.StartAsync([Route(HttpVerb.Get, "/pets", "[]"), Route(HttpVerb.Post, "/pets", "{}", 201)],
+            new MockServerOptions { Port = HttpProtocolExecutorTests.FreePort(), Stateful = true });
+        var baseUrl = server.BaseUrl!.ToString().TrimEnd('/');
+
+        Assert.Equal(1, server.ImportState(JsonNode.Parse("""{"pets":[{"id":10,"name":"Imported"}]}""")!.AsObject()));
+        var (_, list) = await SendAsync(HttpMethod.Get, $"{baseUrl}/pets");
+        Assert.Equal("Imported", list!.AsArray().Single()!["name"]!.GetValue<string>());
+
+        await SendAsync(HttpMethod.Post, $"{baseUrl}/pets", """{"name":"New"}""");
+        var exported = server.ExportState()!;
+        Assert.Equal([10L, 11L], exported["/pets"]!.AsArray().Select(p => p!["id"]!.GetValue<long>()));
     }
 
     [Fact]
@@ -231,7 +373,7 @@ public sealed class SeededMockServerTests
         using var http = new HttpClient();
         var responses = await Task.WhenAll(Enumerable.Range(0, 64).Select(async i =>
         {
-            using var response = await http.GetAsync($"{server.BaseUrl}users/{i}");
+            using var response = await http.GetAsync($"{server.BaseUrl}users/{i + 1}");
             return (response.StatusCode, Body: await response.Content.ReadAsStringAsync());
         }));
 
