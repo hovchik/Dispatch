@@ -70,7 +70,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
         Collections.OpenRequested += OpenRequest;
         Collections.RequestDeleted += OnRequestDeleted;
-        Collections.ActionRequested += (node, action) => _ = RunCollectionActionAsync(node, action);
+        Collections.ActionRequested += (node, action) => _ = SafeAsync(() => RunCollectionActionAsync(node, action));
         History.OpenRequested += OpenRequest;
         History.CompareRequested += CompareHistory;
         _services.Cookies.Changed += (_, _) => _ = SaveCookiesAsync();
@@ -447,7 +447,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
             ErrorMessage = "Create or import a collection first.";
             return;
         }
-        _ = RunCollectionActionAsync(node, action);
+        _ = SafeAsync(() => RunCollectionActionAsync(node, action));
     }
 
     partial void OnIsDarkThemeChanged(bool value)
