@@ -74,7 +74,8 @@ public sealed partial class PaginationWalker(IRequestSender sender)
     private static readonly string[] ItemPaths = ["$.data", "$.items", "$.results", "$.records", "$.entries", "$.content", "$.rows",
         "$.list", "$.values", "$.hits.hits", "$.data.items", "$.data.results", "$.result.items", "$._embedded"];
 
-    private static readonly string[] NextUrlPaths = ["$.next", "$.links.next", "$.links.next.href", "$._links.next.href", "$.paging.next",
+    // Nested "href" forms come before their parents, so { "links": { "next": { "href": … } } } resolves to the URL.
+    private static readonly string[] NextUrlPaths = ["$.next.href", "$.next", "$.links.next.href", "$.links.next", "$._links.next.href", "$.paging.next",
         "$.pagination.next", "$.pagination.next_url", "$.pagination.nextUrl", "$.meta.next", "$.meta.pagination.links.next", "$.next_page_url",
         "$.nextPageUrl", "$.@odata.nextLink", "$['@odata.nextLink']", "$.next_url", "$.nextUrl", "$.links.next_page"];
 
@@ -219,8 +220,8 @@ public sealed partial class PaginationWalker(IRequestSender sender)
         {
             if (NextLink(response) is not null)
                 strategy = PaginationStrategy.LinkHeader;
-            else if (ProbeHelpers.FirstMatch(body, NextUrlPaths) is { Node: JsonValue nv } && JsonPath.ToText(nv) is var next
-                     && (next.StartsWith("http", StringComparison.OrdinalIgnoreCase) || next.StartsWith('/') || next.StartsWith('?')))
+            else if (NextUrlPaths.Select(path => JsonPath.Select(body, path).FirstOrDefault()).OfType<JsonValue>().Select(JsonPath.ToText)
+                     .Any(next => next.StartsWith("http", StringComparison.OrdinalIgnoreCase) || next.StartsWith('/') || next.StartsWith('?')))
                 strategy = PaginationStrategy.NextUrl;
             else if (cursorPath is not null || ProbeHelpers.FirstMatch(body, CursorPaths) is not null)
                 strategy = PaginationStrategy.Cursor;
@@ -265,12 +266,16 @@ public sealed partial class PaginationWalker(IRequestSender sender)
             startPage = sp0;
         var offset = strategy == PaginationStrategy.Offset && int.TryParse(ProbeHelpers.Query(first, pageParam!), NumberStyles.Integer, CultureInfo.InvariantCulture, out var o0) ? o0 : 0;
 
+        // A walk that starts past the first page can't judge totals for the whole collection.
+        var partialStart = strategy == PaginationStrategy.Page && startPage > 1 || strategy == PaginationStrategy.Offset && offset > 0;
+
         List<string> IdsOf(JsonArray array) => array.Select(i => Identity(i, ref idField)).ToList();
 
         string? NextOf(ApiResponse r, JsonNode? b) => strategy switch
         {
             PaginationStrategy.LinkHeader => NextLink(r),
-            PaginationStrategy.NextUrl => ProbeHelpers.FirstMatch(b, NextUrlPaths) is { } m ? JsonPath.ToText(m.Node) : null,
+            PaginationStrategy.NextUrl => NextUrlPaths.Select(path => JsonPath.Select(b, path).FirstOrDefault())
+                .OfType<JsonValue>().Select(JsonPath.ToText).FirstOrDefault(t => t.Length > 0 && t != "null"),
             PaginationStrategy.Cursor => cursorPath is not null && JsonPath.Select(b, cursorPath).FirstOrDefault() is { } c && JsonPath.ToText(c) is { Length: > 0 } t
                                          && t != "null" ? t : null,
             _ => null
@@ -278,9 +283,12 @@ public sealed partial class PaginationWalker(IRequestSender sender)
 
         var firstIds = IdsOf(items.Value.Items);
         pages.Add(new Page(1, report.Url, response.StatusCode, firstIds, response.Elapsed.TotalMilliseconds, NextOf(response, body)));
-        var pageSize = requestedSize ?? firstIds.Count;
+        // The server may cap the requested size (limit=1000 answering 100), so pages are judged by what the first page
+        // actually held; the requested size is only used to spot pages that are too large.
+        var pageSize = requestedSize is { } req0 && firstIds.Count > 0 ? Math.Min(req0, firstIds.Count) : requestedSize ?? firstIds.Count;
         var seenNext = new HashSet<string>(StringComparer.Ordinal);
         var loop = false;
+        string? offOrigin = null;
         var endReason = "";
         var current = first;
         var currentResponse = response;
@@ -310,6 +318,14 @@ public sealed partial class PaginationWalker(IRequestSender sender)
                         goto done;
                     }
                     nextRequest = ProbeHelpers.WithUrl(current, last.Next, currentResponse.EffectiveUrl ?? report.Url);
+                    // Never send the request's credentials to a host the server pointed at.
+                    if (Uri.TryCreate(currentResponse.EffectiveUrl ?? report.Url, UriKind.Absolute, out var from)
+                        && Uri.TryCreate(nextRequest.Url, UriKind.Absolute, out var to) && !ProbeHelpers.SameOrigin(from, to))
+                    {
+                        endReason = "next link to another origin";
+                        offOrigin = to.GetLeftPart(UriPartial.Authority);
+                        goto done;
+                    }
                     break;
                 case PaginationStrategy.Cursor:
                     if (last.Next is null)
@@ -326,7 +342,8 @@ public sealed partial class PaginationWalker(IRequestSender sender)
                     nextRequest = ProbeHelpers.WithQuery(current, cursorParam!, Uri.EscapeDataString(last.Next));
                     break;
                 case PaginationStrategy.Offset:
-                    if (last.Ids.Count < pageSize || total is { } t1 && offset + last.Ids.Count >= t1)
+                    // Walk until a short or empty page, never until the advertised total: an under-reported total is a finding.
+                    if (last.Ids.Count < pageSize)
                     {
                         endReason = "short page";
                         goto done;
@@ -335,7 +352,7 @@ public sealed partial class PaginationWalker(IRequestSender sender)
                     nextRequest = ProbeHelpers.WithQuery(current, pageParam!, offset.ToString(CultureInfo.InvariantCulture));
                     break;
                 default:
-                    if (last.Ids.Count < pageSize || totalPages is { } tp && startPage + pages.Count - 1 >= tp)
+                    if (last.Ids.Count < pageSize)
                     {
                         endReason = "short page";
                         goto done;
@@ -398,7 +415,7 @@ public sealed partial class PaginationWalker(IRequestSender sender)
         var all = walked.SelectMany(p => p.Ids.Select(id => (Page: p.Number, Id: id))).ToList();
         var unique = all.Select(a => a.Id).Distinct().Count();
         var duplicates = all.GroupBy(a => a.Id).Where(g => g.Count() > 1).ToList();
-        var complete = !report.Stopped && !loop && endReason is "empty page" or "no next link" or "no next cursor" or "short page" or "not paginated";
+        var complete = !report.Stopped && !loop && !partialStart && endReason is "empty page" or "no next link" or "no next cursor" or "short page" or "not paginated";
 
         var strategyText = strategy switch
         {
@@ -433,7 +450,15 @@ public sealed partial class PaginationWalker(IRequestSender sender)
         }).ToArray());
         report.Details["complete"] = complete;
 
-        if (walked.Count == 1 && complete && strategy is PaginationStrategy.Page or PaginationStrategy.Offset && firstIds.Count < pageSize)
+        if (offOrigin is not null)
+            report.Insights.Add(new ReportInsight(InsightLevel.Warning,
+                $"The next link after page {walked.Count} points to another origin ({offOrigin}). It wasn't followed, so the request's credentials " +
+                "aren't sent there; totals are not compared. Clients that follow it hand their credentials to that host unless they strip them."));
+        if (partialStart)
+            report.Insights.Add(new ReportInsight(InsightLevel.Info,
+                $"The walk started at {pageParam}={(strategy == PaginationStrategy.Page ? startPage : offset)}, not the first page, so totals and page counts " +
+                "are not compared. Remove the parameter to walk the whole collection."));
+        if (walked.Count(p => p.Ids.Count > 0) == 1 && complete && !notPaginated && strategy is PaginationStrategy.Page or PaginationStrategy.Offset)
             report.Insights.Add(new ReportInsight(InsightLevel.Info,
                 $"Everything fits on one page ({firstIds.Count} items). Lower the page size (e.g. --page-size 2) to exercise the paging."));
 

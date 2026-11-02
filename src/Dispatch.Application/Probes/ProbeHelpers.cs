@@ -94,14 +94,72 @@ public static class ProbeHelpers
     public static bool HasHeader(ApiRequest request, string name) =>
         request.Headers.Any(h => h.IsActive && h.Key.Equals(name, StringComparison.OrdinalIgnoreCase));
 
-    private static readonly string[] VolatileWords =
-        ["time", "date", "created", "updated", "modified", "timestamp", "requestid", "request_id", "traceid", "trace_id", "nonce", "expires", "etag"];
+    private static readonly HashSet<string> VolatileWords =
+        ["time", "date", "datetime", "timestamp", "ts", "created", "updated", "modified", "nonce", "expires", "expiry", "etag", "now", "generated"];
 
-    /// <summary>Whether a JSON member name is likely to change between identical requests (timestamps, trace ids).</summary>
+    private static readonly HashSet<string> VolatileIdOwners = ["request", "trace", "span", "correlation", "transaction"];
+
+    /// <summary>Splits a member name into lower-case words: createdAt → created, at; request_id → request, id.</summary>
+    public static IReadOnlyList<string> Words(string name)
+    {
+        var words = new List<string>();
+        var current = new System.Text.StringBuilder();
+        for (var i = 0; i < name.Length; i++)
+        {
+            var c = name[i];
+            var boundary = !char.IsLetterOrDigit(c) || char.IsUpper(c) && current.Length > 0 && (char.IsLower(name[i - 1]) || i + 1 < name.Length && char.IsLower(name[i + 1]));
+            if (boundary && current.Length > 0)
+            {
+                words.Add(current.ToString());
+                current.Clear();
+            }
+            if (char.IsLetterOrDigit(c))
+                current.Append(char.ToLowerInvariant(c));
+        }
+        if (current.Length > 0)
+            words.Add(current.ToString());
+        return words;
+    }
+
+    /// <summary>
+    /// Whether a JSON member name is likely to change between identical requests: timestamps (createdAt, updated_at,
+    /// timestamp) and trace ids (requestId, trace_id). Matched by whole words, so candidateId or updateable aren't.
+    /// </summary>
     public static bool IsVolatile(string name)
     {
-        var lower = name.ToLowerInvariant();
-        return VolatileWords.Any(lower.Contains) || lower.EndsWith("at", StringComparison.Ordinal) && name.Length > 2 && char.IsUpper(name[^2]);
+        var words = Words(name);
+        if (words.Count == 0)
+            return false;
+        if (words.Any(VolatileWords.Contains))
+            return true;
+        // createdAt / modifiedOn style: a past participle followed by "at" / "on".
+        if (words.Count >= 2 && words[^1] is "at" or "on" && words[^2].EndsWith("ed", StringComparison.Ordinal))
+            return true;
+        return words.Count >= 2 && words[^1] == "id" && VolatileIdOwners.Contains(words[^2]);
+    }
+
+    /// <summary>Same scheme, host and port.</summary>
+    public static bool SameOrigin(Uri a, Uri b) =>
+        a.Scheme.Equals(b.Scheme, StringComparison.OrdinalIgnoreCase) && a.Host.Equals(b.Host, StringComparison.OrdinalIgnoreCase) && a.Port == b.Port;
+
+    /// <summary>Whether two responses carry the same body: compares the bytes of binary bodies, the text otherwise.</summary>
+    public static bool SameBody(ApiResponse a, ApiResponse b) =>
+        a.BodyBytes is { } x && b.BodyBytes is { } y ? x.AsSpan().SequenceEqual(y) : a.Body == b.Body;
+
+    /// <summary>
+    /// Whether the request that was actually sent carried credentials: Authorization or Cookie in the raw request (which
+    /// includes cookie-jar cookies and script-added headers), else in the saved request.
+    /// </summary>
+    /// <remarks>
+    /// <c>Other</c> covers cookies and API keys: HTTP's special shared-cache rule only applies to Authorization.
+    /// </remarks>
+    public static (bool Authorization, bool Other) SentCredentials(ApiRequest request, ApiResponse response)
+    {
+        var raw = response.RawRequest ?? string.Empty;
+        bool InRaw(string header) => raw.Split('\n').Any(l => l.TrimStart().StartsWith(header + ":", StringComparison.OrdinalIgnoreCase));
+        var authorization = InRaw("Authorization") || HasHeader(request, "Authorization") || request.Auth.Mode is not (AuthMode.None or AuthMode.ApiKey);
+        var other = InRaw("Cookie") || HasHeader(request, "Cookie") || request.Auth.Mode == AuthMode.ApiKey;
+        return (authorization, other);
     }
 
     /// <summary>The body with volatile members removed and keys sorted, for "same response?" comparisons.</summary>

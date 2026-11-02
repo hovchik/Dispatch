@@ -170,7 +170,9 @@ public sealed class IdempotencyProber(IRequestSender sender)
                 else if (replay.Ok && replay.Response.StatusCode == original.Response.StatusCode && replay.Body == original.Body)
                 {
                     replayVerdict = "same response";
-                    keyHonoured = original.Resource is not null || replayedHeader is not null || method != HttpVerb.Post;
+                    // Only a replay marker, or a POST that didn't create a second resource, shows the key is used. PUT, PATCH and
+                    // DELETE often return the same response without looking at the key at all.
+                    keyHonoured = replayedHeader is not null || method == HttpVerb.Post && original.Resource is not null;
                     report.Insights.Add(new ReportInsight(InsightLevel.Good,
                         $"Retrying with the same {header} returned the original response (HTTP {replay.Response.StatusCode})" +
                         (replayedHeader is null ? "." : $" and marked it as replayed ({replayedHeader}).")));
@@ -201,7 +203,10 @@ public sealed class IdempotencyProber(IRequestSender sender)
 
         // ---- 2. Same key, different body ----
         string reuseVerdict = "—";
-        if (options.KeyReuse && method != HttpVerb.Delete)
+        if (options.KeyReuse && method != HttpVerb.Delete && request.Body.Mode == BodyMode.Binary)
+            report.Insights.Add(new ReportInsight(InsightLevel.Info,
+                "The key-reuse check was skipped: the body is a binary file, and the probe can't send different bytes."));
+        else if (options.KeyReuse && method != HttpVerb.Delete)
         {
             var changed = WithDifferentBody(keyed);
             var reuse = await SendAsync(session, changed, "same key, different body").ConfigureAwait(false);
@@ -255,6 +260,8 @@ public sealed class IdempotencyProber(IRequestSender sender)
             else if (crashed > 0)
                 report.Insights.Add(new ReportInsight(InsightLevel.Bad,
                     $"{crashed} of {race.Count} simultaneous requests with one key failed ({Statuses(race)}). Concurrent duplicates should get the original response or a 409."));
+            else if (race.Count < 2)
+                raceVerdict = "not run (request cap)";
             else if (created.Count == 1 || race.Count(o => o.Ok) <= 1)
                 report.Insights.Add(new ReportInsight(InsightLevel.Good,
                     $"{race.Count} simultaneous requests with one key were handled safely ({Statuses(race)})" +
@@ -272,7 +279,7 @@ public sealed class IdempotencyProber(IRequestSender sender)
             var race = await RaceAsync(session, bare, options.Parallel, "parallel, no key").ConfigureAwait(false);
             var created = race.Where(o => o.Ok).Select(o => o.Resource).Where(id => id is not null).Distinct().ToList();
             var crashed = race.Count(o => !o.Response.HasResponse || o.Response.StatusCode >= 500);
-            noKeyVerdict = Statuses(race);
+            noKeyVerdict = race.Count < 2 ? "not run (request cap)" : Statuses(race);
             if (crashed > 0)
                 report.Insights.Add(new ReportInsight(InsightLevel.Bad,
                     $"{crashed} of {race.Count} simultaneous identical requests without a key failed ({Statuses(race)}): the endpoint has a race under concurrency " +
@@ -281,7 +288,7 @@ public sealed class IdempotencyProber(IRequestSender sender)
                 report.Insights.Add(new ReportInsight(InsightLevel.Info,
                     $"Without a key, {race.Count} simultaneous identical POSTs created {created.Count} resources. That is normal for POST, but a double-clicked " +
                     $"submit does the same: clients should send {header}."));
-            else if (method == HttpVerb.Post && race.All(o => o.Response.StatusCode is 400 or 422 or 428))
+            else if (method == HttpVerb.Post && race.Count >= 2 && race.All(o => o.Response.StatusCode is 400 or 422 or 428))
                 report.Insights.Add(new ReportInsight(InsightLevel.Good, $"Requests without {header} are rejected ({Statuses(race)}): the key is required."));
             if (method is HttpVerb.Put or HttpVerb.Patch && race.Where(o => o.Ok).Select(o => o.Body).Distinct().Count() > 1)
                 report.Insights.Add(new ReportInsight(InsightLevel.Warning,
@@ -342,7 +349,9 @@ public sealed class IdempotencyProber(IRequestSender sender)
         report.Details["parallel"] = options.Parallel;
 
         var problems = report.Insights.Count(i => i.Level == InsightLevel.Bad);
-        report.Summary = problems == 0
+        report.Summary = problems == 0 && report.Stopped
+            ? $"Incomplete: stopped after {report.RequestsSent} requests, no problems found so far"
+            : problems == 0
             ? $"Safe to retry: {report.RequestsSent} requests, no duplicates or failures found"
             : $"{problems} retry problem(s) found in {report.RequestsSent} requests";
     }

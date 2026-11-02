@@ -107,11 +107,17 @@ internal sealed class ProbeSession(IRequestSender sender, ProbeReport report, Pr
         lock (_gate)
         {
             if (_reserved >= options.MaxRequests)
+            {
+                // Everything after this point is skipped: the report must say it is incomplete.
+                report.Stopped = true;
                 return null;
+            }
             _reserved++;
         }
         ct.ThrowIfCancellationRequested();
         var response = await sender.SendAsync(request, SendOptions, ct).ConfigureAwait(false);
+        // The HTTP executor turns cancellation into a failed response; don't blame the endpoint for it.
+        ct.ThrowIfCancellationRequested();
         var (note, problem) = describe?.Invoke(response) ?? (null, false);
         var url = response.EffectiveUrl ?? request.Url;
         var step = new ProbeStep(ElapsedMs, label, request.Method.ToString().ToUpperInvariant(), url, response.StatusCode, !response.HasResponse,

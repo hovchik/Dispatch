@@ -94,7 +94,11 @@ public sealed class CacheChecker(IRequestSender sender)
     private static async Task CheckCoreAsync(ApiRequest request, CacheOptions options, ProbeReport report, ProbeSession session)
     {
         if (request.Method is not (HttpVerb.Get or HttpVerb.Head))
-            Add(report, InsightLevel.Info, $"{request.Method.ToString().ToUpperInvariant()} responses are rarely cached; caching checks are meant for GET.");
+        {
+            // Never resend an unsafe method several times; conditional requests mean something else (412) for it anyway.
+            report.Error = $"Caching checks need a GET or HEAD request; {request.Method.ToString().ToUpperInvariant()} is not resent.";
+            return;
+        }
         // Conditional headers of our own replace any the request already carries.
         var plain = ProbeHelpers.WithHeader(ProbeHelpers.WithHeader(request, "If-None-Match", null), "If-Modified-Since", null);
 
@@ -120,8 +124,13 @@ public sealed class CacheChecker(IRequestSender sender)
         var expires = ProbeHelpers.Header(r1, "Expires");
         var vary = ProbeHelpers.Header(r1, "Vary");
         var varyItems = (vary ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var personalised = ProbeHelpers.HasHeader(request, "Authorization") || ProbeHelpers.HasHeader(request, "Cookie")
-                           || request.Auth.Mode != AuthMode.None;
+        var (authorization, otherCredentials) = ProbeHelpers.SentCredentials(request, r1);
+        var personalised = authorization || otherCredentials;
+        // RFC 9111 §3.5: a shared cache stores a response to a request with Authorization only when public, s-maxage or
+        // must-revalidate allows it. Cookies and API keys get no such protection, so max-age alone is enough there.
+        var sharedCacheable = authorization
+            ? !cc.Has("no-store") && !cc.Has("private") && (cc.Has("public") || cc.Seconds("s-maxage") > 0 || cc.Has("must-revalidate"))
+            : cc.SharedCacheable;
         var setsCookie = ProbeHelpers.Header(r1, "Set-Cookie") is not null;
         var bodyBytes = r1.SizeBytes > 0 ? r1.SizeBytes : r1.Body.Length;
 
@@ -147,13 +156,13 @@ public sealed class CacheChecker(IRequestSender sender)
             Add(report, InsightLevel.Info, "Expires is in the past while max-age allows caching; max-age wins, but the headers disagree.");
 
         // ---- Personalised content in shared caches ----
-        if (personalised && cc.SharedCacheable)
+        if (personalised && sharedCacheable)
             Add(report, InsightLevel.Bad,
-                $"The request carries credentials, but the response is cacheable by shared caches ({cacheControlHeader}). A CDN or proxy may serve one user's " +
-                "data to another. Use Cache-Control: private (or no-store).");
+                $"The request carries {(authorization ? "an Authorization header" : "cookies or an API key")}, but the response is cacheable by shared caches " +
+                $"({cacheControlHeader}). A CDN or proxy may serve one user's data to another. Use Cache-Control: private (or no-store).");
         if (setsCookie && cc.SharedCacheable)
             Add(report, InsightLevel.Bad, "The response sets a cookie and is cacheable by shared caches: a cache can hand the same Set-Cookie (session) to every visitor.");
-        if (personalised && !cc.Has("private") && !cc.Has("no-store") && cacheControlHeader is not null && !cc.SharedCacheable)
+        if (personalised && !cc.Has("private") && !cc.Has("no-store") && cacheControlHeader is not null && !sharedCacheable)
             Add(report, InsightLevel.Good, "Credentials are sent and the response isn't cacheable by shared caches.");
 
         // ---- Vary ----
@@ -186,7 +195,7 @@ public sealed class CacheChecker(IRequestSender sender)
         if (secondSent is { } second && second.Response.StatusCode is >= 200 and < 300)
         {
             var r2 = second.Response;
-            var sameBody = r2.Body == r1.Body;
+            var sameBody = ProbeHelpers.SameBody(r1, r2);
             var etag2 = ProbeHelpers.Header(r2, "ETag");
             if (etag is not null && etag2 is not null)
             {
@@ -197,11 +206,18 @@ public sealed class CacheChecker(IRequestSender sender)
                         $"The body didn't change but the ETag did ({etag} then {etag2}): every revalidation misses, so the ETag saves nothing. " +
                         "Typical causes: a per-node or timestamp-based ETag behind a load balancer.");
                 }
-                else if (!sameBody && etag2 == etag)
+                else if (!sameBody && etag2 == etag && !etag.TrimStart().StartsWith("W/", StringComparison.Ordinal))
                 {
                     stability = "stale ETag";
                     Add(report, InsightLevel.Bad,
-                        $"The body changed but the ETag stayed {etag}: caches will keep serving the old body after revalidating.");
+                        $"The body changed but the strong ETag stayed {etag}: caches will keep serving the old body after revalidating.");
+                }
+                else if (!sameBody && etag2 == etag)
+                {
+                    // A weak ETag only promises semantic equivalence, so different bytes don't disprove it.
+                    stability = "weak, bytes differ";
+                    Add(report, InsightLevel.Info,
+                        $"The body bytes changed while the weak ETag {etag} stayed the same. That's allowed for equivalent content; check it if the data itself changed.");
                 }
                 else
                     stability = sameBody ? "stable" : "body changed";
@@ -237,6 +253,13 @@ public sealed class CacheChecker(IRequestSender sender)
                     if (cacheControlHeader is not null && ProbeHelpers.Header(r, "Cache-Control") is null)
                         Add(report, InsightLevel.Warning, "The 304 response omits Cache-Control, so caches can't refresh the freshness lifetime.");
                 }
+                else if (r.StatusCode is >= 200 and < 300 && (ProbeHelpers.Header(r, "ETag") is { } newTag && newTag != etag || !ProbeHelpers.SameBody(r, r1)))
+                {
+                    // A changed representation must be returned in full: that's correct, but it means the test is inconclusive.
+                    inm = $"{r.StatusCode} (changed)";
+                    Add(report, InsightLevel.Info,
+                        "If-None-Match answered with a full response because the content (or its ETag) changed during the probe; run it again on stable data to test 304.");
+                }
                 else if (r.StatusCode is >= 200 and < 300)
                 {
                     inm = r.StatusCode.ToString(CultureInfo.InvariantCulture);
@@ -263,6 +286,12 @@ public sealed class CacheChecker(IRequestSender sender)
                 ims = c.Step.StatusText;
                 if (c.Response.StatusCode == 304)
                     Add(report, InsightLevel.Good, "If-Modified-Since with Last-Modified answers 304 Not Modified.");
+                else if (c.Response.StatusCode is >= 200 and < 300
+                         && (ProbeHelpers.Header(c.Response, "Last-Modified") is { } newLm && newLm != lastModified || !ProbeHelpers.SameBody(c.Response, r1)))
+                {
+                    ims = $"{c.Response.StatusCode} (changed)";
+                    Add(report, InsightLevel.Info, "If-Modified-Since answered with a full response because the content changed during the probe; the test is inconclusive.");
+                }
                 else if (etag is null && c.Response.StatusCode is >= 200 and < 300)
                     Add(report, InsightLevel.Warning,
                         $"If-Modified-Since with the Last-Modified date still answered {c.Response.StatusCode} with the full body: Last-Modified is not usable for revalidation.");
@@ -303,7 +332,8 @@ public sealed class CacheChecker(IRequestSender sender)
         report.Stats.Add(new ProbeStat("If-None-Match", inm, etag is null ? "no ETag to test" : null, inm == "304" ? false : etag is null ? null : true));
         report.Stats.Add(new ProbeStat("If-Modified-Since", ims, lastModified is null ? "no Last-Modified" : null));
         report.Stats.Add(new ProbeStat("Vary", vary ?? "—"));
-        report.Stats.Add(new ProbeStat("Body", ReportBytes(bodyBytes), ProbeHelpers.Header(r1, "Content-Encoding") is { } enc ? $"{enc}-encoded" : "not compressed"));
+        // The transport decompresses automatically and drops Content-Encoding, so only a remaining header says anything.
+        report.Stats.Add(new ProbeStat("Body", ReportBytes(bodyBytes), ProbeHelpers.Header(r1, "Content-Encoding") is { } enc ? $"{enc}-encoded" : null));
         if (head != "—")
             report.Stats.Add(new ProbeStat("HEAD", head));
 
@@ -316,6 +346,7 @@ public sealed class CacheChecker(IRequestSender sender)
         report.Details["ifModifiedSince"] = ims;
         report.Details["etagStability"] = stability;
         report.Details["personalised"] = personalised;
+        report.Details["sharedCacheable"] = sharedCacheable;
         report.Details["bodyBytes"] = bodyBytes;
 
         var policy = cc.Has("no-store") ? "not cached (no-store)"

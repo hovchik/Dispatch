@@ -64,6 +64,20 @@ public class EndpointProbeUnitTests
     }
 
     [Fact]
+    public void Volatile_names_match_whole_words()
+    {
+        Assert.True(ProbeHelpers.IsVolatile("createdAt"));
+        Assert.True(ProbeHelpers.IsVolatile("updated_at"));
+        Assert.True(ProbeHelpers.IsVolatile("timestamp"));
+        Assert.True(ProbeHelpers.IsVolatile("requestId"));
+        Assert.True(ProbeHelpers.IsVolatile("X-Trace-Id"));
+        Assert.False(ProbeHelpers.IsVolatile("candidateId"));
+        Assert.False(ProbeHelpers.IsVolatile("format"));
+        Assert.False(ProbeHelpers.IsVolatile("id"));
+        Assert.NotEqual(ProbeHelpers.Canonical("""{"candidateId":1}"""), ProbeHelpers.Canonical("""{"candidateId":2}"""));
+    }
+
+    [Fact]
     public void Report_fails_by_threshold_and_renders()
     {
         var report = new ProbeReport { Kind = ProbeKind.Caching, RequestName = "Get", Method = "GET", Url = "http://x", Summary = "s" };
@@ -202,6 +216,49 @@ public class EndpointProbeTests
         Assert.Contains(flat.Insights, i => i.Text.Contains("No pagination found"));
     }
 
+    [Fact]
+    public async Task Walks_past_a_server_capped_page_size_and_counts_from_a_later_start_as_partial()
+    {
+        var all = Items(23).ToList();
+        // The server caps limit at 10, whatever is asked for.
+        await using var server = await TestServer.StartAsync(app => app.MapGet("/items", (HttpContext ctx) =>
+        {
+            var page = int.Parse(ctx.Request.Query["page"].FirstOrDefault() ?? "1");
+            return Results.Json(new { data = all.Skip((page - 1) * 10).Take(10), total = all.Count });
+        }));
+        await using var services = Services();
+        var walker = services.GetRequiredService<PaginationWalker>();
+
+        var capped = await walker.WalkAsync(Get(server.BaseUrl + "/items?page=1&limit=100"), new PaginationOptions { EdgeCases = false });
+        Assert.Equal(23, capped.Details["items"]!.GetValue<int>());
+        Assert.Equal(0, capped.Problems);
+
+        var later = await walker.WalkAsync(Get(server.BaseUrl + "/items?page=2"), new PaginationOptions { EdgeCases = false });
+        Assert.Equal(0, later.Problems);
+        Assert.Contains(later.Insights, i => i.Text.Contains("not the first page"));
+    }
+
+    [Fact]
+    public async Task Does_not_follow_next_links_to_another_origin()
+    {
+        await using var other = await TestServer.StartAsync(app => app.MapGet("/steal", (HttpContext ctx) =>
+            Results.Json(new { got = ctx.Request.Headers.Authorization.ToString() })));
+        var hits = 0;
+        await using var server = await TestServer.StartAsync(app => app.MapGet("/items", (HttpContext ctx) =>
+        {
+            Interlocked.Increment(ref hits);
+            ctx.Response.Headers.Link = $"<{other.BaseUrl}/steal>; rel=\"next\"";
+            return Results.Json(new[] { new { id = 1 }, new { id = 2 } });
+        }));
+        await using var services = Services();
+        var request = Get(server.BaseUrl + "/items");
+        request.Auth = new AuthSettings { Mode = AuthMode.Bearer, Token = "secret" };
+        var report = await services.GetRequiredService<PaginationWalker>().WalkAsync(request, new PaginationOptions { CheckStability = false });
+
+        Assert.Equal(1, report.RequestsSent);
+        Assert.Contains(report.Insights, i => i.Level == InsightLevel.Warning && i.Text.Contains("another origin"));
+    }
+
     private static ApiRequest Post(string url) => new()
     {
         Name = "Create order", Method = HttpVerb.Post, Url = url,
@@ -252,6 +309,64 @@ public class EndpointProbeTests
     }
 
     [Fact]
+    public async Task Idempotency_marks_a_run_cut_short_by_the_request_cap_as_incomplete()
+    {
+        await using var server = await TestServer.StartAsync(app => app.MapPost("/orders", () => Results.Json(new { id = 7 }, statusCode: 201)));
+        await using var services = Services();
+        var report = await services.GetRequiredService<IdempotencyProber>()
+            .ProbeAsync(Post(server.BaseUrl + "/orders"), new IdempotencyOptions { MaxRequests = 2 });
+
+        Assert.True(report.Stopped);
+        Assert.StartsWith("Incomplete", report.Summary);
+        Assert.DoesNotContain(report.Insights, i => i.Text.Contains("handled safely"));
+    }
+
+    [Fact]
+    public async Task Caching_flags_a_stable_etag_that_never_gets_a_304()
+    {
+        await using var server = await TestServer.StartAsync(app => app.MapGet("/doc", (HttpContext ctx) =>
+        {
+            ctx.Response.Headers.CacheControl = "no-cache";
+            ctx.Response.Headers.ETag = "\"v1\"";
+            return Results.Json(new { title = "Doc" });
+        }));
+        await using var services = Services();
+        var report = await services.GetRequiredService<CacheChecker>().CheckAsync(Get(server.BaseUrl + "/doc"), new CacheOptions { CheckHead = false });
+        Assert.Contains(report.Insights, i => i.Level == InsightLevel.Bad && i.Text.Contains("conditional requests are not supported"));
+    }
+
+    [Fact]
+    public async Task Caching_refuses_unsafe_methods_and_allows_max_age_for_Authorization()
+    {
+        var posts = 0;
+        await using var server = await TestServer.StartAsync(app =>
+        {
+            app.MapPost("/orders", () => { Interlocked.Increment(ref posts); return Results.Ok(); });
+            app.MapGet("/me", (HttpContext ctx) =>
+            {
+                ctx.Response.Headers.CacheControl = "max-age=60";
+                return Results.Json(new { user = "ann" });
+            });
+        });
+        await using var services = Services();
+        var checker = services.GetRequiredService<CacheChecker>();
+
+        var post = await checker.CheckAsync(Post(server.BaseUrl + "/orders"), new CacheOptions());
+        Assert.NotNull(post.Error);
+        Assert.Equal(0, posts);
+
+        var request = Get(server.BaseUrl + "/me");
+        request.Auth = new AuthSettings { Mode = AuthMode.Bearer, Token = "secret" };
+        var me = await checker.CheckAsync(request, new CacheOptions { CheckHead = false });
+        Assert.DoesNotContain(me.Insights, i => i.Level == InsightLevel.Bad);
+
+        var cookie = Get(server.BaseUrl + "/me");
+        cookie.Headers.Add(new KeyValueItem("Cookie", "session=abc"));
+        var withCookie = await checker.CheckAsync(cookie, new CacheOptions { CheckHead = false });
+        Assert.Contains(withCookie.Insights, i => i.Level == InsightLevel.Bad && i.Text.Contains("cookies or an API key"));
+    }
+
+    [Fact]
     public async Task Caching_passes_correct_revalidation()
     {
         await using var server = await TestServer.StartAsync(app => app.MapMethods("/product", ["GET", "HEAD"], (HttpContext ctx) =>
@@ -287,9 +402,10 @@ public class EndpointProbeTests
         request.Auth = new AuthSettings { Mode = AuthMode.Bearer, Token = "secret" };
         var report = await services.GetRequiredService<CacheChecker>().CheckAsync(request, new CacheOptions { CheckHead = false });
 
-        Assert.Contains(report.Insights, i => i.Level == InsightLevel.Bad && i.Text.Contains("carries credentials"));
+        Assert.Contains(report.Insights, i => i.Level == InsightLevel.Bad && i.Text.Contains("carries an Authorization header"));
         Assert.Contains(report.Insights, i => i.Level == InsightLevel.Bad && i.Text.Contains("ETag did"));
-        Assert.Contains(report.Insights, i => i.Level == InsightLevel.Bad && i.Text.Contains("conditional requests are not supported"));
+        // The ETag changes on every request, so the conditional request's 200 is inconclusive rather than a failure.
+        Assert.Contains(report.Insights, i => i.Level == InsightLevel.Info && i.Text.Contains("changed during the probe"));
         Assert.Contains(report.Insights, i => i.Level == InsightLevel.Bad && i.Text.Contains("Vary doesn't list Origin"));
     }
 }
