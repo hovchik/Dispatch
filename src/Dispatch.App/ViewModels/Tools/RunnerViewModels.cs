@@ -627,6 +627,31 @@ public sealed partial class MockServerViewModel : ObservableObject, ITool
 
 public sealed record TimelineBar(double Height, string Tooltip, bool HasErrors);
 
+/// <summary>One metric of a baseline comparison, pre-formatted.</summary>
+public sealed record MetricRow(MetricDelta Metric)
+{
+    public string Name => Metric.Metric;
+    public string Baseline => Metric.Format(Metric.Baseline);
+    public string Current => Metric.Format(Metric.Current);
+    public string Delta => $"{Metric.DeltaPercent:+0;-0;0}%";
+    public string Verdict => Metric.Verdict;
+    public Avalonia.Media.IBrush Brush => Metric.Regressed ? ReportBrushes.Bad : Metric.Improved ? ReportBrushes.Good : ReportBrushes.Neutral;
+}
+
+/// <summary>One request of a baseline comparison: p95 and throughput before and after.</summary>
+public sealed record ComparisonRequestRow(LoadRequestComparison Row)
+{
+    public string Name => Row.Name;
+    public string Verdict => Row.Verdict;
+    public string P95 => Row["p95"] is { } m ? $"{m.Baseline:0} → {m.Current:0} ms ({m.DeltaPercent:+0;-0;0}%)" : "–";
+    public string Throughput => Row["throughput"] is { } m ? $"{m.Baseline:0.0} → {m.Current:0.0} req/s ({m.DeltaPercent:+0;-0;0}%)" : "–";
+    public string ErrorRate => Row["error rate"] is { } m ? $"{m.Baseline * 100:0.0}% → {m.Current * 100:0.0}%" : "–";
+    public Avalonia.Media.IBrush Brush => Row.Verdict switch
+    {
+        "REGRESSED" or "MISSING" => ReportBrushes.Bad, "IMPROVED" => ReportBrushes.Good, "NEW" => ReportBrushes.Info, _ => ReportBrushes.Neutral
+    };
+}
+
 /// <summary>A per-request row of the load-test report, pre-formatted for the table.</summary>
 public sealed record LoadRequestRow(LoadRequestStats Stats)
 {
@@ -681,6 +706,25 @@ public sealed partial class LoadTestViewModel : ObservableObject, ITool
     public ObservableCollection<ReportBar> Histogram { get; } = [];
     public ObservableCollection<ReportBar> StatusBars { get; } = [];
     public ObservableCollection<LoadRequestRow> ReportRequests { get; } = [];
+    public ObservableCollection<StatTile> StreamingTiles { get; } = [];
+
+    // Baseline comparison (filled when a baseline is set or loaded).
+    public ObservableCollection<string> ComparisonFindings { get; } = [];
+    public ObservableCollection<MetricRow> ComparisonMetrics { get; } = [];
+    public ObservableCollection<ComparisonRequestRow> ComparisonRequests { get; } = [];
+    private LoadBaseline? _baseline;
+
+    [ObservableProperty] private decimal _maxRegressionPercent = (decimal)LoadBaselineComparer.DefaultMaxRegressionPercent;
+    [ObservableProperty] private string _comparisonVerdict = "";
+    [ObservableProperty] private Avalonia.Media.IBrush _comparisonBrush = ReportBrushes.Neutral;
+    [ObservableProperty] private string _comparisonSubtitle = "";
+    [ObservableProperty] private bool _hasStreaming;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasComparison))]
+    private LoadComparison? _comparison;
+
+    public bool HasComparison => Comparison is not null;
 
     [ObservableProperty] private decimal _users = 10;
     [ObservableProperty] private decimal _durationSeconds = 30;
@@ -826,8 +870,80 @@ public sealed partial class LoadTestViewModel : ObservableObject, ITool
         foreach (var r in report.PerRequest.OrderByDescending(r => r.Latency.P95))
             ReportRequests.Add(new LoadRequestRow(r));
 
+        StreamingTiles.Clear();
+        if (report.Streaming is { } st)
+        {
+            StreamingTiles.Add(new StatTile("Connections", st.Connections.ToString("N0"), $"{st.EstablishedConnections:N0} established"));
+            StreamingTiles.Add(new StatTile("Connect errors", st.ConnectErrors.ToString("N0"), null, st.ConnectErrors > 0 ? ReportBrushes.Bad : ReportBrushes.Good));
+            StreamingTiles.Add(new StatTile("Drops", st.Drops.ToString("N0"), null, st.Drops > 0 ? ReportBrushes.Bad : ReportBrushes.Good));
+            StreamingTiles.Add(new StatTile("Messages", st.MessagesReceived.ToString("N0"), $"{st.MessagesSent:N0} sent"));
+            StreamingTiles.Add(new StatTile("Messages/s", $"{st.MessagesPerSecond:0.0}"));
+            StreamingTiles.Add(new StatTile("Message p95", $"{st.MessageLatency.P95:0} ms", $"p50 {st.MessageLatency.P50:0} ms · max {st.MessageLatency.Max:0} ms"));
+        }
+        HasStreaming = report.Streaming is not null;
+
         Report = report;
+        if (_baseline is not null)
+            ShowComparison(LoadBaselineComparer.Compare(report, _baseline, (double)MaxRegressionPercent));
+        else
+            Comparison = null;
         SelectedTab = 1;
+    }
+
+    private void ShowComparison(LoadComparison comparison)
+    {
+        Comparison = comparison;
+        ComparisonVerdict = comparison.Verdict;
+        ComparisonBrush = comparison.Verdict switch { "REGRESSED" => ReportBrushes.Bad, "IMPROVED" => ReportBrushes.Good, _ => ReportBrushes.Neutral };
+        ComparisonSubtitle = $"{comparison.BaselineName} · {comparison.BaselineStartedAt:yyyy-MM-dd HH:mm} · {comparison.BaselineVirtualUsers} virtual user(s) · " +
+                             $"allowed regression {comparison.MaxRegressionPercent:0.#}%";
+        ComparisonFindings.Clear();
+        foreach (var finding in comparison.Findings)
+            ComparisonFindings.Add(finding);
+        ComparisonMetrics.Clear();
+        foreach (var m in comparison.Overall)
+            ComparisonMetrics.Add(new MetricRow(m));
+        ComparisonRequests.Clear();
+        foreach (var r in comparison.PerRequest)
+            ComparisonRequests.Add(new ComparisonRequestRow(r));
+    }
+
+    /// <summary>Saves the current report as a baseline file and compares later runs in this window with it.</summary>
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task SetAsBaselineAsync()
+    {
+        if (Report is null)
+            return;
+        var path = await _dialogs.SaveFileAsync("Save load baseline",
+            Application.Interop.DispatchFormat.Slug(_collection.Name) + "-baseline.json", new FileFilter("JSON", "*.json"));
+        if (path is null)
+            return;
+        await File.WriteAllTextAsync(path, LoadBaseline.Serialize(Report, _collection.Name));
+        _baseline = LoadBaseline.From(Report, Path.GetFileName(path));
+        ShowComparison(LoadBaselineComparer.Compare(Report, _baseline, (double)MaxRegressionPercent));
+        Status = $"Baseline saved to {path}. The next runs in this window are compared with it.";
+    }
+
+    /// <summary>Loads a baseline file (a saved JSON report) and compares the current report with it.</summary>
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task CompareWithBaselineAsync()
+    {
+        if (Report is null)
+            return;
+        var path = await _dialogs.OpenFileAsync("Open load baseline", new FileFilter("JSON", "*.json"));
+        if (path is null)
+            return;
+        try
+        {
+            _baseline = LoadBaseline.Parse(await File.ReadAllTextAsync(path));
+        }
+        catch (FormatException ex)
+        {
+            Status = ex.Message;
+            return;
+        }
+        ShowComparison(LoadBaselineComparer.Compare(Report, _baseline, (double)MaxRegressionPercent));
+        Status = $"Compared with {Path.GetFileName(path)}: {Comparison!.Verdict}.";
     }
 
     private void Show(int total, double rps, int errors, LatencyStats latency, int users)
@@ -863,9 +979,9 @@ public sealed partial class LoadTestViewModel : ObservableObject, ITool
             return;
         var (extension, content, filter) = format switch
         {
-            "json" => (".json", LoadReportWriter.Json(Report, _collection.Name), new FileFilter("JSON", "*.json")),
+            "json" => (".json", LoadReportWriter.Json(Report, _collection.Name, Comparison), new FileFilter("JSON", "*.json")),
             "csv" => (".csv", LoadReportWriter.Csv(Report), new FileFilter("CSV", "*.csv")),
-            _ => (".html", LoadReportWriter.Html(Report, _collection.Name), new FileFilter("HTML", "*.html"))
+            _ => (".html", LoadReportWriter.Html(Report, _collection.Name, Comparison), new FileFilter("HTML", "*.html"))
         };
         var path = await _dialogs.SaveFileAsync("Save load test report",
             Application.Interop.DispatchFormat.Slug(_collection.Name) + "-load" + extension, filter);
@@ -883,7 +999,7 @@ public sealed partial class LoadTestViewModel : ObservableObject, ITool
             return;
         try
         {
-            ShellOpener.OpenTemp(_collection.Name + "-load", ".html", System.Text.Encoding.UTF8.GetBytes(LoadReportWriter.Html(Report, _collection.Name)));
+            ShellOpener.OpenTemp(_collection.Name + "-load", ".html", System.Text.Encoding.UTF8.GetBytes(LoadReportWriter.Html(Report, _collection.Name, Comparison)));
         }
         catch (Exception ex)
         {

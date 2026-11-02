@@ -29,6 +29,11 @@
           <NumericUpDown Value="{Binding MaxAverageMs}" Minimum="0" Maximum="600000" Width="130" FormatString="0" />
           <TextBlock Text="ms (0 = no limit)" VerticalAlignment="Center" Classes="muted" FontSize="12" />
         </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="Fail if a TLS certificate expires within" VerticalAlignment="Center" Classes="muted" FontSize="12" />
+          <NumericUpDown Value="{Binding CertificateWarnDays}" Minimum="0" Maximum="3650" Width="130" FormatString="0" />
+          <TextBlock Text="days (0 = don't check)" VerticalAlignment="Center" Classes="muted" FontSize="12" />
+        </StackPanel>
 
         <TextBlock Classes="section" Text="REQUESTS" />
         <Border Classes="card" Padding="6" MaxHeight="150">

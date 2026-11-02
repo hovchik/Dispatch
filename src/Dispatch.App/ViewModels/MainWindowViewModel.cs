@@ -33,6 +33,7 @@ public sealed record MainServices(
     Dispatch.Application.Security.SecurityScanner Scanner,
     Dispatch.Application.Minimize.RequestMinimizer Minimizer,
     Dispatch.Application.RateLimits.RateLimitProber RateLimits,
+    Dispatch.Application.Probes.EndpointProbes Probes,
     IHistoryRepository HistoryStore,
     IFlowRepository Flows,
     Dispatch.Application.Flows.FlowRunner FlowRunner,
@@ -41,7 +42,8 @@ public sealed record MainServices(
     Dispatch.Infrastructure.Capture.CertificateAuthority CaptureAuthority,
     Func<Dispatch.Infrastructure.Capture.CaptureProxy> CaptureProxyFactory,
     GrpcSchemaProvider GrpcSchemas,
-    Infrastructure.Auth.SystemBrowserInteraction OAuth);
+    Infrastructure.Auth.SystemBrowserInteraction OAuth,
+    Dispatch.Application.Webhooks.IWebhookReceiver Webhooks);
 
 /// <summary>The panels the activity rail can show in the sidebar.</summary>
 public enum SidebarSection
@@ -58,6 +60,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
     private readonly MainServices _services;
     private HelpViewModel? _help;
+    private WebhookViewModel? _webhooks;
 
     public MainWindowViewModel(MainServices services, CollectionsViewModel collections, HistoryViewModel history,
         EnvironmentsViewModel environments)
@@ -67,6 +70,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         History = history;
         Environments = environments;
         Palette = new CommandPaletteViewModel(PaletteItems);
+        ResponseViewModel.TlsLookup = Services.TlsSummaryCache.LookupAsync;
 
         Collections.OpenRequested += OpenRequest;
         Collections.RequestDeleted += OnRequestDeleted;
@@ -206,6 +210,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
     public void ShowRateLimit(ApiRequest request) =>
         Dialogs.ShowTool(new RateLimitViewModel(request, _services.RateLimits, Dialogs, () => ActiveEnvironment,
+            FindCollection(request.CollectionId)?.Variables));
+
+    public void ShowTls(ApiRequest request)
+    {
+        var variables = Dispatch.Application.Variables.VariableContext.For(ActiveEnvironment, FindCollection(request.CollectionId)?.Variables).Merged();
+        var url = Dispatch.Application.Variables.VariableResolver.Resolve(request.Url, variables).Trim();
+        var target = Uri.TryCreate(url.Contains("://", StringComparison.Ordinal) ? url : "https://" + url, UriKind.Absolute, out var uri) && uri.IdnHost.Length > 0
+            ? (uri.IsDefaultPort ? uri.IdnHost : $"{uri.IdnHost}:{uri.Port}")
+            : url;
+        Dialogs.ShowTool(new TlsViewModel(new Dispatch.Application.Tls.TlsInspector(), Dialogs, _services.Tabs.Clipboard, target));
+    }
+
+    public void ShowEndpointProbe(ApiRequest request, Dispatch.Application.Probes.ProbeKind kind) =>
+        Dialogs.ShowTool(new EndpointProbeViewModel(kind, request, _services.Probes, Dialogs, () => ActiveEnvironment,
             FindCollection(request.CollectionId)?.Variables));
 
     public void ShowImpact(ApiRequest request, string? currentBody, string? previousBody)
@@ -426,11 +444,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         Dialogs, _services.Tabs.Clipboard, _services.Tabs.Collections, Collections.LoadAsync));
 
     [RelayCommand]
+    private void OpenTlsInspector() => Dialogs.ShowTool(new TlsViewModel(new Dispatch.Application.Tls.TlsInspector(), Dialogs, _services.Tabs.Clipboard));
+
+    [RelayCommand]
     private void OpenClientFuzz() => Dialogs.ShowTool(new ClientFuzzViewModel(_services.CaptureProxyFactory, _services.CaptureAuthority,
         Dialogs, _services.Tabs.Clipboard));
 
     [RelayCommand]
     private void OpenRunner() => OpenCollectionTool(CollectionAction.Run);
+
+    /// <summary>One window for the shared receiver: reopening shows the same callbacks, and closing keeps it listening.</summary>
+    [RelayCommand]
+    private void OpenWebhooks() => Dialogs.ShowTool(_webhooks ??= new WebhookViewModel(_services.Webhooks, _services.Tabs.Sender,
+        _services.Tabs.Collections, Dialogs, _services.Tabs.Clipboard, () => ActiveEnvironment,
+        () => FindCollection(SelectedTab?.CollectionId) ?? FindCollection(Collections.Items.FirstOrDefault()?.Id),
+        () => SafeAsync(Collections.LoadAsync), AddTab));
 
     [RelayCommand]
     private void OpenMockServer() => OpenCollectionTool(CollectionAction.Mock);
@@ -463,6 +491,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
     [RelayCommand]
     private void OpenCollectionSettings() => OpenCollectionTool(CollectionAction.Settings);
+
+    [RelayCommand]
+    private void GenerateOpenApi() => OpenCollectionTool(CollectionAction.GenerateOpenApi);
+
+    /// <summary>Compare environments: run the current collection against two environments or base URLs and diff the responses.</summary>
+    [RelayCommand]
+    private void OpenCompare()
+    {
+        var node = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId) ?? Collections.Items.FirstOrDefault();
+        if (node is null)
+        {
+            ErrorMessage = "Create or import a collection first.";
+            return;
+        }
+        var environments = Environments.Items.Where(e => !e.IsNone).Select(e => e.ToModel()).ToList();
+        Dialogs.ShowTool(new CompareViewModel(node.Model, new Dispatch.Application.Compare.EnvironmentComparer(_services.Tabs.Sender), Dialogs,
+            environments, ActiveEnvironment));
+    }
 
     /// <summary>Toolbar tools act on the collection of the current tab, else the first collection.</summary>
     private void OpenCollectionTool(CollectionAction action)
@@ -534,6 +580,29 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
                     if (html)
                         ShellOpener.Open(path);
                     ShowInfo($"Documentation for {collection.Requests.Count} endpoint(s) saved to {path}");
+                });
+                break;
+            case CollectionAction.GenerateOpenApi:
+                await SafeAsync(async () =>
+                {
+                    var slug = DispatchFormat.Slug(collection.Name);
+                    var path = await Dialogs.SaveFileAsync("Generate OpenAPI spec", slug + ".openapi.yaml",
+                        new FileFilter("OpenAPI YAML", "*.yaml", "*.yml"), new FileFilter("OpenAPI JSON", "*.json"));
+                    if (path is null)
+                        return;
+                    IReadOnlyList<HistoryEntry> history = [];
+                    try
+                    {
+                        history = await _services.HistoryStore.GetRecentAsync(5000);
+                    }
+                    catch (Exception)
+                    {
+                        // A spec without history is still a spec.
+                    }
+                    var spec = Application.Spec.OpenApiWriter.FromCollection(collection, history);
+                    var json = path.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
+                    await File.WriteAllTextAsync(path, json ? Application.Spec.OpenApiWriter.ToJson(spec) : Application.Spec.OpenApiWriter.ToYaml(spec));
+                    ShowInfo($"OpenAPI spec with {Application.Spec.OpenApiWriter.OperationCount(spec)} operation(s) saved to {path}");
                 });
                 break;
             case CollectionAction.ExportFolder:
@@ -643,13 +712,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         yield return new PaletteItem("API laws…", "Mine rules the API always follows, then check them", OpenLaws);
         yield return new PaletteItem("Spec coverage…", "Score the collection against its OpenAPI document", OpenSpecCoverage);
         yield return new PaletteItem("Compare spec versions…", "Breaking-change detector for OpenAPI documents", OpenSpecDiff);
+        yield return new PaletteItem("Compare environments…", "Run the collection on two environments and diff every response", OpenCompare);
         yield return new PaletteItem("Collection settings…", "Variables, auth and defaults of the current collection", OpenCollectionSettings);
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
         yield return new PaletteItem("Capture proxy…", "Record browser / app traffic into a collection", OpenCapture);
         yield return new PaletteItem("Client fuzzing…", "Vary responses to an app through a proxy to find how it breaks", OpenClientFuzz);
+        yield return new PaletteItem("TLS inspector…", "Certificate chain, expiry, protocol, cipher and ALPN of a host", OpenTlsInspector);
+        yield return new PaletteItem("Webhook receiver…", "Receive, inspect, replay and check callbacks locally", OpenWebhooks);
         foreach (var collection in Collections.Items)
             yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
                 () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));
+        foreach (var collection in Collections.Items)
+            yield return new PaletteItem($"Generate OpenAPI spec: {collection.Name}", "OpenAPI 3.0 from requests, examples and history",
+                () => _ = RunCollectionActionAsync(collection, CollectionAction.GenerateOpenApi));
         yield return new PaletteItem("Toggle theme", "Light / dark", ToggleTheme);
         yield return new PaletteItem("Toggle sidebar", "Show or hide the sidebar (Ctrl+B)", ToggleSidebar);
         yield return new PaletteItem("Toggle layout", "Request and response side by side or stacked", ToggleLayout);

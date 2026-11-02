@@ -1,109 +1,95 @@
-using System.Globalization;
 using System.Text.Json.Nodes;
 using Dispatch.Application.Abstractions;
 using Dispatch.Application.Interop;
-using Dispatch.Application.Running;
 using Dispatch.Application.Spec;
 using Dispatch.Domain;
 using Dispatch.Infrastructure.Http;
 using Dispatch.Infrastructure.Interop;
+using Dispatch.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Dispatch.Cli;
 
-/// <summary><c>dispatch coverage</c>: how much of an OpenAPI spec a collection, a run or captured traffic exercises.</summary>
-public static class CoverageCommand
+/// <summary><c>dispatch openapi</c>: write an OpenAPI 3.0 document from a collection (plus its run history) or a HAR file.</summary>
+public static class OpenApiCommand
 {
-    private const string Usage = "Usage: dispatch coverage <spec.yaml|url> <collection|run.json|traffic.har> [--run] [--env e] [--requests <collection>] " +
-                                 "[--min 80] [-r cli,html,json] [-o dir] [--insecure]";
+    private const string Usage = "Usage: dispatch openapi <collection | traffic.har> [-o api.yaml|-] [--format yaml|json] [--title t] " +
+                                 "[--version v] [--server url] [--no-history] [--no-examples] [--db path]";
 
-    private static readonly HashSet<string> Flags = ["run", "insecure", "no-color"];
+    private static readonly HashSet<string> Flags = ["no-history", "no-examples"];
 
     public static async Task<int> ExecuteAsync(string[] rawArgs, CancellationToken cancellationToken)
     {
-        var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["e"] = "env", ["o"] = "out", ["r"] = "reporter" });
-        if (args.Positionals.Count != 2)
+        var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["o"] = "out", ["f"] = "format" });
+        if (args.Positionals.Count != 1)
             throw new UsageException(Usage);
-        SingleRequest.ValidateReporters(args);
-        double? minimum = null;
-        if (args.Option("min") is { } minText)
+        var source = args.Positionals[0];
+        var outPath = args.Option("out");
+        var format = (args.Option("format") ?? (outPath is not null && outPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? "json" : "yaml"))
+            .ToLowerInvariant();
+        if (format is not ("yaml" or "yml" or "json"))
+            throw new UsageException($"--format expects yaml or json, got '{format}'.");
+        var options = new OpenApiOptions
         {
-            if (!double.TryParse(minText.TrimEnd('%'), NumberStyles.Float, CultureInfo.InvariantCulture, out var min) || min is < 0 or > 100)
-                throw new UsageException($"--min expects a percentage between 0 and 100, got '{minText}'.");
-            minimum = min;
-        }
+            Title = args.Option("title"),
+            Version = args.Option("version") ?? "1.0.0",
+            Server = args.Option("server"),
+            IncludeExamples = !args.Flag("no-examples")
+        };
 
+        // With -o - the document is the only thing on stdout; progress goes to stderr.
+        var progress = outPath == "-" ? Console.Error : Console.Out;
         await using var services = Program.BuildServices(args.Option("db"));
-        var workspace = new Workspace(services);
-        var spec = await SpecLoader.LoadAsync(args.Positionals[0], services.GetRequiredService<IHttpClientSource>(), cancellationToken);
-        var source = args.Positionals[1];
-
-        IReadOnlyList<CoverageSample> samples;
-        string sourceName;
-        var json = File.Exists(source) ? TryJson(source) : null;
-        if (json is not null && Har.IsHar(json))
+        JsonObject spec;
+        string slug;
+        if (File.Exists(source) && TryHar(source) is { } har)
         {
-            samples = CoverageSamples.FromHar(json);
-            sourceName = Path.GetFileName(source);
-            Console.WriteLine($"Read {samples.Count} exchange(s) from {sourceName}.");
-        }
-        else if (json is not null && CoverageSamples.IsRunJson(json))
-        {
-            RequestCollection? origin = null;
-            if (args.Option("requests") is { } requestsSource)
-                (origin, _) = await workspace.LoadCollectionAsync(requestsSource, args.Option("collection"));
-            samples = CoverageSamples.FromRunJson(json, origin);
-            sourceName = Path.GetFileName(source);
-            Console.WriteLine($"Read {samples.Count} result(s) from {sourceName}" + (origin is null ? " (pass --requests <collection> to add methods, headers and bodies)." : "."));
+            spec = OpenApiWriter.FromHar(har, options);
+            slug = DispatchFormat.Slug(Path.GetFileNameWithoutExtension(source));
+            progress.WriteLine($"Described {OpenApiWriter.OperationCount(spec)} operation(s) from {Path.GetFileName(source)}.");
         }
         else
         {
-            var (collection, bundled) = await workspace.LoadCollectionAsync(source, args.Option("collection"));
-            var environment = await workspace.LoadEnvironmentAsync(args.Option("env"), bundled);
-            sourceName = collection.Name;
-            if (args.Flag("run"))
-            {
-                var requests = collection.Requests.Where(r => r.Kind == RequestKind.Http).OrderBy(r => r.SortOrder).ToList();
-                if (args.Flag("insecure"))
-                    requests = requests.Select(r => { var c = r.Clone(); c.Settings.VerifySsl = false; return c; }).ToList();
-                Console.WriteLine($"Running {collection.Name} ({requests.Count} request(s))…");
-                var report = await services.GetRequiredService<CollectionRunner>().RunAsync(new RunOptions
-                {
-                    Name = collection.Name, Requests = requests, CollectionRequests = collection.Requests, Environment = environment,
-                    CollectionVariables = collection.Variables, CollectionSpec = collection.SpecLocation, RecordHistory = false,
-                    Snapshots = Dispatch.Application.Testing.SnapshotMode.Verify
-                }, cancellationToken: cancellationToken);
-                samples = CoverageSamples.FromRun(report);
-                sourceName += " (run)";
-            }
-            else
-            {
-                samples = CoverageSamples.FromCollection(collection, environment);
-            }
+            var (collection, _) = await new Workspace(services).LoadCollectionAsync(source, args.Option("collection"));
+            var history = args.Flag("no-history") ? [] : await HistoryAsync(services, cancellationToken);
+            spec = OpenApiWriter.FromCollection(collection, history, options);
+            slug = DispatchFormat.Slug(collection.Name);
+            progress.WriteLine($"Described {OpenApiWriter.OperationCount(spec)} operation(s) of {collection.Name}" +
+                              (history.Count > 0 ? $" (with {history.Count} history entries available)." : "."));
         }
 
-        var coverage = SpecCoverage.Analyze(spec, samples, sourceName);
-        if (args.Options("reporter").DefaultIfEmpty("cli").Contains("cli", StringComparer.OrdinalIgnoreCase))
+        var content = format == "json" ? OpenApiWriter.ToJson(spec) : OpenApiWriter.ToYaml(spec);
+        var path = outPath ?? $"{slug}.openapi.{(format == "json" ? "json" : "yaml")}";
+        if (path == "-")
         {
-            Console.WriteLine();
-            Console.WriteLine(CoverageReportWriter.Text(coverage, SingleRequest.Color(args), minimum));
+            Console.WriteLine(content);
+            return Program.ExitOk;
         }
-        await SingleRequest.WriteReportsAsync(args, $"{DispatchFormat.Slug(spec.Title)}-coverage-{coverage.CreatedAt:yyyyMMdd-HHmmss}",
-            reporter => reporter switch
-            {
-                "html" => (".html", CoverageReportWriter.Html(coverage, minimum)),
-                "json" => (".json", CoverageReportWriter.Json(coverage, minimum)),
-                _ => null
-            });
-        return minimum is { } m && !coverage.Passes(m) ? Program.ExitTestsFailed : Program.ExitOk;
+        await File.WriteAllTextAsync(path, content, cancellationToken);
+        Console.WriteLine($"Wrote {Path.GetFullPath(path)}");
+        return Program.ExitOk;
     }
 
-    internal static JsonNode? TryJson(string path)
+    /// <summary>Recent history from the app database (empty for a fresh or unreadable database).</summary>
+    private static async Task<IReadOnlyList<HistoryEntry>> HistoryAsync(IServiceProvider services, CancellationToken cancellationToken)
     {
         try
         {
-            var text = File.ReadAllText(path).TrimStart();
-            return text.StartsWith('{') ? JsonNode.Parse(text) : null;
+            await services.GetRequiredService<DatabaseInitializer>().InitializeAsync();
+            return await services.GetRequiredService<IHistoryRepository>().GetRecentAsync(5000, cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
+        {
+            return [];
+        }
+    }
+
+    internal static JsonNode? TryHar(string path)
+    {
+        try
+        {
+            var root = JsonNode.Parse(File.ReadAllText(path));
+            return root is not null && Har.IsHar(root) ? root : null;
         }
         catch (System.Text.Json.JsonException)
         {
@@ -112,74 +98,75 @@ public static class CoverageCommand
     }
 }
 
-/// <summary><c>dispatch breaking</c>: classify the differences between two spec versions and what they break in a collection.</summary>
-public static class BreakingCommand
+/// <summary><c>dispatch scaffold</c>: create a test collection (happy paths, schema checks, negatives) from an OpenAPI spec.</summary>
+public static class ScaffoldCommand
 {
-    private const string Usage = "Usage: dispatch breaking <old.yaml|url> <new.yaml|url> [--collection c] [--fail-on breaking|any|never] [-r cli,html,json] [-o dir]";
+    private const string Usage = "Usage: dispatch scaffold <spec.yaml | spec.json | url> [-o tests.dispatch.json|-] [--save] [--no-negatives] " +
+                                 "[--no-schema] [--db path]";
 
-    private static readonly HashSet<string> Flags = ["no-color"];
+    private static readonly HashSet<string> Flags = ["save", "no-negatives", "no-schema"];
 
     public static async Task<int> ExecuteAsync(string[] rawArgs, CancellationToken cancellationToken)
     {
-        var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["o"] = "out", ["r"] = "reporter", ["c"] = "collection" });
-        if (args.Positionals.Count != 2)
+        var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["o"] = "out" });
+        if (args.Positionals.Count != 1)
             throw new UsageException(Usage);
-        SingleRequest.ValidateReporters(args);
-        var failOn = (args.Option("fail-on") ?? "breaking").ToLowerInvariant();
-        if (failOn is not ("breaking" or "any" or "never"))
-            throw new UsageException($"--fail-on expects breaking, any or never, got '{failOn}'.");
-
+        var source = args.Positionals[0];
+        var progress = args.Option("out") == "-" ? Console.Error : Console.Out;
         await using var services = Program.BuildServices(args.Option("db"));
-        var clients = services.GetRequiredService<IHttpClientSource>();
-        var before = await SpecLoader.LoadAsync(args.Positionals[0], clients, cancellationToken);
-        var after = await SpecLoader.LoadAsync(args.Positionals[1], clients, cancellationToken);
-        var report = SpecDiff.Compare(before, after, Name(args.Positionals[0], before), Name(args.Positionals[1], after));
 
-        if (args.Option("collection") is { } source)
+        var (text, location) = await LoadSpecAsync(services, source, cancellationToken);
+        var root = ParseSpec(text);
+        var report = TestScaffolder.Scaffold(root, location, new ScaffoldOptions
         {
-            var workspace = new Workspace(services);
-            var (collection, _) = await workspace.LoadCollectionAsync(source, null);
-            SpecDiff.AddImpact(report, before, collection, await FlowsAsync(services, collection));
+            Negatives = !args.Flag("no-negatives"),
+            SchemaAssertions = !args.Flag("no-schema")
+        });
+        progress.WriteLine(report.Summary);
+        foreach (var note in report.Notes)
+            Console.Error.WriteLine($"note: {note}");
+
+        if (args.Flag("save"))
+        {
+            var count = report.Collection.Requests.Count;
+            await new Workspace(services).SaveImportAsync(ImportResult.Single("OpenAPI tests", report.Collection));
+            Console.WriteLine($"Saved collection '{report.Collection.Name}' ({count} requests) to the app.");
+            return Program.ExitOk;
         }
 
-        if (args.Options("reporter").DefaultIfEmpty("cli").Contains("cli", StringComparer.OrdinalIgnoreCase))
+        var content = DispatchFormat.ExportCollection(report.Collection);
+        var path = args.Option("out") ?? DispatchFormat.Slug(report.Collection.Name) + ".dispatch.json";
+        if (path == "-")
         {
-            Console.WriteLine(SpecDiffReportWriter.Text(report, SingleRequest.Color(args)));
+            Console.WriteLine(content);
+            return Program.ExitOk;
         }
-        await SingleRequest.WriteReportsAsync(args, $"{DispatchFormat.Slug(after.Title)}-breaking-{report.CreatedAt:yyyyMMdd-HHmmss}",
-            reporter => reporter switch
-            {
-                "html" => (".html", SpecDiffReportWriter.Html(report)),
-                "json" => (".json", SpecDiffReportWriter.Json(report)),
-                _ => null
-            });
-
-        var failed = failOn switch
-        {
-            "breaking" => report.HasBreaking,
-            "any" => report.Changes.Any(c => c.Severity != ChangeSeverity.Info),
-            _ => false
-        };
-        return failed ? Program.ExitTestsFailed : Program.ExitOk;
+        await File.WriteAllTextAsync(path, content, cancellationToken);
+        Console.WriteLine($"Wrote {report.Collection.Requests.Count} request(s) to {Path.GetFullPath(path)}");
+        return Program.ExitOk;
     }
 
-    private static string Name(string location, SpecDocument spec)
+    private static async Task<(string Text, string Location)> LoadSpecAsync(IServiceProvider services, string source, CancellationToken cancellationToken)
     {
-        var file = File.Exists(location) ? Path.GetFileName(location) : location;
-        return spec.Version.Length > 0 ? $"{file} ({spec.Version})" : file;
+        if (File.Exists(source))
+            return (await File.ReadAllTextAsync(source, cancellationToken), Path.GetFullPath(source));
+        if (source.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || source.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            var client = services.GetRequiredService<IHttpClientSource>().GetClient(new RequestSettings());
+            using var response = await client.GetAsync(source, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            return (await response.Content.ReadAsStringAsync(cancellationToken), source);
+        }
+        throw new UsageException($"'{source}' is not a file or URL. Pass an OpenAPI / Swagger document (YAML or JSON).");
     }
 
-    /// <summary>Flows saved in the app for this collection (none for file-only collections or a fresh database).</summary>
-    private static async Task<IReadOnlyList<TestFlow>> FlowsAsync(IServiceProvider services, RequestCollection collection)
+    /// <summary>JSON or YAML text of an OpenAPI / Swagger document.</summary>
+    internal static JsonNode ParseSpec(string text)
     {
-        try
-        {
-            await services.GetRequiredService<Dispatch.Infrastructure.Persistence.DatabaseInitializer>().InitializeAsync();
-            return (await services.GetRequiredService<IFlowRepository>().GetAllAsync()).Where(f => f.CollectionId == collection.Id).ToList();
-        }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
-        {
-            return [];
-        }
+        var trimmed = text.TrimStart('﻿', ' ', '\t', '\r', '\n');
+        var root = trimmed.StartsWith('{') ? JsonNode.Parse(trimmed) : Yaml.ToJson(trimmed);
+        if (root is null || !OpenApi.IsOpenApi(root))
+            throw new UsageException("The document is not an OpenAPI or Swagger spec (no 'openapi' or 'swagger' field).");
+        return root;
     }
 }

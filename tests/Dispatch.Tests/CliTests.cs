@@ -30,6 +30,25 @@ internal static class Cli
         }
     }
 
+    /// <summary>Like <see cref="RunAsync"/> but captures stdout alone (stderr is swallowed), for commands that write a document to stdout.</summary>
+    public static async Task<(int Exit, string Output)> RunStdoutAsync(params string[] args)
+    {
+        var output = new StringWriter();
+        var (oldOut, oldErr) = (Console.Out, Console.Error);
+        Console.SetOut(output);
+        Console.SetError(new StringWriter());
+        try
+        {
+            var exit = await Dispatch.Cli.Program.Main(args);
+            return (exit, output.ToString());
+        }
+        finally
+        {
+            Console.SetOut(oldOut);
+            Console.SetError(oldErr);
+        }
+    }
+
     public static string TempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), "dispatch-tests", Guid.NewGuid().ToString("N"));

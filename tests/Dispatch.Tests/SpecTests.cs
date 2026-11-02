@@ -1,7 +1,8 @@
 using System.Text.Json.Nodes;
-using Dispatch.Application.Impact;
+using Dispatch.Application.Help;
 using Dispatch.Application.Interop;
 using Dispatch.Application.Spec;
+using Dispatch.Application.Testing;
 using Dispatch.Domain;
 using Dispatch.Infrastructure.Interop;
 using Microsoft.AspNetCore.Builder;
@@ -9,513 +10,491 @@ using Microsoft.AspNetCore.Http;
 
 namespace Dispatch.Tests;
 
-internal static class SpecScenario
+public class OpenApiWriterTests
 {
-    public const string V1 = """
-        openapi: 3.0.0
-        info: { title: Pets, version: "1.0" }
-        servers: [{ url: https://api.example.com/v1 }]
-        paths:
-          /pets:
-            get:
-              operationId: listPets
-              parameters:
-                - { name: limit, in: query, schema: { type: integer } }
-                - { name: status, in: query, required: true, schema: { type: string, enum: [available, sold] } }
-              responses:
-                "200": { description: ok, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Pet" } } } } }
-                "400": { description: bad }
-            post:
-              operationId: createPet
-              requestBody:
-                required: true
-                content: { application/json: { schema: { $ref: "#/components/schemas/NewPet" } } }
-              responses:
-                "201": { description: created, content: { application/json: { schema: { $ref: "#/components/schemas/Pet" } } } }
-                "422": { description: invalid }
-          /pets/{id}:
-            get:
-              operationId: getPet
-              parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
-              responses:
-                "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Pet" } } } }
-                "404": { description: missing }
-            delete:
-              operationId: deletePet
-              parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
-              responses: { "204": { description: gone } }
+    private static RequestCollection PetStore()
+    {
+        var collection = new RequestCollection
+        {
+            Name = "Pet Store",
+            Variables = [new KeyValueItem("baseUrl", "https://api.pets.test/v1"), new KeyValueItem("petId", "7")]
+        };
+        collection.Requests.Add(new ApiRequest
+        {
+            Name = "Get a pet", Folder = "pets", Method = HttpVerb.Get, CollectionId = collection.Id, SortOrder = 0,
+            Url = "{{baseUrl}}/pets/{{petId}}?fields=name&verbose=true",
+            QueryParams = [new KeyValueItem("fields", "name"), new KeyValueItem("verbose", "true", enabled: false)],
+            Headers = [new KeyValueItem("X-Tenant", "acme")],
+            Auth = new AuthSettings { Mode = AuthMode.Bearer, Token = "{{token}}" },
+            Examples =
+            [
+                new ResponseExample { StatusCode = 200, Body = """{"id":7,"name":"Rex","tag":null,"born":"2020-05-01","owner":{"email":"ann@example.com"}}""" },
+                new ResponseExample { StatusCode = 200, Body = """{"id":8,"name":"Tom","tag":"cat","born":"2019-01-12","owner":{"email":"bob@example.com"}}""" },
+                new ResponseExample { StatusCode = 404, Body = """{"error":"not found"}""" }
+            ]
+        });
+        collection.Requests.Add(new ApiRequest
+        {
+            Name = "Create a pet", Folder = "pets", Method = HttpVerb.Post, CollectionId = collection.Id, SortOrder = 1,
+            Url = "{{baseUrl}}/pets",
+            Body = new RequestBody { Mode = BodyMode.Json, Content = """{"name":"Rex","kind":"dog"}""" },
+            Auth = new AuthSettings { Mode = AuthMode.ApiKey, ApiKeyName = "X-API-Key" },
+            Examples = [new ResponseExample { StatusCode = 201, Body = """{"id":"3fa85f64-5717-4562-b3fc-2c963f66afa6","name":"Rex","kind":"dog"}""" }]
+        });
+        collection.Requests.Add(new ApiRequest
+        {
+            Name = "Delete order", Method = HttpVerb.Delete, CollectionId = collection.Id, SortOrder = 2,
+            Url = "https://api.pets.test/v1/users/42/orders/9001"
+        });
+        return collection;
+    }
+
+    [Fact]
+    public void Describes_paths_parameters_schemas_and_security_from_a_collection()
+    {
+        var spec = OpenApiWriter.FromCollection(PetStore());
+
+        Assert.Equal("3.0.3", spec["openapi"]!.ToString());
+        Assert.Equal("Pet Store", spec["info"]!["title"]!.ToString());
+        Assert.Equal("https://api.pets.test/v1", spec["servers"]![0]!["url"]!.ToString());
+
+        var get = spec["paths"]!["/pets/{petId}"]!["get"]!;
+        Assert.Equal("Get a pet", get["summary"]!.ToString());
+        Assert.Equal("getPetsByPetId", get["operationId"]!.ToString());
+        Assert.Equal("pets", get["tags"]![0]!.ToString());
+        var parameters = get["parameters"]!.AsArray();
+        var petId = parameters.Single(p => p!["name"]!.ToString() == "petId");
+        Assert.Equal("path", petId!["in"]!.ToString());
+        Assert.Equal("integer", petId["schema"]!["type"]!.ToString());
+        Assert.True(parameters.Single(p => p!["name"]!.ToString() == "fields")!["required"]!.GetValue<bool>());
+        Assert.False(parameters.Single(p => p!["name"]!.ToString() == "verbose")!["required"]!.GetValue<bool>());
+        Assert.Equal("header", parameters.Single(p => p!["name"]!.ToString() == "X-Tenant")!["in"]!.ToString());
+
+        var ok = get["responses"]!["200"]!["content"]!["application/json"]!;
+        var schema = ok["schema"]!;
+        Assert.Equal("object", schema["type"]!.ToString());
+        Assert.Equal("integer", schema["properties"]!["id"]!["type"]!.ToString());
+        Assert.True(schema["properties"]!["tag"]!["nullable"]!.GetValue<bool>());
+        Assert.Equal("date", schema["properties"]!["born"]!["format"]!.ToString());
+        Assert.Equal("email", schema["properties"]!["owner"]!["properties"]!["email"]!["format"]!.ToString());
+        Assert.Contains("name", schema["required"]!.AsArray().Select(r => r!.ToString()));
+        Assert.Equal("Rex", ok["example"]!["name"]!.ToString());
+        Assert.Equal("Not Found", get["responses"]!["404"]!["description"]!.ToString());
+        Assert.Equal("bearerAuth", get["security"]![0]!.AsObject().First().Key);
+
+        var post = spec["paths"]!["/pets"]!["post"]!;
+        Assert.True(post["requestBody"]!["required"]!.GetValue<bool>());
+        Assert.Equal("string", post["requestBody"]!["content"]!["application/json"]!["schema"]!["properties"]!["kind"]!["type"]!.ToString());
+        Assert.Equal("uuid", post["responses"]!["201"]!["content"]!["application/json"]!["schema"]!["properties"]!["id"]!["format"]!.ToString());
+        Assert.Equal("apiKeyAuth", post["security"]![0]!.AsObject().First().Key);
+
+        var schemes = spec["components"]!["securitySchemes"]!;
+        Assert.Equal("bearer", schemes["bearerAuth"]!["scheme"]!.ToString());
+        Assert.Equal("X-API-Key", schemes["apiKeyAuth"]!["name"]!.ToString());
+
+        // Absolute URLs with id-like segments are templated after the preceding segment; no example → default 200.
+        var delete = spec["paths"]!["/users/{userId}/orders/{orderId}"]!["delete"]!;
+        Assert.Equal("OK", delete["responses"]!["200"]!["description"]!.ToString());
+        Assert.Equal("42", delete["parameters"]![0]!["example"]!.ToString());
+    }
+
+    [Fact]
+    public void Distinct_auth_configurations_get_distinct_security_schemes()
+    {
+        var collection = new RequestCollection { Name = "Keys", Variables = [new KeyValueItem("baseUrl", "https://k.test")] };
+        collection.Requests.Add(new ApiRequest { Name = "A", Url = "{{baseUrl}}/a", Auth = new AuthSettings { Mode = AuthMode.ApiKey, ApiKeyName = "X-API-Key" } });
+        collection.Requests.Add(new ApiRequest { Name = "B", Url = "{{baseUrl}}/b", Auth = new AuthSettings { Mode = AuthMode.ApiKey, ApiKeyName = "api_key", ApiKeyLocation = ApiKeyLocation.QueryParam } });
+        collection.Requests.Add(new ApiRequest { Name = "C", Url = "{{baseUrl}}/c", Auth = new AuthSettings { Mode = AuthMode.ApiKey, ApiKeyName = "X-API-Key" } });
+
+        var spec = OpenApiWriter.FromCollection(collection);
+        var schemes = spec["components"]!["securitySchemes"]!.AsObject();
+        Assert.Equal(["apiKeyAuth", "apiKeyAuth2"], schemes.Select(s => s.Key));
+        Assert.Equal("query", schemes["apiKeyAuth2"]!["in"]!.ToString());
+        Assert.Equal("apiKeyAuth2", spec["paths"]!["/b"]!["get"]!["security"]![0]!.AsObject().First().Key);
+        Assert.Equal("apiKeyAuth", spec["paths"]!["/c"]!["get"]!["security"]![0]!.AsObject().First().Key);
+    }
+
+    [Fact]
+    public void Uses_history_of_this_collection_only()
+    {
+        var collection = PetStore();
+        var get = collection.Requests.Single(r => r.Name == "Get a pet");
+        static HistoryEntry Entry(ApiRequest request, string url, string body) => new()
+        {
+            Method = HttpVerb.Get, Url = url, Request = request,
+            Response = new ResponseSnapshot { StatusCode = 200, EffectiveUrl = url, Body = body }
+        };
+        var otherApi = new ApiRequest { Name = "Other", Url = "https://other.test/pets/1", CollectionId = Guid.NewGuid() };
+        var history = new List<HistoryEntry>
+        {
+            Entry(get, "https://api.pets.test/v1/pets/7", """{"id":7,"name":"Rex","weight":12}"""),
+            Entry(otherApi, "https://other.test/pets/1", """{"id":1,"name":"x","foreign":true}""")
+        };
+
+        var schema = OpenApiWriter.FromCollection(collection, history)["paths"]!["/pets/{petId}"]!["get"]!["responses"]!["200"]!["content"]!["application/json"]!["schema"]!;
+        Assert.NotNull(schema["properties"]!["weight"]);
+        Assert.Null(schema["properties"]!["foreign"]);
+    }
+
+    [Theory]
+    [InlineData("/users/42/orders/7", "/users/{userId}/orders/{orderId}")]
+    [InlineData("/v2/items/3fa85f64-5717-4562-b3fc-2c963f66afa6", "/v2/items/{itemId}")]
+    [InlineData("/pets/{{petId}}/photos", "/pets/{petId}/photos")]
+    [InlineData("/categories/12/stats", "/categories/{categoryId}/stats")]
+    [InlineData("/42", "/{id}")]
+    [InlineData("/health", "/health")]
+    public void Templates_paths(string path, string expected) => Assert.Equal(expected, OpenApiWriter.TemplateOf(path));
+
+    [Fact]
+    public void Generated_yaml_is_read_back_identically_and_quotes_only_what_yaml_would_misread()
+    {
+        var spec = OpenApiWriter.FromCollection(PetStore());
+        spec["info"]!["description"] = "yes: it's \"quoted\" #not a comment\nsecond line";
+        ((JsonObject)spec["info"]!)["x-dates"] = new JsonArray("2024-01-01", "007", "1e3", "on", "", " padded ", "plain text");
+        var yaml = OpenApiWriter.ToYaml(spec);
+
+        Assert.StartsWith("openapi: 3.0.3\n", yaml);
+        Assert.Contains("\"200\":\n", yaml);
+        Assert.Contains("- \"2024-01-01\"", yaml);
+        Assert.Contains("- \"007\"", yaml);
+        Assert.Contains("- \"on\"", yaml);
+        Assert.Contains("- plain text", yaml);
+        Assert.Contains("- name: petId\n", yaml);
+
+        var reread = Yaml.ToJson(yaml);
+        Assert.Equal(spec.ToJsonString(), reread!.ToJsonString());
+    }
+
+    [Fact]
+    public void Round_trips_through_the_openapi_importer()
+    {
+        var spec = OpenApiWriter.FromCollection(PetStore());
+        var imported = Importer.ImportText(OpenApiWriter.ToYaml(spec), "generated", "/specs/generated.yaml");
+        var collection = imported.Collections.Single();
+
+        Assert.StartsWith("OpenAPI 3.0", imported.Format);
+        Assert.Equal("Pet Store", collection.Name);
+        Assert.Equal("https://api.pets.test/v1", collection.Variables.Single(v => v.Key == "baseUrl").Value);
+        Assert.Equal(3, collection.Requests.Count);
+
+        var get = collection.Requests.Single(r => r.Name == "Get a pet");
+        Assert.Equal("{{baseUrl}}/pets/{{petId}}", get.Url.Split('?')[0]);
+        Assert.Equal("7", collection.Variables.Single(v => v.Key == "petId").Value);
+        Assert.Equal(AuthMode.Bearer, get.Auth.Mode);
+        Assert.Contains(get.Assertions, a => a is { Source: ValueSource.Status, Expected: "200" });
+        Assert.Contains(get.Examples, e => e.StatusCode == 200 && e.Body.Contains("Rex"));
+
+        var create = collection.Requests.Single(r => r.Name == "Create a pet");
+        Assert.Equal(BodyMode.Json, create.Body.Mode);
+        Assert.Equal("dog", JsonNode.Parse(create.Body.Content)!["kind"]!.ToString());
+        Assert.Equal(AuthMode.ApiKey, create.Auth.Mode);
+    }
+
+    [Fact]
+    public void Describes_captured_traffic_from_a_har_file()
+    {
+        static JsonObject Entry(string method, string url, int status, string body, string? auth = null, string? postBody = null) => new()
+        {
+            ["startedDateTime"] = "2026-01-01T10:00:00Z",
+            ["request"] = new JsonObject
+            {
+                ["method"] = method, ["url"] = url,
+                ["headers"] = new JsonArray(auth is null ? [] : [new JsonObject { ["name"] = "Authorization", ["value"] = auth }]),
+                ["postData"] = postBody is null ? null : new JsonObject { ["mimeType"] = "application/json", ["text"] = postBody }
+            },
+            ["response"] = new JsonObject
+            {
+                ["status"] = status,
+                ["content"] = new JsonObject { ["mimeType"] = "application/json", ["text"] = body }
+            }
+        };
+        var har = new JsonObject
+        {
+            ["log"] = new JsonObject
+            {
+                ["entries"] = new JsonArray(
+                    Entry("GET", "https://api.shop.test/users/alice?expand=orders", 200, """{"name":"alice","role":"admin"}""", "Bearer abc"),
+                    Entry("GET", "https://api.shop.test/users/bob", 200, """{"name":"bob","role":"user"}""", "Bearer abc"),
+                    Entry("GET", "https://api.shop.test/users/carol", 200, """{"name":"carol","role":"user"}""", "Bearer abc"),
+                    Entry("GET", "https://api.shop.test/users/dave", 404, """{"error":"gone"}""", "Bearer abc"),
+                    Entry("POST", "https://api.shop.test/orders", 201, """{"id":1,"status":"paid"}""", "Bearer abc", """{"sku":"A1","qty":2}"""),
+                    Entry("POST", "https://api.shop.test/orders", 201, """{"id":2,"status":"paid"}""", "Bearer abc", """{"sku":"B2","qty":1}"""),
+                    Entry("GET", "https://cdn.shop.test/app.js", 200, "console.log(1)"))
+            }
+        };
+
+        var spec = OpenApiWriter.FromHar(har);
+
+        Assert.Equal("https://api.shop.test", spec["servers"]![0]!["url"]!.ToString());
+        Assert.Equal("api.shop.test API", spec["info"]!["title"]!.ToString());
+        var paths = spec["paths"]!.AsObject();
+        Assert.Equal(["/users/{userId}", "/orders"], paths.Select(p => p.Key));
+
+        var users = paths["/users/{userId}"]!["get"]!;
+        Assert.Equal("users", users["tags"]![0]!.ToString());
+        Assert.False(users["parameters"]!.AsArray().Single(p => p!["name"]!.ToString() == "expand")!["required"]!.GetValue<bool>());
+        Assert.Equal(["200", "404"], users["responses"]!.AsObject().Select(r => r.Key));
+        Assert.Equal("bearerAuth", users["security"]![0]!.AsObject().First().Key);
+
+        var orders = paths["/orders"]!["post"]!;
+        Assert.Equal("integer", orders["requestBody"]!["content"]!["application/json"]!["schema"]!["properties"]!["qty"]!["type"]!.ToString());
+        Assert.Equal(2, OpenApiWriter.OperationCount(spec));
+    }
+}
+
+public class SchemaInferrerTests
+{
+    private static JsonObject Infer(params string[] samples) => SchemaInferrer.Infer(samples.Select(s => JsonNode.Parse(s)).ToList());
+
+    [Fact]
+    public void Merges_objects_marking_fields_present_everywhere_as_required()
+    {
+        var schema = Infer("""{"id":1,"name":"a","extra":true}""", """{"id":2,"name":null}""");
+        Assert.Equal(["id", "name"], schema["required"]!.AsArray().Select(r => r!.ToString()));
+        Assert.True(schema["properties"]!["name"]!["nullable"]!.GetValue<bool>());
+        Assert.Equal("string", schema["properties"]!["name"]!["type"]!.ToString());
+        Assert.Equal("boolean", schema["properties"]!["extra"]!["type"]!.ToString());
+    }
+
+    [Fact]
+    public void Infers_arrays_numbers_formats_enums_and_mixed_types()
+    {
+        var schema = Infer("""{"items":[{"price":1.5,"when":"2024-01-01T10:00:00Z"},{"price":2,"when":"2024-01-02T10:00:00Z"}],"mixed":1}""",
+            """{"items":[],"mixed":"one"}""");
+        Assert.Equal("number", schema["properties"]!["items"]!["items"]!["properties"]!["price"]!["type"]!.ToString());
+        Assert.Equal("date-time", schema["properties"]!["items"]!["items"]!["properties"]!["when"]!["format"]!.ToString());
+        Assert.Equal(2, schema["properties"]!["mixed"]!["oneOf"]!.AsArray().Count);
+        // Integers fold into number even next to another type, so no sample matches two oneOf branches.
+        var tri = Infer("1", "1.5", "\"unknown\"")["oneOf"]!.AsArray();
+        Assert.Equal(["number", "string"], tri.Select(b => b!["type"]!.ToString()).Order());
+
+        var statuses = Infer("\"paid\"", "\"shipped\"", "\"paid\"", "\"shipped\"", "\"paid\"");
+        Assert.Equal(["paid", "shipped"], statuses["enum"]!.AsArray().Select(e => e!.ToString()));
+
+        // Values that never repeat are not an enumeration; nulls alone are just nullable.
+        Assert.Null(Infer("\"a\"", "\"b\"", "\"c\"", "\"d\"")["enum"]);
+        Assert.True(Infer("null")["nullable"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public void Parameter_values_are_typed_from_their_text()
+    {
+        JsonObject Scalar(params string[] values) => SchemaInferrer.Infer(values.Select(v => (JsonNode?)JsonValue.Create(v)).ToList(), true);
+        Assert.Equal("integer", Scalar("1", "42")["type"]!.ToString());
+        Assert.Equal("boolean", Scalar("true", "false")["type"]!.ToString());
+        Assert.Equal("string", Scalar("1", "abc")["type"]!.ToString());
+        Assert.Equal("uuid", Scalar("3fa85f64-5717-4562-b3fc-2c963f66afa6")["format"]!.ToString());
+    }
+}
+
+public class TestScaffolderTests
+{
+    internal const string Spec = """
+        openapi: 3.0.3
+        info: { title: Orders, version: "1.0" }
+        servers:
+          - url: https://orders.test
         components:
           schemas:
-            NewPet:
+            Order:
               type: object
-              required: [name, kind]
-              properties: { name: { type: string }, kind: { type: string }, age: { type: integer } }
-            Pet:
-              allOf:
-                - $ref: "#/components/schemas/NewPet"
-                - type: object
-                  required: [id]
-                  properties: { id: { type: integer }, owner: { type: object, properties: { email: { type: string } } } }
-        """;
-
-    /// <summary>v2: delete removed, new required query param, limit retyped, enum narrowed, id renamed to petId, 201 → 200, pets now need auth.</summary>
-    public const string V2 = """
-        openapi: 3.0.0
-        info: { title: Pets, version: "2.0" }
-        servers: [{ url: https://api.example.com/v1 }]
-        components:
-          securitySchemes: { bearer: { type: http, scheme: bearer } }
-          schemas:
-            NewPet:
-              type: object
-              required: [name, kind]
-              properties: { name: { type: string }, kind: { type: string }, age: { type: integer }, color: { type: string } }
-            Pet:
-              allOf:
-                - $ref: "#/components/schemas/NewPet"
-                - type: object
-                  required: [petId]
-                  properties: { petId: { type: integer }, owner: { type: object, properties: { email: { type: string } } } }
+              required: [sku, qty]
+              properties:
+                id: { type: integer, readOnly: true }
+                sku: { type: string, example: A1 }
+                qty: { type: integer, example: 2 }
+                note: { type: string }
         paths:
-          /pets:
+          /orders:
             get:
-              operationId: listPets
-              security: [{ bearer: [] }]
+              summary: List orders
               parameters:
-                - { name: limit, in: query, schema: { type: string } }
-                - { name: sort, in: query, required: true, schema: { type: string } }
-                - { name: status, in: query, required: true, schema: { type: string, enum: [available] } }
+                - { name: limit, in: query, required: true, schema: { type: integer, example: 10 } }
+                - { name: X-Tenant, in: header, required: true, schema: { type: string, example: acme } }
+                - { name: sort, in: query, schema: { type: string } }
               responses:
-                "200": { description: ok, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Pet" } } } } }
-                "400": { description: bad }
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        type: array
+                        items: { $ref: '#/components/schemas/Order' }
             post:
-              operationId: createPet
+              summary: Create order
               requestBody:
                 required: true
-                content: { application/json: { schema: { $ref: "#/components/schemas/NewPet" } } }
+                content:
+                  application/json:
+                    schema: { $ref: '#/components/schemas/Order' }
               responses:
-                "200": { description: created, content: { application/json: { schema: { $ref: "#/components/schemas/Pet" } } } }
-                "422": { description: invalid }
-          /pets/{id}:
+                '201':
+                  description: Created
+                  content:
+                    application/json:
+                      schema: { $ref: '#/components/schemas/Order' }
+          /health:
             get:
-              operationId: getPet
-              parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+              summary: Health
               responses:
-                "200": { description: ok, content: { application/json: { schema: { $ref: "#/components/schemas/Pet" } } } }
-                "404": { description: missing }
+                '204': { description: No content }
         """;
 
-    public const string Har = """
-        {"log":{"entries":[
-         {"startedDateTime":"2026-01-01T00:00:00Z","request":{"method":"GET","url":"https://api.example.com/v1/pets?status=available&limit=5","headers":[],"queryString":[{"name":"status","value":"available"},{"name":"limit","value":"5"}]},"response":{"status":200,"content":{"text":"[]"}}},
-         {"startedDateTime":"2026-01-01T00:00:01Z","request":{"method":"GET","url":"https://api.example.com/v1/pets?status=sold","headers":[],"queryString":[{"name":"status","value":"sold"}]},"response":{"status":200,"content":{"text":"[]"}}},
-         {"startedDateTime":"2026-01-01T00:00:02Z","request":{"method":"GET","url":"https://api.example.com/v1/pets","headers":[]},"response":{"status":400,"content":{"text":"{}"}}},
-         {"startedDateTime":"2026-01-01T00:00:03Z","request":{"method":"POST","url":"https://api.example.com/v1/pets","headers":[],"postData":{"text":"{\"name\":\"Rex\"}"}},"response":{"status":422,"content":{"text":"{}"}}},
-         {"startedDateTime":"2026-01-01T00:00:04Z","request":{"method":"GET","url":"https://api.example.com/v1/pets/7","headers":[]},"response":{"status":200,"content":{"text":"{}"}}},
-         {"startedDateTime":"2026-01-01T00:00:05Z","request":{"method":"PUT","url":"https://api.example.com/v1/pets/7","headers":[]},"response":{"status":405,"content":{"text":"{}"}}},
-         {"startedDateTime":"2026-01-01T00:00:06Z","request":{"method":"GET","url":"https://api.example.com/v1/owners","headers":[]},"response":{"status":200,"content":{"text":"{}"}}}
-        ]}}
-        """;
-
-    public static SpecDocument Spec(string yaml) => SpecLoader.Parse(yaml);
-
-    /// <summary>A collection that imports v1 (one request per operation) with the importer's status assertions.</summary>
-    public static RequestCollection Collection() => Importer.ImportText(V1, "pets", "pets.yaml").Collections[0];
-}
-
-public class SpecDocumentTests
-{
     [Fact]
-    public void Parses_operations_parameters_bodies_and_responses()
+    public void Scaffolds_happy_paths_schema_assertions_and_negatives()
     {
-        var spec = SpecScenario.Spec(SpecScenario.V1);
+        var report = TestScaffolder.Scaffold(Yaml.ToJson(Spec)!, "/specs/orders.yaml");
+        var collection = report.Collection;
 
-        Assert.Equal("Pets", spec.Title);
-        Assert.Equal(["/v1", ""], spec.BasePaths);
-        Assert.Equal(4, spec.Operations.Count);
-        var list = spec.Find("GET", "/pets")!;
-        Assert.Equal(["query:limit", "query:status"], list.Parameters.Select(p => p.Key));
-        Assert.Equal(["\"available\"", "\"sold\""], list.Parameters[1].Enum);
-        Assert.Equal(["200", "400"], list.Responses.Select(r => r.Code));
-        var create = spec.Find("POST", "/pets")!;
-        Assert.True(create.RequestBodyRequired);
-        Assert.Equal(["name", "kind"], SchemaShape.RequiredOf(spec.Root, create.RequestSchema));
-        Assert.Equal("201", create.SuccessResponse!.Code);
+        Assert.Equal("Orders tests", collection.Name);
+        Assert.Equal(3, report.Operations);
+        Assert.Equal(2, report.SchemaAssertions);
+        Assert.Equal(4, report.NegativeRequests);
+        Assert.Equal(7, collection.Requests.Count);
+        Assert.All(collection.Requests, r => Assert.Equal(collection.Id, r.CollectionId));
+
+        var list = collection.Requests.Single(r => r.Name == "List orders");
+        Assert.Contains(list.Assertions, a => a is { Source: ValueSource.Status, Expected: "200" });
+        Assert.Contains(list.Assertions, a => a.Source == ValueSource.Contract);
+        var schema = list.Assertions.Single(a => a.Source == ValueSource.JsonSchema);
+        Assert.Empty(JsonSchemaValidator.Validate("""[{"id":1,"sku":"A1","qty":2}]""", schema.Path));
+        Assert.NotEmpty(JsonSchemaValidator.Validate("""[{"id":1,"sku":"A1"}]""", schema.Path));
+
+        var health = collection.Requests.Single(r => r.Name == "Health");
+        Assert.DoesNotContain(health.Assertions, a => a.Source == ValueSource.JsonSchema);
+
+        // Negatives follow their request, in a sub-folder, with only the 4xx assertions.
+        var names = collection.Requests.OrderBy(r => r.SortOrder).Select(r => r.Name).ToList();
+        Assert.Equal(["List orders", "List orders — missing query parameter limit", "List orders — missing header X-Tenant",
+            "Create order", "Create order — missing body field sku", "Create order — missing body field qty", "Health"], names);
+        var missingLimit = collection.Requests.Single(r => r.Name.EndsWith("missing query parameter limit"));
+        Assert.Equal("Negative tests", missingLimit.Folder);
+        Assert.DoesNotContain("limit", missingLimit.Url);
+        Assert.DoesNotContain(missingLimit.QueryParams, q => q.Key == "limit");
+        Assert.Contains(missingLimit.Headers, h => h.Key == "X-Tenant");
+        Assert.Equal(2, missingLimit.Assertions.Count);
+        Assert.Contains(missingLimit.Assertions, a => a is { Source: ValueSource.Status, Operator: AssertionOperator.GreaterOrEqual, Expected: "400" });
+        Assert.Contains(missingLimit.Assertions, a => a is { Source: ValueSource.Status, Operator: AssertionOperator.LessThan, Expected: "500" });
+        Assert.Empty(missingLimit.Examples);
+
+        var missingSku = collection.Requests.Single(r => r.Name.EndsWith("missing body field sku"));
+        var body = JsonNode.Parse(missingSku.Body.Content)!.AsObject();
+        Assert.False(body.ContainsKey("sku"));
+        Assert.Equal(2, body["qty"]!.GetValue<int>());
+
+        // Running it again changes nothing.
+        var again = TestScaffolder.Apply(Yaml.ToJson(Spec)!, collection);
+        Assert.Equal(0, again.NegativeRequests + again.SchemaAssertions);
+        Assert.Equal(7, collection.Requests.Count);
     }
 
     [Fact]
-    public void Matches_real_paths_to_templates_with_and_without_the_server_base_path()
+    public void Help_has_a_topic_for_spec_generation()
     {
-        var spec = SpecScenario.Spec(SpecScenario.V1);
-
-        Assert.Equal("GET /pets/{id}", spec.Match("GET", "https://api.example.com/v1/pets/42").Operation!.Key);
-        Assert.Equal("GET /pets/{id}", spec.Match("get", "/pets/42/").Operation!.Key);
-        Assert.Equal("GET /pets/{id}", spec.Match("GET", "{{baseUrl}}/pets/{{id}}").Operation!.Key);
-        Assert.Equal("42", spec.PathValues(spec.Find("GET", "/pets/{id}")!, "https://api.example.com/v1/pets/42")["id"]);
-        // Documented path, undocumented method.
-        var (operation, template) = spec.Match("PUT", "/v1/pets/42");
-        Assert.Null(operation);
-        Assert.Equal("/pets/{id}", template);
-        Assert.Equal((null, null), spec.Match("GET", "/owners"));
-        // Unknown method: any operation on the path, GET first.
-        Assert.Equal("GET /pets", spec.Match(null, "/pets").Operation!.Key);
-    }
-
-    [Fact]
-    public void Flattens_schemas_through_refs_allOf_and_arrays()
-    {
-        var spec = SpecScenario.Spec(SpecScenario.V1);
-        var fields = SchemaShape.Flatten(spec.Root, spec.Find("GET", "/pets")!.SuccessResponse!.Schema);
-
-        Assert.Equal("array", fields["$"].TypeText);
-        Assert.True(fields["$[*].id"].Required);
-        Assert.Equal("integer", fields["$[*].id"].TypeText);
-        Assert.False(fields["$[*].age"].Required);
-        Assert.Equal("string", fields["$[*].owner.email"].TypeText);
-    }
-
-    [Fact]
-    public void Flattening_stops_on_recursive_schemas()
-    {
-        var root = JsonNode.Parse("""{"openapi":"3.0.0","paths":{},"components":{"schemas":{"Node":{"type":"object","properties":{"name":{"type":"string"},"children":{"type":"array","items":{"$ref":"#/components/schemas/Node"}}}}}}}""")!;
-        var fields = SchemaShape.Flatten(root, root["components"]!["schemas"]!["Node"]);
-        Assert.Contains("$.children[*].name", fields.Keys);
-        Assert.True(fields.Count < 10);
-    }
-
-    [Fact]
-    public void Reads_swagger_2_documents()
-    {
-        var spec = SpecLoader.Parse("""
-            {"swagger":"2.0","info":{"title":"Old","version":"1"},"host":"h","basePath":"/api","schemes":["https"],
-             "paths":{"/things":{"post":{"parameters":[{"name":"body","in":"body","required":true,"schema":{"type":"object","required":["a"],"properties":{"a":{"type":"string"}}}},
-             {"name":"X-Trace","in":"header","type":"string"}],"responses":{"200":{"description":"ok","schema":{"type":"object","properties":{"id":{"type":"integer"}}}}}}}}}
-            """);
-        Assert.True(spec.IsSwagger2);
-        Assert.Equal(["/api", ""], spec.BasePaths);
-        var op = Assert.Single(spec.Operations);
-        Assert.Equal(["header:X-Trace"], op.Parameters.Select(p => p.Key));
-        Assert.Equal(["a"], SchemaShape.RequiredOf(spec.Root, op.RequestSchema));
-        Assert.Equal("integer", SchemaShape.Flatten(spec.Root, op.SuccessResponse!.Schema)["$.id"].TypeText);
-    }
-}
-
-public class SpecCoverageTests
-{
-    [Fact]
-    public void Scores_har_traffic_on_every_metric()
-    {
-        var spec = SpecScenario.Spec(SpecScenario.V1);
-        var samples = CoverageSamples.FromHar(JsonNode.Parse(SpecScenario.Har)!);
-        var report = SpecCoverage.Analyze(spec, samples, "traffic.har");
-
-        Assert.Equal(7, report.SampleCount);
-        var operations = report[CoverageMetricId.Operations];
-        Assert.Equal((3, 4), (operations.Covered, operations.Total));
-        Assert.Contains(operations.Gaps, g => g.Operation == "DELETE /pets/{id}");
-
-        var statuses = report[CoverageMetricId.StatusCodes];
-        Assert.Equal((4, 7), (statuses.Covered, statuses.Total));
-        Assert.Contains(statuses.Gaps, g => g is { Operation: "POST /pets", Detail: "201 never seen" });
-
-        var parameters = report[CoverageMetricId.Parameters];
-        Assert.Equal((2, 4), (parameters.Covered, parameters.Total)); // status varied (available/sold), limit present and absent
-        Assert.Contains(parameters.Gaps, g => g.Operation == "GET /pets/{id}" && g.Detail.Contains("always '7'"));
-
-        var required = report[CoverageMetricId.RequiredFields];
-        Assert.Equal((2, 3), (required.Covered, required.Total)); // status omitted once, kind omitted; name never omitted
-        Assert.Contains(required.Gaps, g => g.Detail.Contains("'name'"));
-
-        var documented = report[CoverageMetricId.Documented];
-        Assert.Equal((5, 7), (documented.Covered, documented.Total));
-        Assert.Contains(report.Undocumented, g => g.Operation == "PUT /v1/pets/{id}" && g.Hint!.Contains("not for PUT"));
-        Assert.Contains(report.Undocumented, g => g.Operation == "GET /v1/owners");
-
-        Assert.InRange(report.Overall, 63, 65);
-        Assert.False(report.Passes(80));
-        Assert.True(report.Passes(60));
-    }
-
-    [Fact]
-    public void Scores_a_collection_as_defined_using_asserted_statuses_and_examples()
-    {
-        var spec = SpecScenario.Spec(SpecScenario.V1);
-        var collection = SpecScenario.Collection();
-        var report = SpecCoverage.Analyze(spec, CoverageSamples.FromCollection(collection), collection.Name);
-
-        Assert.Equal(100, report[CoverageMetricId.Operations].Percent);
-        Assert.Equal(100, report[CoverageMetricId.Documented].Percent);
-        Assert.Equal(0, report[CoverageMetricId.Parameters].Percent); // one value per request
-        Assert.Contains(report[CoverageMetricId.StatusCodes].Gaps, g => g is { Operation: "GET /pets/{id}", Detail: "404 never seen" });
-        Assert.DoesNotContain(report[CoverageMetricId.StatusCodes].Gaps, g => g.Detail == "201 never seen");
-    }
-
-    [Fact]
-    public void Reads_run_json_reports_and_joins_the_collection_for_methods()
-    {
-        var runJson = JsonNode.Parse("""
-            {"name":"Pets","totals":{"requests":2},"results":[
-              {"name":"createPet","kind":"Http","url":"https://api.example.com/v1/pets","status":201},
-              {"name":"getPet","kind":"Http","url":"https://api.example.com/v1/pets/3","status":404}]}
-            """)!;
-        Assert.True(CoverageSamples.IsRunJson(runJson));
-        var collection = SpecScenario.Collection();
-        var samples = CoverageSamples.FromRunJson(runJson, collection);
-        Assert.Equal("POST", samples[0].Method);
-        Assert.NotNull(samples[0].Body);
-
-        var report = SpecCoverage.Analyze(SpecScenario.Spec(SpecScenario.V1), samples, "run.json");
-        Assert.Equal(2, report[CoverageMetricId.Operations].Covered);
-        Assert.Contains(report.Operations, o => o.Key == "GET /pets/{id}" && o.StatusesSeen.SequenceEqual([404]));
-        // Without the collection the method is unknown: the path still matches (GET first).
-        Assert.Null(CoverageSamples.FromRunJson(runJson)[0].Method);
-        Assert.Equal(2, SpecCoverage.Analyze(SpecScenario.Spec(SpecScenario.V1), CoverageSamples.FromRunJson(runJson), "run.json")[CoverageMetricId.Documented].Covered);
-    }
-
-    [Fact]
-    public void Writers_render_every_metric()
-    {
-        var report = SpecCoverage.Analyze(SpecScenario.Spec(SpecScenario.V1), CoverageSamples.FromHar(JsonNode.Parse(SpecScenario.Har)!), "traffic.har");
-        var text = CoverageReportWriter.Text(report, minimum: 80);
-        Assert.Contains("FAIL", text);
-        Assert.Contains("DELETE /pets/{id}", text);
-        var html = CoverageReportWriter.Html(report, 80);
-        Assert.Contains("Operations called", html);
-        Assert.Contains("GET /v1/owners", html);
-        var json = JsonNode.Parse(CoverageReportWriter.Json(report, 80))!;
-        Assert.False(json["passed"]!.GetValue<bool>());
-        Assert.Equal(5, json["metrics"]!.AsArray().Count);
-    }
-}
-
-public class SpecDiffTests
-{
-    private static SpecDiffReport Diff() => SpecDiff.Compare(SpecScenario.Spec(SpecScenario.V1), SpecScenario.Spec(SpecScenario.V2));
-
-    [Fact]
-    public void Classifies_removals_requirements_types_enums_statuses_and_security()
-    {
-        var report = Diff();
-        var breaking = report.Changes.Where(c => c.Severity == ChangeSeverity.Breaking).Select(c => c.ToString()).ToList();
-
-        Assert.Contains("DELETE /pets/{id} · operation: removed", breaking);
-        Assert.Contains("GET /pets · query sort: new required parameter", breaking);
-        Assert.Contains("GET /pets · query limit: type integer → string", breaking);
-        Assert.Contains(breaking, c => c.StartsWith("GET /pets · query status: enum narrowed") && c.Contains("\"sold\""));
-        Assert.Contains("GET /pets · response 200: renamed $[*].id → $[*].petId", breaking);
-        Assert.Contains("GET /pets/{id} · response 200: renamed $.id → $.petId", breaking);
-        Assert.Contains("POST /pets · status: success status 201 → 200", breaking);
-        Assert.Contains(breaking, c => c.StartsWith("GET /pets · security: now requires authentication"));
-
-        Assert.Contains(report.Changes, c => c is { Severity: ChangeSeverity.NonBreaking, Operation: "POST /pets", Description: "added $.color (string)" });
-        Assert.Contains(report.Changes, c => c is { Severity: ChangeSeverity.Info, Location: "version" });
-        Assert.True(report.HasBreaking);
-        Assert.StartsWith("9 breaking changes", report.Summary);
-    }
-
-    [Fact]
-    public void Response_and_request_rules_are_opposites()
-    {
-        static SpecDocument Spec(string requestRequired, string responseRequired, string responseEnum) => SpecLoader.Parse($$"""
-            {"openapi":"3.0.0","info":{"title":"T","version":"1"},"paths":{"/x":{"post":{
-              "requestBody":{"content":{"application/json":{"schema":{"type":"object","required":[{{requestRequired}}],"properties":{"a":{"type":"string"},"b":{"type":"string"} } } } } },
-              "responses":{"200":{"description":"ok","content":{"application/json":{"schema":{"type":"object","required":[{{responseRequired}}],"properties":{"a":{"type":"string"},"s":{"type":"string","enum":[{{responseEnum}}]} } } } } } } } } } }
-            """);
-        var report = SpecDiff.Compare(Spec("\"a\"", "\"a\"", "\"x\""), Spec("\"a\",\"b\"", "", "\"x\",\"y\""));
-
-        Assert.Contains(report.Changes, c => c is { Severity: ChangeSeverity.Breaking, Location: "request body", Description: "$.b became required" });
-        Assert.Contains(report.Changes, c => c is { Severity: ChangeSeverity.Breaking, Location: "response 200", Description: "$.a is no longer guaranteed (optional now)" });
-        Assert.Contains(report.Changes, c => c.Severity == ChangeSeverity.Breaking && c.Location == "response 200" && c.Description.StartsWith("$.s enum widened"));
-
-        var reverse = SpecDiff.Compare(Spec("\"a\",\"b\"", "", "\"x\",\"y\""), Spec("\"a\"", "\"a\"", "\"x\""));
-        Assert.Contains(reverse.Changes, c => c is { Severity: ChangeSeverity.NonBreaking, Description: "$.b became optional" });
-        Assert.Contains(reverse.Changes, c => c is { Severity: ChangeSeverity.NonBreaking, Description: "$.a is now always present" });
-        Assert.Contains(reverse.Changes, c => c.Severity == ChangeSeverity.NonBreaking && c.Description.StartsWith("$.s enum narrowed"));
-        Assert.False(reverse.HasBreaking);
-    }
-
-    [Fact]
-    public void Enum_constraints_added_or_removed_count_as_narrowing_or_widening()
-    {
-        static SpecDocument Spec(string paramSchema, string fieldSchema) => SpecLoader.Parse($$"""
-            {"openapi":"3.0.0","info":{"title":"T","version":"1"},"paths":{"/x":{"get":{
-              "parameters":[{"name":"kind","in":"query","schema":{{paramSchema}} }],
-              "responses":{"200":{"description":"ok","content":{"application/json":{"schema":{"type":"object","properties":{"s":{{fieldSchema}} } } } } } } } } } }
-            """);
-        var free = Spec("""{"type":"string"}""", """{"type":"string"}""");
-        var restricted = Spec("""{"type":"string","enum":["a","b"]}""", """{"type":"string","enum":["a"]}""");
-
-        var gained = SpecDiff.Compare(free, restricted);
-        Assert.Contains(gained.Changes, c => c is { Severity: ChangeSeverity.Breaking, Location: "query kind" } && c.Description.StartsWith("now restricted to"));
-        Assert.Contains(gained.Changes, c => c is { Severity: ChangeSeverity.NonBreaking, Location: "response 200" } && c.Description.Contains("now restricted"));
-
-        var lost = SpecDiff.Compare(restricted, free);
-        Assert.Contains(lost.Changes, c => c is { Severity: ChangeSeverity.NonBreaking, Location: "query kind", Description: "no longer restricted to an enum" });
-        Assert.Contains(lost.Changes, c => c is { Severity: ChangeSeverity.Breaking, Location: "response 200" } && c.Description.Contains("no longer restricted"));
-    }
-
-    [Fact]
-    public void Security_alternatives_and_conjunctions_are_compared_structurally()
-    {
-        static SpecDocument Spec(string security) => SpecLoader.Parse($$"""
-            {"openapi":"3.0.0","info":{"title":"T","version":"1"},
-             "components":{"securitySchemes":{"apiKey":{"type":"apiKey","in":"header","name":"X-Key"},"bearer":{"type":"http","scheme":"bearer"} } },
-             "paths":{"/x":{"get":{"security":{{security}},"responses":{"200":{"description":"ok"} } } } } }
-            """);
-        var either = Spec("""[{"apiKey":[]},{"bearer":[]}]""");
-        var both = Spec("""[{"apiKey":[],"bearer":[]}]""");
-        var withAnonymous = Spec("""[{},{"bearer":[]}]""");
-        var bearerOnly = Spec("""[{"bearer":[]}]""");
-
-        // "either" → "both": a client with one credential is rejected now.
-        var tightened = SpecDiff.Compare(either, both).Changes;
-        Assert.Equal(2, tightened.Count(c => c.Severity == ChangeSeverity.Breaking && c.Description.StartsWith("no longer accepts")));
-        // "both" → "either": anyone who sent both still passes.
-        Assert.DoesNotContain(SpecDiff.Compare(both, either).Changes, c => c.Severity == ChangeSeverity.Breaking);
-        // Removing the anonymous alternative is breaking; adding it is not.
-        Assert.Contains(SpecDiff.Compare(withAnonymous, bearerOnly).Changes, c => c.Severity == ChangeSeverity.Breaking && c.Description.StartsWith("now requires authentication"));
-        Assert.Contains(SpecDiff.Compare(bearerOnly, withAnonymous).Changes, c => c is { Severity: ChangeSeverity.NonBreaking, Description: "no longer requires authentication" });
-        Assert.Empty(SpecDiff.Compare(both, both).Changes);
-    }
-
-    [Fact]
-    public void Body_field_detection_tolerates_quoted_and_bare_variables()
-    {
-        var collection = SpecScenario.Collection();
-        var create = collection.Requests.Single(r => r.Name == "createPet");
-        create.Body.Content = """{"name":"{{petName}}","kind":"dog","age":{{age}}}""";
-        var report = Diff();
-        SpecDiff.AddImpact(report, SpecScenario.Spec(SpecScenario.V1), collection);
-        // name, kind and age are all present, so no "lacks" item for createPet.
-        Assert.DoesNotContain(report.Impact, i => i.Owner == "createPet" && i.Detail.Contains("lacks"));
-    }
-
-    [Fact]
-    public void Moved_paths_are_paired_by_operation_id()
-    {
-        var before = SpecLoader.Parse("""{"openapi":"3.0.0","info":{"title":"T","version":"1"},"paths":{"/users":{"get":{"operationId":"list","responses":{"200":{"description":"ok"}}}}}}""");
-        var after = SpecLoader.Parse("""{"openapi":"3.0.0","info":{"title":"T","version":"1"},"paths":{"/accounts":{"get":{"operationId":"list","responses":{"200":{"description":"ok"}}}}}}""");
-        var change = Assert.Single(SpecDiff.Compare(before, after).Changes);
-        Assert.Equal(("GET /users", ChangeSeverity.Breaking, "moved to /accounts"), (change.Operation, change.Severity, change.Description));
-        Assert.Empty(SpecDiff.Compare(before, before).Changes);
-    }
-
-    [Fact]
-    public void Impact_lists_what_the_collection_breaks_on()
-    {
-        var collection = SpecScenario.Collection();
-        var getPet = collection.Requests.Single(r => r.Name == "getPet");
-        getPet.Assertions.Add(new Assertion { Source = ValueSource.JsonPath, Path = "$.id", Operator = AssertionOperator.Exists });
-        getPet.Extractions.Add(new ExtractionRule { Variable = "petId", Path = "$.id" });
-        var deletePet = collection.Requests.Single(r => r.Name == "deletePet");
-        deletePet.Url = "{{baseUrl}}/pets/{{petId}}";
-        var flow = new TestFlow { Name = "Pet lifecycle", CollectionId = collection.Id, Steps = [new FlowStep { Type = FlowStepType.Request, RequestId = getPet.Id }] };
-
-        var report = Diff();
-        SpecDiff.AddImpact(report, SpecScenario.Spec(SpecScenario.V1), collection, [flow]);
-
-        Assert.Equal(collection.Name, report.CollectionName);
-        var breaks = report.Impact.Where(i => i.Severity == ImpactSeverity.Breaks).ToList();
-        Assert.Contains(breaks, i => i.Owner == "deletePet" && i.Detail.Contains("removed"));
-        Assert.Contains(breaks, i => i.Owner == "listPets" && i.Detail.Contains("query sort"));
-        Assert.Contains(breaks, i => i.Owner == "createPet" && i.Kind == "Assertion" && i.Suggestion == "Change the expected status to 200.");
-        Assert.Contains(breaks, i => i.Owner == "getPet" && i.Kind == "Assertion" && i.Suggestion == "Change the path to $.petId.");
-        Assert.Contains(breaks, i => i.Owner == "getPet" && i.Kind == "Extraction");
-        Assert.Contains(breaks, i => i.Owner == "deletePet" && i.Kind == "VariableUse" && i.Detail.Contains("{{petId}}"));
-        Assert.Contains(report.Impact, i => i.Owner == "Pet lifecycle" && i.Kind == "Flow");
-        Assert.Contains(report.Impact, i => i.Owner == "listPets" && i.Severity == ImpactSeverity.Possible && i.Detail.Contains("enum narrowed"));
-        Assert.Contains("break", report.Summary);
-
-        var html = SpecDiffReportWriter.Html(report);
-        Assert.Contains("Impact on Pets", html);
-        var json = JsonNode.Parse(SpecDiffReportWriter.Json(report))!;
-        Assert.True(json["breaking"]!.GetValue<bool>());
-        Assert.NotEmpty(json["impact"]!.AsArray());
-        Assert.Contains("Breaks in Pets", SpecDiffReportWriter.Text(report));
+        Assert.Contains(HelpCatalog.Search("openapi scaffold"), t => t.Id == HelpCatalog.SpecGeneration);
+        Assert.Contains(HelpCatalog.Search("negative test"), t => t.Id == HelpCatalog.SpecGeneration);
     }
 }
 
 [Collection("Console")]
-public class SpecCliTests
+public class CliSpecTests
 {
     [Fact]
-    public async Task Coverage_gates_on_min_and_writes_reports()
+    public async Task Openapi_command_writes_yaml_or_json_from_a_collection_or_har()
     {
         var dir = Cli.TempDir();
-        var spec = Path.Combine(dir, "pets.yaml");
+        var collection = new RequestCollection
+        {
+            Name = "Shop",
+            Variables = [new KeyValueItem("baseUrl", "https://shop.test")],
+            Requests =
+            [
+                new ApiRequest
+                {
+                    Name = "Get item", Url = "{{baseUrl}}/items/12",
+                    Examples = [new ResponseExample { StatusCode = 200, Body = """{"id":12,"price":9.5}""" }]
+                }
+            ]
+        };
+        var file = Path.Combine(dir, "shop.dispatch.json");
+        await File.WriteAllTextAsync(file, DispatchFormat.ExportCollection(collection));
+
+        var yamlPath = Path.Combine(dir, "api.yaml");
+        var (exit, output) = await Cli.RunAsync("openapi", file, "-o", yamlPath, "--db", Path.Combine(dir, "d.db"), "--title", "Shop API");
+        Assert.Equal(0, exit);
+        Assert.Contains("Described 1 operation(s)", output);
+        var yaml = await File.ReadAllTextAsync(yamlPath);
+        Assert.Contains("title: Shop API", yaml);
+        Assert.Contains("/items/{itemId}:", yaml);
+
+        var jsonPath = Path.Combine(dir, "api.json");
+        (exit, _) = await Cli.RunAsync("openapi", file, "-o", jsonPath, "--db", Path.Combine(dir, "d.db"), "--server", "https://prod.shop.test");
+        Assert.Equal(0, exit);
+        var json = JsonNode.Parse(await File.ReadAllTextAsync(jsonPath))!;
+        Assert.Equal("https://prod.shop.test", json["servers"]![0]!["url"]!.ToString());
+        Assert.Equal("number", json["paths"]!["/items/{itemId}"]!["get"]!["responses"]!["200"]!["content"]!["application/json"]!["schema"]!["properties"]!["price"]!["type"]!.ToString());
+
         var har = Path.Combine(dir, "traffic.har");
-        await File.WriteAllTextAsync(spec, SpecScenario.V1);
-        await File.WriteAllTextAsync(har, SpecScenario.Har);
-        var db = Path.Combine(dir, "d.sqlite");
+        await File.WriteAllTextAsync(har, """
+            {"log":{"entries":[{"startedDateTime":"2026-01-01T00:00:00Z","request":{"method":"GET","url":"https://h.test/ping","headers":[]},
+             "response":{"status":200,"content":{"mimeType":"application/json","text":"{\"ok\":true}"}}}]}}
+            """);
+        (exit, output) = await Cli.RunAsync("openapi", har, "-o", "-", "--db", Path.Combine(dir, "d.db"));
+        Assert.Equal(0, exit);
+        Assert.Contains("/ping:", output);
+        Assert.Contains("url: https://h.test", output);
 
-        var (exit, output) = await Cli.RunAsync("coverage", spec, har, "--min", "80", "-r", "cli,json,html", "-o", Path.Combine(dir, "out"), "--db", db, "--no-color");
-        Assert.Equal(Dispatch.Cli.Program.ExitTestsFailed, exit);
-        Assert.Contains("FAIL", output);
-        Assert.Contains("DELETE /pets/{id}", output);
-        Assert.Single(Directory.GetFiles(Path.Combine(dir, "out"), "*.json"));
-        Assert.Single(Directory.GetFiles(Path.Combine(dir, "out"), "*.html"));
+        // On stdout the document is alone: progress goes to stderr, so the output parses as a whole.
+        var (stdoutExit, stdoutJson) = await Cli.RunStdoutAsync("openapi", har, "-o", "-", "--format", "json", "--db", Path.Combine(dir, "d.db"));
+        Assert.Equal(0, stdoutExit);
+        Assert.Equal("3.0.3", JsonNode.Parse(stdoutJson)!["openapi"]!.ToString());
 
-        (exit, output) = await Cli.RunAsync("coverage", spec, har, "--min", "50", "--db", db, "--no-color");
-        Assert.Equal(Dispatch.Cli.Program.ExitOk, exit);
-        Assert.Contains("pass", output);
-
-        // The spec itself imports as a collection: every operation is called once.
-        (exit, output) = await Cli.RunAsync("coverage", spec, spec, "--db", db, "--no-color");
-        Assert.Equal(Dispatch.Cli.Program.ExitOk, exit);
-        Assert.Contains("Operations called        4/4", output);
-
-        (exit, _) = await Cli.RunAsync("coverage", spec, har, "--min", "150", "--db", db);
-        Assert.Equal(Dispatch.Cli.Program.ExitError, exit);
+        var (usage, _) = await Cli.RunAsync("openapi", "--db", Path.Combine(dir, "d.db"));
+        Assert.Equal(2, usage);
     }
 
     [Fact]
-    public async Task Coverage_can_run_the_collection_live()
+    public async Task Scaffold_command_writes_a_collection_that_runs_against_the_api()
     {
         await using var server = await TestServer.StartAsync(app =>
         {
-            app.MapGet("/pets", (HttpContext ctx) => ctx.Request.Query.ContainsKey("status") ? Results.Json(Array.Empty<object>()) : Results.BadRequest());
-            app.MapPost("/pets", () => Results.Json(new { id = 1, name = "Rex", kind = "dog" }, statusCode: 201));
-            app.MapGet("/pets/{id}", (int id) => id == 0 ? Results.NotFound() : Results.Json(new { id, name = "Rex", kind = "dog" }));
-            app.MapDelete("/pets/{id}", () => Results.NoContent());
+            app.MapGet("/orders", (HttpRequest request) =>
+                !request.Query.ContainsKey("limit") || !request.Headers.ContainsKey("X-Tenant")
+                    ? Results.BadRequest(new { error = "limit and X-Tenant are required" })
+                    : Results.Json(new[] { new { id = 1, sku = "A1", qty = 2 } }));
+            app.MapPost("/orders", async (HttpRequest request) =>
+            {
+                var body = await JsonNode.ParseAsync(request.Body);
+                return body?["sku"] is null || body["qty"] is null
+                    ? Results.UnprocessableEntity(new { error = "sku and qty are required" })
+                    : Results.Json(new { id = 2, sku = body["sku"]!.ToString(), qty = body["qty"]!.GetValue<int>() }, statusCode: 201);
+            });
+            app.MapGet("/health", () => Results.NoContent());
         });
         var dir = Cli.TempDir();
-        var spec = Path.Combine(dir, "pets.yaml");
-        await File.WriteAllTextAsync(spec, SpecScenario.V1);
-        var collection = SpecScenario.Collection();
-        collection.Variables.First(v => v.Key == "baseUrl").Value = server.BaseUrl;
-        var file = Path.Combine(dir, "pets.dispatch.json");
-        await File.WriteAllTextAsync(file, DispatchFormat.ExportCollection(collection));
+        var spec = Path.Combine(dir, "orders.yaml");
+        await File.WriteAllTextAsync(spec, TestScaffolderTests.Spec.Replace("https://orders.test", server.BaseUrl));
+        var tests = Path.Combine(dir, "tests.dispatch.json");
+        var db = Path.Combine(dir, "d.db");
 
-        var (exit, output) = await Cli.RunAsync("coverage", spec, file, "--run", "--db", Path.Combine(dir, "d.sqlite"), "--no-color");
-        Assert.Equal(Dispatch.Cli.Program.ExitOk, exit);
-        Assert.Contains("Running Pets", output);
-        Assert.Contains("Operations called        4/4", output);
-        Assert.Matches(@"GET /pets/\{id\}\s+200 never seen", output); // the imported id example is 0 → 404 seen, 200 is the gap
-    }
+        var (exit, output) = await Cli.RunAsync("scaffold", spec, "-o", tests, "--db", db);
+        Assert.Equal(0, exit);
+        Assert.Contains("3 happy-path request(s)", output);
+        Assert.Contains("4 negative request(s)", output);
+        Assert.Equal(7, DispatchFormat.Import(await File.ReadAllTextAsync(tests)).RequestCount);
 
-    [Fact]
-    public async Task Breaking_fails_on_breaking_changes_and_lists_the_collection_impact()
-    {
-        var dir = Cli.TempDir();
-        var v1 = Path.Combine(dir, "v1.yaml");
-        var v2 = Path.Combine(dir, "v2.yaml");
-        await File.WriteAllTextAsync(v1, SpecScenario.V1);
-        await File.WriteAllTextAsync(v2, SpecScenario.V2);
-        var db = Path.Combine(dir, "d.sqlite");
+        var (stdoutExit, stdoutJson) = await Cli.RunStdoutAsync("scaffold", spec, "-o", "-", "--db", db);
+        Assert.Equal(0, stdoutExit);
+        Assert.Equal(7, DispatchFormat.Import(stdoutJson).RequestCount);
 
-        var (exit, output) = await Cli.RunAsync("breaking", v1, v2, "--collection", v1, "-r", "cli,json", "-o", Path.Combine(dir, "out"), "--db", db, "--no-color");
-        Assert.Equal(Dispatch.Cli.Program.ExitTestsFailed, exit);
-        Assert.Contains("Breaking (9)", output);
-        Assert.Contains("deletePet · URL", output);
-        Assert.Contains("Change the expected status to 200.", output);
-        Assert.Single(Directory.GetFiles(Path.Combine(dir, "out"), "*.json"));
+        var (runExit, runOutput) = await Cli.RunAsync("run", tests, "--db", db, "--no-color");
+        Assert.True(runExit == 0, runOutput);
 
-        (exit, _) = await Cli.RunAsync("breaking", v1, v2, "--fail-on", "never", "--db", db);
-        Assert.Equal(Dispatch.Cli.Program.ExitOk, exit);
-        (exit, output) = await Cli.RunAsync("breaking", v1, v1, "--fail-on", "any", "--db", db, "--no-color");
-        Assert.Equal(Dispatch.Cli.Program.ExitOk, exit);
-        Assert.Contains("No differences", output);
-        (exit, _) = await Cli.RunAsync("breaking", v1, v2, "--fail-on", "sometimes", "--db", db);
-        Assert.Equal(Dispatch.Cli.Program.ExitError, exit);
+        var (saveExit, saveOutput) = await Cli.RunAsync("scaffold", spec, "--save", "--no-negatives", "--db", db);
+        Assert.Equal(0, saveExit);
+        Assert.Contains("Saved collection 'Orders tests' (3 requests)", saveOutput);
+        var (listExit, listOutput) = await Cli.RunAsync("list", "--db", db);
+        Assert.Equal(0, listExit);
+        Assert.Contains("Orders tests", listOutput);
     }
 }

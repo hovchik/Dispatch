@@ -109,6 +109,7 @@ public sealed class RequestSender : IRequestSender
     private readonly IOAuth2TokenProvider? _oauth;
     private readonly AssertionEvaluator _assertions;
     private readonly SessionVariables _session;
+    private readonly Webhooks.IWebhookReceiver? _webhooks;
 
     public RequestSender(
         IEnumerable<IProtocolExecutor> executors,
@@ -116,7 +117,8 @@ public sealed class RequestSender : IRequestSender
         SessionVariables? session = null,
         IScriptRunner? scripts = null,
         IOAuth2TokenProvider? oauth = null,
-        IContractValidator? contracts = null)
+        IContractValidator? contracts = null,
+        Webhooks.IWebhookReceiver? webhooks = null)
     {
         var map = new Dictionary<RequestKind, IProtocolExecutor>();
         foreach (var executor in executors)
@@ -128,6 +130,7 @@ public sealed class RequestSender : IRequestSender
         _scripts = scripts;
         _oauth = oauth;
         _assertions = new AssertionEvaluator(contracts);
+        _webhooks = webhooks;
     }
 
     public Task<ApiResponse> SendAsync(ApiRequest request, ApiEnvironment? environment, CancellationToken cancellationToken) =>
@@ -198,7 +201,7 @@ public sealed class RequestSender : IRequestSender
         // Listeners for message expectations subscribe before the request goes out, so nothing it causes is missed.
         await using var consequences = options.CheckExpectations && served is null
             ? await Consequences.ConsequenceSession.StartAsync(working, options.CollectionRequests,
-                kind => _executors.GetValueOrDefault(kind), variables, cancellationToken).ConfigureAwait(false)
+                kind => _executors.GetValueOrDefault(kind), variables, cancellationToken, _webhooks).ConfigureAwait(false)
             : null;
         consequences?.MarkTriggered();
 

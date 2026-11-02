@@ -592,12 +592,12 @@ public static partial class LawMiner
 
     // ---- Helpers ---------------------------------------------------------------------------------
 
-    private sealed record FormatRule(string Name, string Pattern)
+    internal sealed record FormatRule(string Name, string Pattern)
     {
         public Regex Regex { get; } = new(Pattern, RegexOptions.CultureInvariant);
     }
 
-    private static readonly FormatRule[] Formats =
+    internal static readonly FormatRule[] Formats =
     [
         new("UUID", @"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"),
         new("date-time", @"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$"),
