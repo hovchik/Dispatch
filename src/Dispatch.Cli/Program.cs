@@ -30,6 +30,11 @@ public static class Program
           dispatch minimize <collection> [...]    Shrink a request to the parts its outcome depends on
                                                   (--request n, --match status|class|tests|body, --contains text)
           dispatch ratelimit <collection> [...]   Discover an endpoint's real rate limit (--request n, --expect-limit)
+          dispatch paginate <collection> [...]    Walk a list endpoint's pages: duplicates, gaps, totals, loops (--request n,
+                                                  --strategy auto|link|next|cursor|page|offset, --page-size n)
+          dispatch idempotency <collection> [...] Check a request is safe to retry: same key, reused key, parallel
+                                                  duplicates (--request n, --key-header h, --parallel n)
+          dispatch cache <collection> [...]       Check HTTP caching: Cache-Control, Vary, ETag / 304 revalidation (--request n)
           dispatch impact <collection> [...]      What breaks because a response changed shape (--request n,
                                                   --baseline snapshot|example|file, --current file)
           dispatch laws <traffic.har|collection>  Infer API laws and anomalies from traffic (--runs n, --write,
@@ -99,6 +104,9 @@ public static class Program
                 "scan" => await ScanCommand.ExecuteAsync(rest, cancel.Token),
                 "minimize" or "minimise" => await MinimizeCommand.ExecuteAsync(rest, cancel.Token),
                 "ratelimit" or "rate-limit" => await RateLimitCommand.ExecuteAsync(rest, cancel.Token),
+                "paginate" or "pagination" => await PaginateCommand.ExecuteAsync(rest, cancel.Token),
+                "idempotency" or "idempotent" => await IdempotencyCommand.ExecuteAsync(rest, cancel.Token),
+                "cache" or "caching" => await CacheCommand.ExecuteAsync(rest, cancel.Token),
                 "impact" => await ImpactCommand.ExecuteAsync(rest, cancel.Token),
                 "laws" => await LawsCommand.ExecuteAsync(rest, cancel.Token),
                 "flow" => await FlowCommand.ExecuteAsync(rest, cancel.Token),

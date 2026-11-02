@@ -71,6 +71,9 @@ public static class HelpCatalog
     public const string ClientFuzz = "client-fuzz";
     public const string Minimize = "minimize";
     public const string RateLimit = "rate-limit";
+    public const string Pagination = "pagination";
+    public const string Idempotency = "idempotency";
+    public const string Caching = "caching";
     public const string Capture = "capture";
     public const string Webhooks = "webhooks";
     public const string ImportExport = "import-export";
@@ -404,6 +407,52 @@ public static class HelpCatalog
         ],
         ["webhook", "webhooks", "callback", "receiver", "listener", "hook", "tunnel", "ngrok", "cloudflared", "replay", "payload", "callback url"],
         null, [MessageChecks, Mock, Cli]),
+
+        new(Pagination, "Tools", "Pagination walker", "Follow every page of a list endpoint and check the paging.",
+        [
+            new HelpParagraph("The pagination walker follows a list endpoint to the end. It works out how the endpoint pages: a Link header with rel=\"next\", a next URL in the body, a cursor sent back as a query parameter, or page / offset parameters. Every item is identified by its id (or its whole content), so the walker can tell what each page added."),
+            new HelpParagraph("It reports items that appear on more than one page, an advertised total (total, totalCount, X-Total-Count, …) that doesn't match what can be reached, pages that loop or repeat, short pages in the middle, page sizes above the requested limit, and later pages that get slower. It then fetches page 1 again to check that the order is stable, and tries a page past the end, a negative or non-numeric page, a page size of 0 and a huge page size."),
+            new HelpSteps(
+            [
+                "Open a list request (for example GET /orders?limit=20) and choose Walk pagination… from the flask button next to Send.",
+                "Leave the strategy on Auto, or pick one and name the parameters if the endpoint is unusual. A small page size exercises more pages.",
+                "Click Run, then read the findings and export an HTML / JSON report if needed."
+            ]),
+            new HelpExample("Walk pages of 5 and fail CI on duplicates or a wrong total", "dispatch paginate \"My Collection\" --request \"List orders\" --page-size 5"),
+            new HelpTip("Duplicates and skipped items usually come from a sort that isn't unique: add a tie-breaker such as the id to ORDER BY.")
+        ],
+        ["pagination", "paging", "pages", "cursor", "offset", "limit", "next", "link header", "total", "duplicates", "x-total-count"],
+        null, [RateLimit, Cli]),
+
+        new(Idempotency, "Tools", "Idempotency & race probe", "Check that a request is safe to retry and to send twice at once.",
+        [
+            new HelpParagraph("Clients retry when a response is lost, and users double-click. The idempotency probe sends a mutating request the way that happens in practice and checks whether duplicates appear."),
+            new HelpParagraph("It sends the request with an Idempotency-Key, retries it with the same key, reuses the key with a changed body, and sends several copies at the same moment, with one key and with none. It compares the resources created (from the Location header or an id in the body) and the responses. PUT and DELETE are also repeated, because HTTP requires them to be idempotent."),
+            new HelpSteps(
+            [
+                "Open the POST, PUT, PATCH or DELETE request in a test environment and choose Check idempotency & races… from the flask button.",
+                "Set the key header if your API uses another name (for example X-Request-Id) and how many copies to send at once.",
+                "Click Run and read the findings: a second resource created by a retry, a reused key that is accepted with a new body, or 5xx under concurrency."
+            ]),
+            new HelpExample("Check an endpoint in CI", "dispatch idempotency \"My Collection\" --request \"Create order\" -e staging --parallel 8"),
+            new HelpTip("This creates data on every run. Use a test environment, never production.")
+        ],
+        ["idempotency", "idempotency-key", "idempotent", "retry", "duplicate", "race", "race condition", "concurrency", "double submit", "double charge"],
+        null, [RateLimit, Cli]),
+
+        new(Caching, "Tools", "Caching checker", "Check Cache-Control, Vary and ETag revalidation.",
+        [
+            new HelpParagraph("The caching checker reads a response's caching headers and tests them. It sends the request twice to see whether the ETag is stable, revalidates with If-None-Match and If-Modified-Since to check for 304 Not Modified, tries an unknown ETag (which must not answer 304) and compares HEAD with GET. CDN cache headers such as X-Cache and CF-Cache-Status are shown when present."),
+            new HelpParagraph("It flags responses to authenticated requests that shared caches may store, cookies on cacheable responses, compressed bodies without Vary: Accept-Encoding, a specific Access-Control-Allow-Origin without Vary: Origin, missing or malformed validators, ETags that change while the body doesn't, and 304 responses with a body."),
+            new HelpSteps(
+            [
+                "Open a GET request and choose Check caching… from the flask button next to Send.",
+                "Click Run, then read the policy summary and the findings."
+            ]),
+            new HelpExample("Fail CI on caching mistakes", "dispatch cache \"My Collection\" --request \"Get product\" --fail-on warning")
+        ],
+        ["cache", "caching", "cache-control", "etag", "304", "not modified", "if-none-match", "last-modified", "vary", "cdn", "max-age"],
+        null, [RateLimit, Cli]),
 
         new(Capture, "Tools", "Capture proxy", "Record traffic from a browser or app.",
         [

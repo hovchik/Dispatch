@@ -88,7 +88,7 @@
                 ToolTip.Tip="Generate code (cURL, Python, C#, JavaScript, Go, grpcurl…)">
           <PathIcon Data="{StaticResource IconCode}" Width="16" Height="16" />
         </Button>
-        <Button Classes="icon" IsVisible="{Binding SupportsProbeTools}" ToolTip.Tip="Request tools: minimize, change impact, rate-limit mapper">
+        <Button Classes="icon" IsVisible="{Binding SupportsProbeTools}" ToolTip.Tip="Request tools: minimize, change impact, rate limit, pagination, idempotency, caching">
           <PathIcon Data="{StaticResource IconFlask}" Width="15" Height="15" />
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedRight">
@@ -103,6 +103,19 @@
               <MenuItem Header="Probe rate limit…" Command="{Binding ProbeRateLimitCommand}"
                         ToolTip.Tip="Discover the endpoint's real rate-limit policy and check its headers">
                 <MenuItem.Icon><PathIcon Data="{StaticResource IconGauge}" Width="12" Height="12" /></MenuItem.Icon>
+              </MenuItem>
+              <Separator />
+              <MenuItem Header="Walk pagination…" Command="{Binding WalkPaginationCommand}"
+                        ToolTip.Tip="Follow every page of a list endpoint: duplicates, gaps, totals, loops and unstable order">
+                <MenuItem.Icon><PathIcon Data="{StaticResource IconCollections}" Width="12" Height="12" /></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="Check idempotency &amp; races…" Command="{Binding ProbeIdempotencyCommand}"
+                        ToolTip.Tip="Replay with the same Idempotency-Key, reuse it with another body, and send copies at once">
+                <MenuItem.Icon><PathIcon Data="{StaticResource IconRefresh}" Width="12" Height="12" /></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="Check caching…" Command="{Binding CheckCachingCommand}"
+                        ToolTip.Tip="Cache-Control, Vary, ETag / Last-Modified and whether revalidation answers 304">
+                <MenuItem.Icon><PathIcon Data="{StaticResource IconClock}" Width="12" Height="12" /></MenuItem.Icon>
               </MenuItem>
             </MenuFlyout>
           </Button.Flyout>
