@@ -1,0 +1,120 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:lint="using:Dispatch.Application.Lint"
+             x:Class="Dispatch.App.Views.Tools.LintView"
+             x:DataType="tools:LintViewModel">
+  <Grid ColumnDefinitions="320,*" Margin="12">
+    <!-- Rules and actions -->
+    <DockPanel Margin="0,0,12,0">
+      <StackPanel DockPanel.Dock="Top" Spacing="8">
+        <TextBlock Text="Lint collection" FontSize="15" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Static checks, nothing is sent: undefined and unused variables, hard-coded secrets, requests nothing can fail on, duplicates and stale examples. Click a problem to open its request." />
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding LintCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconRefresh}" Width="12" Height="12" />
+              <TextBlock Text="Check again" />
+            </StackPanel>
+          </Button>
+          <DropDownButton Grid.Column="1" Content="Export" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+            <DropDownButton.Flyout>
+              <MenuFlyout>
+                <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+                <MenuItem Header="JSON report…" Command="{Binding ExportCommand}" CommandParameter="json" />
+                <Separator />
+                <MenuItem Header="Rule configuration (dispatch-lint.json)…" Command="{Binding ExportConfigCommand}" />
+              </MenuFlyout>
+            </DropDownButton.Flyout>
+          </DropDownButton>
+        </Grid>
+        <TextBlock Classes="section" Text="RULES" Margin="0,8,0,0" />
+      </StackPanel>
+      <TextBlock DockPanel.Dock="Bottom" Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
+      <Border Classes="card" Padding="0">
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Rules}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="tools:LintRuleToggle">
+                <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="10,6" ToolTip.Tip="{Binding Description}">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+                    <CheckBox IsChecked="{Binding IsEnabled}" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Title}" FontSize="12.5" />
+                      <TextBlock Text="{Binding Id}" Classes="muted" FontSize="10.5" FontFamily="{StaticResource MonoFont}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding Count}" Classes="muted" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0" />
+                    <ComboBox Grid.Column="3" ItemsSource="{Binding Severities}" SelectedItem="{Binding Severity}" IsEnabled="{Binding IsEnabled}"
+                              FontSize="11.5" MinWidth="92" VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </DockPanel>
+
+    <!-- Problems -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <ToggleButton IsChecked="{Binding ShowErrors}" Padding="12,6" CornerRadius="8" ToolTip.Tip="Show or hide errors">
+          <StackPanel>
+            <TextBlock Text="{Binding ErrorCount}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource DangerBrush}" />
+            <TextBlock Text="Errors" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </ToggleButton>
+        <ToggleButton IsChecked="{Binding ShowWarnings}" Padding="12,6" CornerRadius="8" ToolTip.Tip="Show or hide warnings">
+          <StackPanel>
+            <TextBlock Text="{Binding WarningCount}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource WarningBrush}" />
+            <TextBlock Text="Warnings" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </ToggleButton>
+        <ToggleButton IsChecked="{Binding ShowInfo}" Padding="12,6" CornerRadius="8" ToolTip.Tip="Show or hide hints">
+          <StackPanel>
+            <TextBlock Text="{Binding InfoCount}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource InfoBrush}" />
+            <TextBlock Text="Info" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </ToggleButton>
+      </StackPanel>
+      <TextBlock Grid.Row="1" Text="{Binding Summary}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,12,0,10"
+                 IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <Border Grid.Row="2" Classes="card" Padding="0">
+        <Panel>
+          <TextBlock Classes="muted" Margin="12" TextWrapping="Wrap" Text="No problems with the enabled rules." IsVisible="{Binding IsClean}" />
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Problems}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="lint:LintProblem">
+                  <Button Background="Transparent" BorderThickness="0" CornerRadius="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="0"
+                          Command="{Binding $parent[ItemsControl].((tools:LintViewModel)DataContext).OpenCommand}" CommandParameter="{Binding}"
+                          ToolTip.Tip="Open the request">
+                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="12,8" Background="{DynamicResource SurfaceBrush}">
+                      <StackPanel Spacing="3">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <Border CornerRadius="4" Padding="6,1" VerticalAlignment="Center"
+                                  Background="{Binding Severity, Converter={x:Static tools:LintSeverityBrush.Instance}}">
+                            <TextBlock Text="{Binding SeverityText}" FontSize="11" FontWeight="Bold" Foreground="White" />
+                          </Border>
+                          <TextBlock Text="{Binding RuleId}" Classes="muted" FontSize="11" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Owner}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Location}" Classes="muted" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="13" />
+                        <TextBlock FontSize="12" Foreground="{DynamicResource SuccessBrush}" TextWrapping="Wrap"
+                                   IsVisible="{Binding Suggestion, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                          <Run Text="Fix:" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Suggestion}" />
+                        </TextBlock>
+                      </StackPanel>
+                    </Border>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Panel>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

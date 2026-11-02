@@ -171,6 +171,19 @@ public static class DispatchFormat
         return slug.Length == 0 ? "request" : slug.Length > 60 ? slug[..60] : slug;
     }
 
+    // ---- Canonical JSON (folder sync) --------------------------------------------------------------------
+
+    /// <summary>One request exactly as a folder file holds it; two requests with equal text are the same definition.</summary>
+    public static string RequestJson(ApiRequest request) => RequestNode(request).ToJsonString(Options);
+
+    /// <summary>The collection's own metadata (name, description, variables, spec) as a folder's collection file holds it, minus the id.</summary>
+    public static string CollectionJson(RequestCollection collection)
+    {
+        var node = CollectionNode(collection);
+        node.Remove("id");
+        return node.ToJsonString(Options);
+    }
+
     // ---- Nodes -------------------------------------------------------------------------------------------
 
     private static JsonObject CollectionNode(RequestCollection c) => new()

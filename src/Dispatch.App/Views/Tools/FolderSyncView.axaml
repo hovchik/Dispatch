@@ -1,0 +1,118 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             x:Class="Dispatch.App.Views.Tools.FolderSyncView"
+             x:DataType="tools:FolderSyncViewModel">
+  <Grid ColumnDefinitions="320,*" Margin="12">
+    <!-- Folder and actions -->
+    <DockPanel Margin="0,0,12,0">
+      <StackPanel DockPanel.Dock="Top" Spacing="8">
+        <TextBlock Text="Sync with folder" FontSize="15" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Keeps this collection and a git-friendly folder (one file per request) the same in both directions. Edit files in your editor or pull them from git, and the app follows; save in the app, and the files follow. Something changed on both sides becomes a conflict you decide." />
+        <TextBlock Classes="section" Text="FOLDER" Margin="0,6,0,0" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+          <TextBox Text="{Binding Folder}" Watermark="C:\repo\api-tests" FontSize="12" />
+          <Button Grid.Column="1" Content="Browse…" Command="{Binding ChooseFolderCommand}" />
+        </Grid>
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,4,0,0">
+          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding SyncNowCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconRefresh}" Width="12" Height="12" />
+              <TextBlock Text="Sync now" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Open folder" Command="{Binding OpenFolderCommand}" />
+        </Grid>
+        <ToggleSwitch IsChecked="{Binding IsWatching}" OnContent="Watching: changes sync automatically" OffContent="Watch folder and app for changes" />
+        <TextBlock Classes="section" Text="LAST SYNC" Margin="0,8,0,0" />
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}">
+            <StackPanel>
+              <TextBlock Text="{Binding ToFolderCount}" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="To folder" Classes="muted" FontSize="11" />
+            </StackPanel>
+          </Border>
+          <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}">
+            <StackPanel>
+              <TextBlock Text="{Binding ToAppCount}" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="To app" Classes="muted" FontSize="11" />
+            </StackPanel>
+          </Border>
+          <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource DangerSoftBrush}">
+            <StackPanel>
+              <TextBlock Text="{Binding ConflictCount}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource DangerBrush}" />
+              <TextBlock Text="Conflicts" Classes="muted" FontSize="11" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        <TextBlock Text="{Binding LastResult}" TextWrapping="Wrap" FontSize="12.5" />
+      </StackPanel>
+      <TextBlock DockPanel.Dock="Bottom" Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" FontSize="12" Margin="0,8,0,0" />
+      <Panel />
+    </DockPanel>
+
+    <!-- Conflicts and log -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+      <StackPanel IsVisible="{Binding HasConflicts}" Spacing="6" Margin="0,0,0,10">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+          <TextBlock Text="Conflicts: both sides changed since the last sync" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Content="Keep all app versions" Command="{Binding KeepAllAppCommand}" FontSize="12" />
+          <Button Grid.Column="2" Content="Keep all folder versions" Command="{Binding KeepAllFolderCommand}" FontSize="12" />
+        </Grid>
+        <Border Classes="card" Padding="0" MaxHeight="320">
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Conflicts}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="tools:SyncConflictItem">
+                  <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="12,8">
+                    <StackPanel Spacing="6">
+                      <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                        <StackPanel VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                          <TextBlock Text="{Binding Description}" Classes="muted" FontSize="12" />
+                        </StackPanel>
+                        <ToggleButton Grid.Column="1" Content="Show both" IsChecked="{Binding IsExpanded}" FontSize="12" />
+                        <Button Grid.Column="2" Content="Keep app" Command="{Binding KeepAppCommand}" FontSize="12" />
+                        <Button Grid.Column="3" Content="Keep folder" Command="{Binding KeepFolderCommand}" FontSize="12" />
+                      </Grid>
+                      <Grid ColumnDefinitions="*,*" ColumnSpacing="8" IsVisible="{Binding IsExpanded}">
+                        <StackPanel>
+                          <TextBlock Text="App" Classes="section" />
+                          <ScrollViewer MaxHeight="200">
+                            <SelectableTextBlock Text="{Binding AppText}" FontFamily="{StaticResource MonoFont}" FontSize="11" TextWrapping="Wrap" />
+                          </ScrollViewer>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                          <TextBlock Text="Folder" Classes="section" />
+                          <ScrollViewer MaxHeight="200">
+                            <SelectableTextBlock Text="{Binding FolderText}" FontFamily="{StaticResource MonoFont}" FontSize="11" TextWrapping="Wrap" />
+                          </ScrollViewer>
+                        </StackPanel>
+                      </Grid>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Border>
+      </StackPanel>
+      <TextBlock Grid.Row="1" Text="ACTIVITY" Classes="section" Margin="0,0,0,6" />
+      <Border Grid.Row="2" Classes="card" Padding="0">
+        <Panel>
+          <TextBlock Classes="muted" Margin="12" Text="Nothing synced yet." IsVisible="{Binding !Log.Count}" />
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Log}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <SelectableTextBlock Text="{Binding}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" Margin="12,3" TextWrapping="Wrap" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Panel>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

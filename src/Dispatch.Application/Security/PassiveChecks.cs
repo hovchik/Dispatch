@@ -141,7 +141,8 @@ public static partial class PassiveChecks
         ("JSON Web Token", new Regex(@"\beyJ[\w-]{6,}\.eyJ[\w-]{6,}\.[\w-]{6,}", RegexOptions.CultureInvariant))
     ];
 
-    private static IEnumerable<(string Kind, string Evidence)> SecretMatches(string text)
+    /// <summary>Credentials recognisable by shape alone (also used by the collection linter).</summary>
+    public static IEnumerable<(string Kind, string Evidence)> SecretMatches(string text)
     {
         foreach (var (kind, pattern) in SecretPatterns)
             if (pattern.Match(text) is { Success: true } m)

@@ -46,6 +46,10 @@ public static class Program
                                                   (--network 3g, or --latency 300ms --bandwidth 1mbps --loss 2%)
           dispatch fuzz-client [--port 8899] [...] Vary responses to an app through a proxy to find how it breaks
                                                   (--host h, --window 5s, --kinds NullField,EmptyArray,…, --duration 10m)
+          dispatch lint <collection> [...]     Static checks: undefined/unused variables, hard-coded secrets, no assertions,
+                                                  duplicates, stale examples (--fail-on warning, --disable DP008, -r cli,html,json)
+          dispatch sync <collection> <folder>     Two-way sync between a saved collection and a git-friendly folder
+                                                  (--watch, --resolve app|folder)
           dispatch coverage <spec> <source>       Score a collection, run.json or HAR against an OpenAPI spec (--run,
                                                   --min 80 gates CI)
           dispatch breaking <old> <new> [...]     Classify spec changes as breaking / non-breaking (--collection c lists
@@ -126,6 +130,8 @@ public static class Program
                 "monitor" => await MonitorCommand.ExecuteAsync(rest, cancel.Token),
                 "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),
                 "fuzz-client" => await FuzzClientCommand.ExecuteAsync(rest, cancel.Token),
+                "lint" => await LintCommand.ExecuteAsync(rest, cancel.Token),
+                "sync" => await SyncCommand.ExecuteAsync(rest, cancel.Token),
                 "coverage" => await CoverageCommand.ExecuteAsync(rest, cancel.Token),
                 "breaking" => await BreakingCommand.ExecuteAsync(rest, cancel.Token),
                 "openapi" => await OpenApiCommand.ExecuteAsync(rest, cancel.Token),

@@ -28,6 +28,8 @@ public enum CollectionAction
     Laws,
     Flows,
     Monitors,
+    Lint,
+    Sync,
     SpecCoverage,
     GenerateOpenApi
 }

@@ -30,6 +30,8 @@
     <DataTemplate DataType="tools:CodeSnippetViewModel"><tv:CodeSnippetView /></DataTemplate>
     <DataTemplate DataType="tools:CollectionSettingsViewModel"><tv:CollectionSettingsView /></DataTemplate>
     <DataTemplate DataType="tools:HelpViewModel"><tv:HelpView /></DataTemplate>
+    <DataTemplate DataType="tools:LintViewModel"><tv:LintView /></DataTemplate>
+    <DataTemplate DataType="tools:FolderSyncViewModel"><tv:FolderSyncView /></DataTemplate>
     <DataTemplate DataType="tools:SpecCoverageViewModel"><tv:SpecCoverageView /></DataTemplate>
     <DataTemplate DataType="tools:SpecDiffViewModel"><tv:SpecDiffView /></DataTemplate>
     <DataTemplate DataType="tools:CompareViewModel"><tv:CompareView /></DataTemplate>
