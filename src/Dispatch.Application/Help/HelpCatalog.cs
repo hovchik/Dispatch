@@ -77,6 +77,7 @@ public static class HelpCatalog
     public const string Protocols = "protocols";
     public const string Cli = "cli";
     public const string Shortcuts = "shortcuts";
+    public const string SpecGeneration = "spec-generation";
 
     public static HelpTopic? Find(string? id) => All.FirstOrDefault(t => t.Id == id);
 
@@ -453,6 +454,23 @@ public static class HelpCatalog
             new HelpTip("Double-click a tab title to rename it.")
         ],
         ["keyboard", "shortcut", "hotkey", "keys", "palette"],
-        null, [GettingStarted])
+        null, [GettingStarted]),
+
+        new(SpecGeneration, "Tools", "OpenAPI generator & test scaffolding", "Write an OpenAPI spec from a collection or traffic, or turn a spec into tests.",
+        [
+            new HelpParagraph("Generate OpenAPI spec… (collection menu) writes an OpenAPI 3.0 document from the collection's requests, their saved examples and the run history. Paths are templated (/users/42 becomes /users/{userId}), query and header parameters are listed, request and response schemas are inferred from every body seen (required fields, nullable, uuid / date-time / email formats, enumerations), and the requests' auth becomes security schemes. The same works for a HAR file from the capture proxy or a browser."),
+            new HelpParagraph("Also create tests on the Import window (for OpenAPI / Swagger documents) adds to every imported request a JSON-schema assertion on the documented success response, and creates one negative request per required query/header parameter or required body field that leaves it out and expects a 4xx. They land in a Negative tests folder next to the request."),
+            new HelpSteps(
+            [
+                "Send a few requests (or run the collection) so the history holds real responses; saved examples count too.",
+                "Open the collection menu → Generate OpenAPI spec… and pick a .yaml or .json file.",
+                "To go the other way, Import a spec and tick Also create tests before pressing Import.",
+                "Run the collection to check that the API rejects the negative requests with a 4xx."
+            ]),
+            new HelpExample("Command line", "dispatch openapi \"My Collection\" -o api.yaml --server https://api.example.com\ndispatch openapi traffic.har --format json -o api.json\ndispatch scaffold api.yaml -o tests.dispatch.json\ndispatch scaffold https://api.example.com/openapi.json --save"),
+            new HelpTip("Schemas are inferred from what was seen: a field present in every sample becomes required, one that is sometimes null becomes nullable. Review the result before publishing it.")
+        ],
+        ["openapi", "swagger", "spec", "specification", "generate", "yaml", "schema", "scaffold", "negative test", "4xx", "har", "contract"],
+        null, [ImportExport, Assertions, Cli])
     ];
 }

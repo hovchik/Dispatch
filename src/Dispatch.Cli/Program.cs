@@ -39,6 +39,10 @@ public static class Program
           dispatch capture [--port 8899] [...]     Record proxied traffic to a HAR or Dispatch collection
           dispatch fuzz-client [--port 8899] [...] Vary responses to an app through a proxy to find how it breaks
                                                   (--host h, --window 5s, --kinds NullField,EmptyArray,…, --duration 10m)
+          dispatch openapi <collection|traffic.har>  Generate an OpenAPI 3.0 spec from a collection, its history or a HAR
+                                                  (-o api.yaml, --format yaml|json, --title, --server)
+          dispatch scaffold <spec.yaml> [-o f]    Create tests from an OpenAPI spec: happy paths, schema checks, 4xx negatives
+                                                  (--save puts them in the app)
           dispatch version
 
         <collection> is a file (Dispatch, Postman, Insomnia, Thunder Client, Hoppscotch, Bruno, HAR, OpenAPI, .http), a Dispatch or Bruno folder, a URL,
@@ -103,6 +107,8 @@ public static class Program
                 "monitor" => await MonitorCommand.ExecuteAsync(rest, cancel.Token),
                 "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),
                 "fuzz-client" => await FuzzClientCommand.ExecuteAsync(rest, cancel.Token),
+                "openapi" => await OpenApiCommand.ExecuteAsync(rest, cancel.Token),
+                "scaffold" => await ScaffoldCommand.ExecuteAsync(rest, cancel.Token),
                 "version" or "--version" => Version(),
                 _ => throw new UsageException($"Unknown command '{command}'. Run 'dispatch --help'.")
             };

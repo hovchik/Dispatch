@@ -47,9 +47,17 @@ public sealed partial class ImportViewModel(
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPreview))]
+    [NotifyPropertyChangedFor(nameof(CanCreateTests))]
     private ImportResult? _preview;
 
+    /// <summary>OpenAPI imports only: also add status / schema assertions and 4xx negative requests (see <see cref="Dispatch.Application.Spec.TestScaffolder"/>).</summary>
+    [ObservableProperty] private bool _alsoCreateTests;
+
+    /// <summary>Loads the spec text behind the current preview, when it is an OpenAPI / Swagger document.</summary>
+    private Func<Task<string>>? _specText;
+
     public bool HasPreview => Preview is not null;
+    public bool CanCreateTests => Preview is not null && _specText is not null;
     public ObservableCollection<string> PreviewLines { get; } = [];
 
     public static string SupportedFormats =>
@@ -69,10 +77,15 @@ public sealed partial class ImportViewModel(
             Merge(combined, await importer.ImportPathAsync(path), formats);
         if (protos.Count > 0)
             Merge(combined, Importer.ImportProto(protos), formats);
-        SetPreview(combined, string.Join(", ", formats.Distinct()));
+        SetPreview(combined, string.Join(", ", formats.Distinct()),
+            paths.Count == 1 && IsOpenApi(combined) ? () => File.ReadAllTextAsync(paths[0]) : null);
     });
 
-    public Task PreviewPathAsync(string path) => BusyAsync(async () => SetPreview(await importer.ImportPathAsync(path), null));
+    public Task PreviewPathAsync(string path) => BusyAsync(async () =>
+    {
+        var result = await importer.ImportPathAsync(path);
+        SetPreview(result, null, IsOpenApi(result) ? () => File.ReadAllTextAsync(path) : null);
+    });
 
     [RelayCommand]
     private Task ChooseFolderAsync() => BusyAsync(async () =>
@@ -84,16 +97,28 @@ public sealed partial class ImportViewModel(
     [RelayCommand]
     private Task ImportUrlAsync() => BusyAsync(async () =>
     {
-        if (Url.Trim().Length > 0)
-            SetPreview(await importer.ImportUrlAsync(Url.Trim()), null);
+        if (Url.Trim().Length == 0)
+            return;
+        var url = Url.Trim();
+        var result = await importer.ImportUrlAsync(url);
+        SetPreview(result, null, IsOpenApi(result) ? async () =>
+        {
+            using var client = new HttpClient();
+            return await client.GetStringAsync(url);
+        } : null);
     });
 
     [RelayCommand]
     private Task ParseTextAsync() => BusyAsync(() =>
     {
-        SetPreview(Importer.ImportText(PastedText), null);
+        var text = PastedText;
+        var result = Importer.ImportText(text);
+        SetPreview(result, null, IsOpenApi(result) ? () => Task.FromResult(text) : null);
         return Task.CompletedTask;
     });
+
+    private static bool IsOpenApi(ImportResult result) =>
+        result.Format.StartsWith("OpenAPI", StringComparison.OrdinalIgnoreCase) || result.Format.StartsWith("Swagger", StringComparison.OrdinalIgnoreCase);
 
     private static void Merge(ImportResult into, ImportResult from, List<string> formats)
     {
@@ -103,8 +128,9 @@ public sealed partial class ImportViewModel(
         formats.Add(from.Format);
     }
 
-    private void SetPreview(ImportResult result, string? format)
+    private void SetPreview(ImportResult result, string? format, Func<Task<string>>? specText = null)
     {
+        _specText = specText;
         Preview = result;
         Imported = false;
         PreviewLines.Clear();
@@ -124,6 +150,17 @@ public sealed partial class ImportViewModel(
     {
         if (Preview is null)
             return;
+        string? tests = null;
+        if (AlsoCreateTests && _specText is not null && Preview.Collections.Count > 0)
+        {
+            var text = (await _specText()).TrimStart('\uFEFF', ' ', '\t', '\r', '\n');
+            var spec = text.StartsWith('{') ? System.Text.Json.Nodes.JsonNode.Parse(text) : Yaml.ToJson(text);
+            if (spec is not null)
+            {
+                var report = Dispatch.Application.Spec.TestScaffolder.Apply(spec, Preview.Collections[0]);
+                tests = $" Added {report.SchemaAssertions} schema assertion(s) and {report.NegativeRequests} negative request(s).";
+            }
+        }
         foreach (var collection in Preview.Collections)
         {
             var requests = collection.Requests.ToList();
@@ -142,7 +179,7 @@ public sealed partial class ImportViewModel(
             environment.Id = Guid.NewGuid();
             await environments.SaveAsync(environment);
         }
-        Status = $"Imported {Preview.Collections.Count} collection(s), {Preview.RequestCount} request(s), {Preview.Environments.Count} environment(s).";
+        Status = $"Imported {Preview.Collections.Count} collection(s), {Preview.RequestCount} request(s), {Preview.Environments.Count} environment(s)." + tests;
         Preview = null;
         PreviewLines.Clear();
         Imported = true;

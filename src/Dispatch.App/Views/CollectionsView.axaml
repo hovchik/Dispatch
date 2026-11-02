@@ -119,6 +119,11 @@
                     <MenuItem Header="Markdown…" Command="{Binding ActionCommand}"
                               CommandParameter="{x:Static vm:CollectionAction.DocsMarkdown}" />
                   </MenuItem>
+                  <MenuItem Header="Generate OpenAPI spec…" Command="{Binding ActionCommand}"
+                            CommandParameter="{x:Static vm:CollectionAction.GenerateOpenApi}"
+                            ToolTip.Tip="Write an OpenAPI 3.0 document from the requests, saved examples and history">
+                    <MenuItem.Icon><PathIcon Data="{StaticResource IconFile}" Width="12" Height="12" /></MenuItem.Icon>
+                  </MenuItem>
                   <Separator />
                   <MenuItem Header="Export">
                     <MenuItem.Icon><PathIcon Data="{StaticResource IconExport}" Width="12" Height="12" /></MenuItem.Icon>

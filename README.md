@@ -125,6 +125,22 @@ Renames come with the corrected path, e.g. *"renamed `$.user.id` → `$.user.use
 2 requests and 1 flow"*. `dispatch impact <collection> --request "Get user"` checks the live API against the snapshot
 in CI and fails when something breaks.
 
+### OpenAPI generator and test scaffolding
+
+**Collection menu → Generate OpenAPI spec…** writes an OpenAPI 3.0 document (YAML or JSON) from what Dispatch already
+knows: the collection's requests, their saved examples and the run history. Paths are templated (`/users/42` becomes
+`/users/{userId}`, `{{petId}}` becomes `{petId}`), query and header parameters are listed with inferred types, request
+and response schemas are merged from every body seen (required fields, `nullable`, `uuid` / `date-time` / `email`
+formats, enumerations) with examples, and the requests' auth becomes `securitySchemes`. The same works from captured
+traffic: `dispatch openapi traffic.har -o api.yaml`, or `dispatch openapi "My Collection" --format json --server
+https://api.example.com`. The generated file imports back into Dispatch (and any other OpenAPI tool).
+
+The other direction, **Import → Also create tests** (or `dispatch scaffold spec.yaml -o tests.dispatch.json`), turns a
+spec into a test collection: every operation gets its happy-path request with a status assertion and a JSON-schema
+assertion on the documented success body, plus one negative request per required query/header parameter and required
+body field that leaves it out and expects a 4xx. `dispatch scaffold spec.yaml --save` puts the collection straight into
+the app; `dispatch run tests.dispatch.json` runs it in CI.
+
 ### Experimental: request forensics
 
 Two investigative tools that go beyond what API clients usually offer. Open them from the flask button next to
@@ -223,6 +239,8 @@ dotnet run --project src/Dispatch.Cli -- minimize "My Collection" --request "Cre
 dotnet run --project src/Dispatch.Cli -- ratelimit "My Collection" --request Login --expect-limit
 dotnet run --project src/Dispatch.Cli -- impact "My Collection" --request "Get user" --baseline snapshot -r cli,html
 dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
+dotnet run --project src/Dispatch.Cli -- openapi "My Collection" -o api.yaml --server https://api.example.com
+dotnet run --project src/Dispatch.Cli -- scaffold api.yaml -o tests.dispatch.json
 dotnet run --project src/Dispatch.Cli -- monitor --watch
 dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
 dotnet run --project src/Dispatch.Cli -- fuzz-client --port 8899 --host api.myapp.com --duration 10m -r cli,html
