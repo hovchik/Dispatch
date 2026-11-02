@@ -33,6 +33,7 @@ public sealed record MainServices(
     Dispatch.Application.Security.SecurityScanner Scanner,
     Dispatch.Application.Minimize.RequestMinimizer Minimizer,
     Dispatch.Application.RateLimits.RateLimitProber RateLimits,
+    Dispatch.Application.Probes.EndpointProbes Probes,
     IHistoryRepository HistoryStore,
     IFlowRepository Flows,
     Dispatch.Application.Flows.FlowRunner FlowRunner,
@@ -206,6 +207,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
     public void ShowRateLimit(ApiRequest request) =>
         Dialogs.ShowTool(new RateLimitViewModel(request, _services.RateLimits, Dialogs, () => ActiveEnvironment,
+            FindCollection(request.CollectionId)?.Variables));
+
+    public void ShowEndpointProbe(ApiRequest request, Dispatch.Application.Probes.ProbeKind kind) =>
+        Dialogs.ShowTool(new EndpointProbeViewModel(kind, request, _services.Probes, Dialogs, () => ActiveEnvironment,
             FindCollection(request.CollectionId)?.Variables));
 
     public void ShowImpact(ApiRequest request, string? currentBody, string? previousBody)
