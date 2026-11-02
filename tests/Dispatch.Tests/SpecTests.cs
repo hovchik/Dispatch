@@ -335,6 +335,62 @@ public class SpecDiffTests
     }
 
     [Fact]
+    public void Enum_constraints_added_or_removed_count_as_narrowing_or_widening()
+    {
+        static SpecDocument Spec(string paramSchema, string fieldSchema) => SpecLoader.Parse($$"""
+            {"openapi":"3.0.0","info":{"title":"T","version":"1"},"paths":{"/x":{"get":{
+              "parameters":[{"name":"kind","in":"query","schema":{{paramSchema}} }],
+              "responses":{"200":{"description":"ok","content":{"application/json":{"schema":{"type":"object","properties":{"s":{{fieldSchema}} } } } } } } } } } }
+            """);
+        var free = Spec("""{"type":"string"}""", """{"type":"string"}""");
+        var restricted = Spec("""{"type":"string","enum":["a","b"]}""", """{"type":"string","enum":["a"]}""");
+
+        var gained = SpecDiff.Compare(free, restricted);
+        Assert.Contains(gained.Changes, c => c is { Severity: ChangeSeverity.Breaking, Location: "query kind" } && c.Description.StartsWith("now restricted to"));
+        Assert.Contains(gained.Changes, c => c is { Severity: ChangeSeverity.NonBreaking, Location: "response 200" } && c.Description.Contains("now restricted"));
+
+        var lost = SpecDiff.Compare(restricted, free);
+        Assert.Contains(lost.Changes, c => c is { Severity: ChangeSeverity.NonBreaking, Location: "query kind", Description: "no longer restricted to an enum" });
+        Assert.Contains(lost.Changes, c => c is { Severity: ChangeSeverity.Breaking, Location: "response 200" } && c.Description.Contains("no longer restricted"));
+    }
+
+    [Fact]
+    public void Security_alternatives_and_conjunctions_are_compared_structurally()
+    {
+        static SpecDocument Spec(string security) => SpecLoader.Parse($$"""
+            {"openapi":"3.0.0","info":{"title":"T","version":"1"},
+             "components":{"securitySchemes":{"apiKey":{"type":"apiKey","in":"header","name":"X-Key"},"bearer":{"type":"http","scheme":"bearer"} } },
+             "paths":{"/x":{"get":{"security":{{security}},"responses":{"200":{"description":"ok"} } } } } }
+            """);
+        var either = Spec("""[{"apiKey":[]},{"bearer":[]}]""");
+        var both = Spec("""[{"apiKey":[],"bearer":[]}]""");
+        var withAnonymous = Spec("""[{},{"bearer":[]}]""");
+        var bearerOnly = Spec("""[{"bearer":[]}]""");
+
+        // "either" → "both": a client with one credential is rejected now.
+        var tightened = SpecDiff.Compare(either, both).Changes;
+        Assert.Equal(2, tightened.Count(c => c.Severity == ChangeSeverity.Breaking && c.Description.StartsWith("no longer accepts")));
+        // "both" → "either": anyone who sent both still passes.
+        Assert.DoesNotContain(SpecDiff.Compare(both, either).Changes, c => c.Severity == ChangeSeverity.Breaking);
+        // Removing the anonymous alternative is breaking; adding it is not.
+        Assert.Contains(SpecDiff.Compare(withAnonymous, bearerOnly).Changes, c => c.Severity == ChangeSeverity.Breaking && c.Description.StartsWith("now requires authentication"));
+        Assert.Contains(SpecDiff.Compare(bearerOnly, withAnonymous).Changes, c => c is { Severity: ChangeSeverity.NonBreaking, Description: "no longer requires authentication" });
+        Assert.Empty(SpecDiff.Compare(both, both).Changes);
+    }
+
+    [Fact]
+    public void Body_field_detection_tolerates_quoted_and_bare_variables()
+    {
+        var collection = SpecScenario.Collection();
+        var create = collection.Requests.Single(r => r.Name == "createPet");
+        create.Body.Content = """{"name":"{{petName}}","kind":"dog","age":{{age}}}""";
+        var report = Diff();
+        SpecDiff.AddImpact(report, SpecScenario.Spec(SpecScenario.V1), collection);
+        // name, kind and age are all present, so no "lacks" item for createPet.
+        Assert.DoesNotContain(report.Impact, i => i.Owner == "createPet" && i.Detail.Contains("lacks"));
+    }
+
+    [Fact]
     public void Moved_paths_are_paired_by_operation_id()
     {
         var before = SpecLoader.Parse("""{"openapi":"3.0.0","info":{"title":"T","version":"1"},"paths":{"/users":{"get":{"operationId":"list","responses":{"200":{"description":"ok"}}}}}}""");

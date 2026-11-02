@@ -41,8 +41,17 @@ public sealed class SpecOperation
     public IReadOnlyList<string> RequestMediaTypes { get; init; } = [];
     public IReadOnlyList<SpecResponse> Responses { get; init; } = [];
 
-    /// <summary>Names of the security schemes the operation accepts (empty = anonymous).</summary>
-    public IReadOnlyList<string> Security { get; init; } = [];
+    /// <summary>
+    /// Security requirements as alternatives: the request must satisfy one of them, and each one lists the schemes it needs
+    /// together (sorted). An empty inner list is the anonymous alternative; an empty outer list means no requirement.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<string>> SecurityRequirements { get; init; } = [];
+
+    /// <summary>Names of the security schemes the operation accepts anywhere (empty = anonymous).</summary>
+    public IReadOnlyList<string> Security => SecurityRequirements.SelectMany(r => r).Distinct().OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+    /// <summary>Whether a request can be made without credentials.</summary>
+    public bool AllowsAnonymous => SecurityRequirements.Count == 0 || SecurityRequirements.Any(r => r.Count == 0);
 
     /// <summary><c>GET /users/{id}</c>.</summary>
     public string Key => $"{Method} {Path}";
@@ -85,7 +94,7 @@ public sealed class SpecDocument
         if (!IsSpec(root))
             throw new FormatException("Not an OpenAPI 3.x or Swagger 2.0 document (no 'openapi' or 'swagger' field).");
         var swagger2 = root["swagger"] is not null;
-        var globalSecurity = SecurityNames(root["security"]);
+        var globalSecurity = SecurityRequirementsOf(root["security"]);
         var operations = new List<SpecOperation>();
 
         foreach (var (path, pathItemNode) in root["paths"] as JsonObject ?? [])
@@ -170,7 +179,7 @@ public sealed class SpecDocument
                     RequestBodyRequired = bodyRequired,
                     RequestMediaTypes = mediaTypes,
                     Responses = responses,
-                    Security = op["security"] is { } s ? SecurityNames(s) : globalSecurity
+                    SecurityRequirements = op["security"] is { } s ? SecurityRequirementsOf(s) : globalSecurity
                 });
             }
         }
@@ -315,8 +324,17 @@ public sealed class SpecDocument
         return list;
     }
 
-    private static IReadOnlyList<string> SecurityNames(JsonNode? security) =>
-        (security as JsonArray ?? []).OfType<JsonObject>().SelectMany(o => o.Select(kv => kv.Key)).Distinct().OrderBy(n => n, StringComparer.Ordinal).ToList();
+    private static IReadOnlyList<IReadOnlyList<string>> SecurityRequirementsOf(JsonNode? security) =>
+        (security as JsonArray ?? []).OfType<JsonObject>()
+            .Select(o => (IReadOnlyList<string>)o.Select(kv => kv.Key).Distinct().OrderBy(n => n, StringComparer.Ordinal).ToList())
+            .Distinct(RequirementComparer.Instance).ToList();
+
+    private sealed class RequirementComparer : IEqualityComparer<IReadOnlyList<string>>
+    {
+        public static readonly RequirementComparer Instance = new();
+        public bool Equals(IReadOnlyList<string>? x, IReadOnlyList<string>? y) => x is not null && y is not null && x.SequenceEqual(y, StringComparer.Ordinal);
+        public int GetHashCode(IReadOnlyList<string> obj) => string.Join("+", obj).GetHashCode(StringComparison.Ordinal);
+    }
 
     private static string SwaggerServer(JsonNode root)
     {

@@ -165,12 +165,20 @@ public static class SpecDiff
                 changes.Add(new SpecChange(ChangeSeverity.NonBreaking, "parameter", key, where, "became optional"));
             if (p.Type != n.Type && p.Type != "any" && n.Type != "any")
                 changes.Add(new SpecChange(ChangeSeverity.Breaking, "parameter", key, where, $"type {p.Type} → {n.Type}"));
+            // An absent enum means unrestricted: gaining one narrows the parameter, losing one widens it.
             var removedValues = p.Enum.Except(n.Enum, StringComparer.Ordinal).ToList();
             var addedValues = n.Enum.Except(p.Enum, StringComparer.Ordinal).ToList();
-            if (p.Enum.Count > 0 && removedValues.Count > 0)
-                changes.Add(new SpecChange(ChangeSeverity.Breaking, "parameter", key, where, $"enum narrowed: removed {string.Join(", ", removedValues)}"));
-            if (addedValues.Count > 0 && p.Enum.Count > 0)
-                changes.Add(new SpecChange(ChangeSeverity.NonBreaking, "parameter", key, where, $"enum widened: added {string.Join(", ", addedValues)}"));
+            if (p.Enum.Count == 0 && n.Enum.Count > 0)
+                changes.Add(new SpecChange(ChangeSeverity.Breaking, "parameter", key, where, $"now restricted to {string.Join(", ", n.Enum.Take(8))}"));
+            else if (p.Enum.Count > 0 && n.Enum.Count == 0)
+                changes.Add(new SpecChange(ChangeSeverity.NonBreaking, "parameter", key, where, "no longer restricted to an enum"));
+            else
+            {
+                if (removedValues.Count > 0)
+                    changes.Add(new SpecChange(ChangeSeverity.Breaking, "parameter", key, where, $"enum narrowed: removed {string.Join(", ", removedValues)}"));
+                if (addedValues.Count > 0)
+                    changes.Add(new SpecChange(ChangeSeverity.NonBreaking, "parameter", key, where, $"enum widened: added {string.Join(", ", addedValues)}"));
+            }
         }
 
         // ---- Request body ----
@@ -222,21 +230,31 @@ public static class SpecDiff
         }
 
         // ---- Security ----
-        if (oldOp.Security.Count == 0 && newOp.Security.Count > 0)
-            changes.Add(new SpecChange(ChangeSeverity.Breaking, "security", key, "security", $"now requires authentication ({string.Join(" or ", newOp.Security)})"));
-        else if (oldOp.Security.Count > 0 && newOp.Security.Count == 0)
+        // Requirements are alternatives (any one satisfies) of schemes needed together. Old clients keep working when every
+        // old alternative still satisfies some new alternative (the new one needs a subset of what the client already sends).
+        var oldReqs = oldOp.SecurityRequirements;
+        var newReqs = newOp.SecurityRequirements;
+        if (oldOp.AllowsAnonymous && !newOp.AllowsAnonymous)
+            changes.Add(new SpecChange(ChangeSeverity.Breaking, "security", key, "security", $"now requires authentication ({Requirements(newReqs)})"));
+        else if (!oldOp.AllowsAnonymous && newOp.AllowsAnonymous)
             changes.Add(new SpecChange(ChangeSeverity.NonBreaking, "security", key, "security", "no longer requires authentication"));
-        else
+        if (!oldOp.AllowsAnonymous && !newOp.AllowsAnonymous)
         {
-            foreach (var scheme in oldOp.Security.Except(newOp.Security, StringComparer.Ordinal))
-                changes.Add(new SpecChange(ChangeSeverity.Breaking, "security", key, "security", $"no longer accepts {scheme}" + SchemeText(before, scheme)));
-            foreach (var scheme in newOp.Security.Except(oldOp.Security, StringComparer.Ordinal))
-                changes.Add(new SpecChange(ChangeSeverity.NonBreaking, "security", key, "security", $"now also accepts {scheme}" + SchemeText(after, scheme)));
+            foreach (var old in oldReqs.Where(o => !newReqs.Any(n => n.All(scheme => o.Contains(scheme, StringComparer.Ordinal)))))
+                changes.Add(new SpecChange(ChangeSeverity.Breaking, "security", key, "security",
+                    $"no longer accepts {Requirement(old)}" + (newReqs.Count > 0 ? $"; now needs {Requirements(newReqs)}" : "")));
+            foreach (var added in newReqs.Where(n => !oldReqs.Any(o => n.All(scheme => o.Contains(scheme, StringComparer.Ordinal)))))
+                changes.Add(new SpecChange(ChangeSeverity.NonBreaking, "security", key, "security", $"now also accepts {Requirement(added)}"));
         }
         foreach (var scheme in oldOp.Security.Intersect(newOp.Security, StringComparer.Ordinal))
             if (before.SecuritySchemes.TryGetValue(scheme, out var a) && after.SecuritySchemes.TryGetValue(scheme, out var b) && a != b)
                 changes.Add(new SpecChange(ChangeSeverity.Breaking, "security", key, "security", $"scheme {scheme} changed: {a} → {b}"));
     }
+
+    private static string Requirement(IReadOnlyList<string> schemes) => schemes.Count == 0 ? "anonymous" : string.Join(" + ", schemes);
+
+    private static string Requirements(IReadOnlyList<IReadOnlyList<string>> requirements) =>
+        string.Join(" or ", requirements.Where(r => r.Count > 0).Select(Requirement));
 
     private static string SchemeText(SpecDocument spec, string scheme) => spec.SecuritySchemes.TryGetValue(scheme, out var t) && t.Length > 0 ? $" ({t})" : "";
 
@@ -348,8 +366,12 @@ public static class SpecDiff
                     changes.Add(new SpecChange(isResponse ? ChangeSeverity.Breaking : ChangeSeverity.NonBreaking, category, key, where,
                         $"{path} enum widened: added {string.Join(", ", addedValues)}" + (isResponse ? " (clients may not handle them)" : "")));
             }
-            else if (o.Enum.Count == 0 && n.Enum.Count > 0 && !isResponse)
-                changes.Add(new SpecChange(ChangeSeverity.Breaking, category, key, where, $"{path} is now restricted to {string.Join(", ", n.Enum.Take(8))}"));
+            else if (o.Enum.Count == 0 && n.Enum.Count > 0)
+                changes.Add(new SpecChange(isResponse ? ChangeSeverity.NonBreaking : ChangeSeverity.Breaking, category, key, where,
+                    $"{path} is now restricted to {string.Join(", ", n.Enum.Take(8))}"));
+            else if (o.Enum.Count > 0 && n.Enum.Count == 0)
+                changes.Add(new SpecChange(isResponse ? ChangeSeverity.Breaking : ChangeSeverity.NonBreaking, category, key, where,
+                    $"{path} is no longer restricted to an enum" + (isResponse ? " (clients may not handle new values)" : "")));
             if (o.Format != n.Format && o.Format is not null && n.Format is not null)
                 changes.Add(new SpecChange(ChangeSeverity.NonBreaking, category, key, where, $"{path} format {o.Format} → {n.Format}"));
         }
@@ -506,7 +528,8 @@ public static class SpecDiff
             return false;
         try
         {
-            var node = System.Text.Json.Nodes.JsonNode.Parse(System.Text.RegularExpressions.Regex.Replace(request.Body.Content, @"\{\{[^}]*\}\}", "\"\""));
+            // {{variables}} stand for a value: quoted ones ("{{name}}" → "0") stay strings, bare ones ({{count}} → 0) become numbers.
+            var node = System.Text.Json.Nodes.JsonNode.Parse(System.Text.RegularExpressions.Regex.Replace(request.Body.Content, @"\{\{[^}]*\}\}", "0"));
             return JsonPath.Select(node, path).Count > 0;
         }
         catch (System.Text.Json.JsonException)
