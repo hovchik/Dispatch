@@ -70,6 +70,9 @@ public sealed class MonitorDefinition
     /// <summary>Fail the run (and alert) when the average response time exceeds this, in ms (0 = no limit).</summary>
     public int MaxAverageMs { get; set; }
 
+    /// <summary>Fail the run (and alert) when a TLS certificate of a monitored HTTPS host expires within this many days (0 = off).</summary>
+    public int CertificateWarnDays { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public MonitorDefinition Clone() => new()
@@ -85,6 +88,7 @@ public sealed class MonitorDefinition
         Cron = Cron,
         Alerts = Alerts.Select(a => a.Clone()).ToList(),
         MaxAverageMs = MaxAverageMs,
+        CertificateWarnDays = CertificateWarnDays,
         CreatedAt = CreatedAt
     };
 }

@@ -78,7 +78,8 @@ public static class DocsGenerator
     private static List<string> Checks(ApiRequest r, IReadOnlyList<ApiRequest> all) =>
         r.Assertions.Where(a => a.Enabled).Select(AssertionEvaluator.Describe)
             .Concat(r.Expectations.Where(e => e.Enabled).Select(e =>
-                Consequences.ConsequenceSession.Describe(e, all.FirstOrDefault(x => x.Id == e.ListenerId)?.Name ?? "(missing listener)")))
+                Consequences.ConsequenceSession.Describe(e, Webhooks.WebhookListener.Is(e) ? Webhooks.WebhookListener.Name
+                    : all.FirstOrDefault(x => x.Id == e.ListenerId)?.Name ?? "(missing listener)")))
             .ToList();
 
     private static void AppendRequest(StringBuilder sb, ApiRequest r, DocsOptions options, IReadOnlyList<ApiRequest> all)

@@ -151,7 +151,7 @@
           <ScrollViewer IsVisible="{Binding HasReport}">
             <StackPanel Spacing="14" Margin="0,0,10,10">
               <!-- Header -->
-              <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
                 <Border Classes="pill" Background="{Binding VerdictBrush}">
                   <TextBlock Text="{Binding Verdict}" Foreground="White" FontWeight="Bold" FontSize="12" />
                 </Border>
@@ -159,13 +159,21 @@
                   <TextBlock Text="Test summary" FontSize="16" FontWeight="SemiBold" />
                   <TextBlock Text="{Binding ReportSubtitle}" Classes="muted" FontSize="11.5" TextWrapping="Wrap" />
                 </StackPanel>
-                <Button Grid.Column="2" Command="{Binding OpenReportCommand}" VerticalAlignment="Center" ToolTip.Tip="Open the HTML report in your browser">
+                <DropDownButton Grid.Column="2" Content="Baseline" VerticalAlignment="Center" ToolTip.Tip="Save this run as a baseline, or compare it with a saved one">
+                  <DropDownButton.Flyout>
+                    <MenuFlyout>
+                      <MenuItem Header="Set as baseline…" Command="{Binding SetAsBaselineCommand}" />
+                      <MenuItem Header="Compare with baseline…" Command="{Binding CompareWithBaselineCommand}" />
+                    </MenuFlyout>
+                  </DropDownButton.Flyout>
+                </DropDownButton>
+                <Button Grid.Column="3" Command="{Binding OpenReportCommand}" VerticalAlignment="Center" ToolTip.Tip="Open the HTML report in your browser">
                   <StackPanel Orientation="Horizontal" Spacing="6">
                     <PathIcon Data="{StaticResource IconExport}" Width="12" Height="12" />
                     <TextBlock Text="Open in browser" />
                   </StackPanel>
                 </Button>
-                <DropDownButton Grid.Column="3" Content="Export" VerticalAlignment="Center">
+                <DropDownButton Grid.Column="4" Content="Export" VerticalAlignment="Center">
                   <DropDownButton.Flyout>
                     <MenuFlyout>
                       <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
@@ -182,10 +190,84 @@
                 </ItemsControl.ItemsPanel>
               </ItemsControl>
 
+              <Border Classes="panel" IsVisible="{Binding HasStreaming}">
+                <StackPanel>
+                  <TextBlock Classes="panelTitle" Text="Streaming connections and messages" />
+                  <ItemsControl ItemsSource="{Binding StreamingTiles}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate><UniformGrid Columns="6" ColumnSpacing="8" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+
               <StackPanel Spacing="0">
                 <TextBlock Classes="section" Text="INSIGHTS" Margin="0,0,0,6" />
                 <ItemsControl ItemsSource="{Binding Insights}" />
               </StackPanel>
+
+              <Border Classes="panel" IsVisible="{Binding HasComparison}">
+                <StackPanel Spacing="6">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                    <Border Classes="pill" Background="{Binding ComparisonBrush}">
+                      <TextBlock Text="{Binding ComparisonVerdict}" Foreground="White" FontWeight="Bold" FontSize="12" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                      <TextBlock Classes="panelTitle" Text="Compared with baseline" Margin="0" />
+                      <TextBlock Text="{Binding ComparisonSubtitle}" Classes="muted" FontSize="11.5" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Classes="label" Text="Max regression %" VerticalAlignment="Center" />
+                    <NumericUpDown Grid.Column="3" Value="{Binding MaxRegressionPercent}" Minimum="0" Maximum="1000" Width="110" FormatString="0" />
+                  </Grid>
+                  <ItemsControl ItemsSource="{Binding ComparisonFindings}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <TextBlock Text="{Binding}" FontSize="12.5" TextWrapping="Wrap" Margin="0,1" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Grid Classes="th" ColumnDefinitions="*,110,110,70,100" Margin="0,6,0,2">
+                    <TextBlock Text="METRIC" />
+                    <TextBlock Grid.Column="1" Text="BASELINE" TextAlignment="Right" />
+                    <TextBlock Grid.Column="2" Text="THIS RUN" TextAlignment="Right" />
+                    <TextBlock Grid.Column="3" Text="Δ" TextAlignment="Right" />
+                    <TextBlock Grid.Column="4" Text="VERDICT" Margin="10,0,0,0" />
+                  </Grid>
+                  <ItemsControl ItemsSource="{Binding ComparisonMetrics}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="tools:MetricRow">
+                        <Grid Classes="row" ColumnDefinitions="*,110,110,70,100" Margin="0,1">
+                          <TextBlock Text="{Binding Name}" />
+                          <TextBlock Grid.Column="1" Text="{Binding Baseline}" TextAlignment="Right" Classes="muted" />
+                          <TextBlock Grid.Column="2" Text="{Binding Current}" TextAlignment="Right" />
+                          <TextBlock Grid.Column="3" Text="{Binding Delta}" TextAlignment="Right" Foreground="{Binding Brush}" />
+                          <TextBlock Grid.Column="4" Text="{Binding Verdict}" Foreground="{Binding Brush}" FontSize="11" FontWeight="SemiBold" Margin="10,0,0,0" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Grid Classes="th" ColumnDefinitions="*,190,200,120,90" Margin="0,8,0,2">
+                    <TextBlock Text="REQUEST" />
+                    <TextBlock Grid.Column="1" Text="P95" />
+                    <TextBlock Grid.Column="2" Text="THROUGHPUT" />
+                    <TextBlock Grid.Column="3" Text="ERRORS" />
+                    <TextBlock Grid.Column="4" Text="VERDICT" />
+                  </Grid>
+                  <ItemsControl ItemsSource="{Binding ComparisonRequests}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="tools:ComparisonRequestRow">
+                        <Grid Classes="row" ColumnDefinitions="*,190,200,120,90" Margin="0,1">
+                          <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                          <TextBlock Grid.Column="1" Text="{Binding P95}" />
+                          <TextBlock Grid.Column="2" Text="{Binding Throughput}" />
+                          <TextBlock Grid.Column="3" Text="{Binding ErrorRate}" Classes="muted" />
+                          <TextBlock Grid.Column="4" Text="{Binding Verdict}" Foreground="{Binding Brush}" FontSize="11" FontWeight="SemiBold" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
 
               <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                 <Border Classes="panel">

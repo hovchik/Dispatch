@@ -22,6 +22,9 @@ public sealed class CaptureProxyOptions
 
     /// <summary>Sees every request and may replace responses before they reach the client (client fuzzing).</summary>
     public Dispatch.Application.ClientFuzz.IResponseInterceptor? Interceptor { get; init; }
+
+    /// <summary>Network conditions to impose on relayed traffic (latency, bandwidth cap, loss, offline windows); null = none.</summary>
+    public NetworkProfile? Network { get; init; }
 }
 
 /// <summary>
@@ -37,6 +40,7 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private CaptureProxyOptions _options = new();
+    private NetworkShaper? _shaper;
     private readonly HttpClient _client = new(new HttpClientHandler
     {
         AllowAutoRedirect = false,
@@ -50,11 +54,15 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
     public int Port { get; private set; }
     public string CaCertificatePem => authority.CaCertificatePem;
 
+    /// <summary>The active network shaper (counters for the UI / CLI), or null when no profile is applied.</summary>
+    public NetworkShaper? Shaper => _shaper;
+
     public Task StartAsync(CaptureProxyOptions options)
     {
         if (_listener is not null)
             throw new InvalidOperationException("The capture proxy is already running.");
         _options = options;
+        _shaper = options.Network is { IsNone: false } profile ? new NetworkShaper(profile) : null;
         _listener = new TcpListener(options.Public ? IPAddress.Any : IPAddress.Loopback, options.Port);
         _listener.Start();
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
@@ -150,7 +158,7 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
         var response = body is null
             ? PayloadTooLarge
             : await ForwardAsync(method, absoluteUri, headers, body, secure: false, ct).ConfigureAwait(false);
-        await WriteResponseAsync(stream, response, ct).ConfigureAwait(false);
+        await WriteResponseAsync(stream, response, _shaper, ct).ConfigureAwait(false);
     }
 
     // ---- HTTPS via CONNECT -------------------------------------------------------------------------
@@ -164,11 +172,29 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
             return;
         }
 
+        // Offline windows and packet loss hit the tunnel itself: the client sees the CONNECT fail outright. The drop is
+        // still recorded, so the traffic list shows what the client saw.
+        if (_shaper is not null)
+        {
+            try
+            {
+                _shaper.Admit();
+            }
+            catch (NetworkDroppedException ex)
+            {
+                var url = $"https://{authority2}";
+                if (ShouldRecord(url))
+                    Publish(new CapturedExchange { Timestamp = DateTimeOffset.Now, Method = "CONNECT", Url = url, Secure = true, Error = ex.Message });
+                throw;
+            }
+        }
         await WriteAsync(clientStream, "HTTP/1.1 200 Connection Established\r\n\r\n", ct).ConfigureAwait(false);
 
         if (!_options.DecryptHttps)
         {
-            // Blind tunnel: pipe bytes both ways without decrypting (nothing is recorded).
+            // Blind tunnel: pipe bytes both ways without decrypting (nothing is recorded, only latency is applied).
+            if (_shaper is not null)
+                await _shaper.DelayAsync(ct).ConfigureAwait(false);
             using var upstream = new TcpClient();
             await upstream.ConnectAsync(host, port, ct).ConfigureAwait(false);
             await using var upstreamStream = upstream.GetStream();
@@ -199,7 +225,7 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
             var response = body is null
                 ? PayloadTooLarge
                 : await ForwardAsync(parts[0], url, headers, body, secure: true, ct).ConfigureAwait(false);
-            await WriteResponseAsync(tls, response, ct).ConfigureAwait(false);
+            await WriteResponseAsync(tls, response, _shaper, ct).ConfigureAwait(false);
             if (ResponseClosesConnection(response))
                 break;
         }
@@ -224,6 +250,24 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
             : null;
 
         _options.Interceptor?.OnRequest(method, url, body.Length > 0 ? SafeText(body) : "", started);
+        if (_shaper is not null)
+        {
+            try
+            {
+                _shaper.Admit();
+            }
+            catch (NetworkDroppedException ex)
+            {
+                if (exchange is not null)
+                {
+                    exchange.Error = ex.Message;
+                    exchange.ElapsedMs = stopwatch.Elapsed.TotalMilliseconds;
+                    Publish(exchange);
+                }
+                throw; // closes the client connection without a response, like a lost link would
+            }
+            await _shaper.DelayAsync(ct).ConfigureAwait(false);
+        }
         try
         {
             using var request = new HttpRequestMessage(new HttpMethod(method), url);
@@ -425,7 +469,7 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
         return body.ToArray();
     }
 
-    private static async Task WriteResponseAsync(Stream stream, ProxyResponse response, CancellationToken ct)
+    private static async Task WriteResponseAsync(Stream stream, ProxyResponse response, NetworkShaper? shaper, CancellationToken ct)
     {
         var head = new StringBuilder();
         head.Append($"HTTP/1.1 {response.Status} {response.Reason}\r\n");
@@ -436,7 +480,12 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
         head.Append("\r\n");
         await WriteAsync(stream, head.ToString(), ct).ConfigureAwait(false);
         if (response.Body.Length > 0)
-            await stream.WriteAsync(response.Body, ct).ConfigureAwait(false);
+        {
+            if (shaper is not null)
+                await shaper.WritePacedAsync(stream, response.Body, ct).ConfigureAwait(false);
+            else
+                await stream.WriteAsync(response.Body, ct).ConfigureAwait(false);
+        }
         await stream.FlushAsync(ct).ConfigureAwait(false);
     }
 
