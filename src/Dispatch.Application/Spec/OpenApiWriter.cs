@@ -412,8 +412,12 @@ public static partial class OpenApiWriter
             default:
                 return null;
         }
-        schemes[name] ??= scheme;
-        return name;
+        // Reuse a scheme only when its configuration is the same; a different API-key header or OAuth flow gets its own name.
+        var unique = name;
+        for (var n = 2; schemes[unique] is { } existing && existing.ToJsonString() != scheme.ToJsonString(); n++)
+            unique = name + n;
+        schemes[unique] ??= scheme;
+        return unique;
     }
 
     private static AuthSettings? AuthFromHeaders(IReadOnlyList<KeyValueItem> headers)

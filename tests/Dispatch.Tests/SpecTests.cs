@@ -99,6 +99,22 @@ public class OpenApiWriterTests
     }
 
     [Fact]
+    public void Distinct_auth_configurations_get_distinct_security_schemes()
+    {
+        var collection = new RequestCollection { Name = "Keys", Variables = [new KeyValueItem("baseUrl", "https://k.test")] };
+        collection.Requests.Add(new ApiRequest { Name = "A", Url = "{{baseUrl}}/a", Auth = new AuthSettings { Mode = AuthMode.ApiKey, ApiKeyName = "X-API-Key" } });
+        collection.Requests.Add(new ApiRequest { Name = "B", Url = "{{baseUrl}}/b", Auth = new AuthSettings { Mode = AuthMode.ApiKey, ApiKeyName = "api_key", ApiKeyLocation = ApiKeyLocation.QueryParam } });
+        collection.Requests.Add(new ApiRequest { Name = "C", Url = "{{baseUrl}}/c", Auth = new AuthSettings { Mode = AuthMode.ApiKey, ApiKeyName = "X-API-Key" } });
+
+        var spec = OpenApiWriter.FromCollection(collection);
+        var schemes = spec["components"]!["securitySchemes"]!.AsObject();
+        Assert.Equal(["apiKeyAuth", "apiKeyAuth2"], schemes.Select(s => s.Key));
+        Assert.Equal("query", schemes["apiKeyAuth2"]!["in"]!.ToString());
+        Assert.Equal("apiKeyAuth2", spec["paths"]!["/b"]!["get"]!["security"]![0]!.AsObject().First().Key);
+        Assert.Equal("apiKeyAuth", spec["paths"]!["/c"]!["get"]!["security"]![0]!.AsObject().First().Key);
+    }
+
+    [Fact]
     public void Uses_history_of_this_collection_only()
     {
         var collection = PetStore();
