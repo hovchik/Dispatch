@@ -46,6 +46,10 @@ public static class Program
                                                   (--network 3g, or --latency 300ms --bandwidth 1mbps --loss 2%)
           dispatch fuzz-client [--port 8899] [...] Vary responses to an app through a proxy to find how it breaks
                                                   (--host h, --window 5s, --kinds NullField,EmptyArray,…, --duration 10m)
+          dispatch openapi <collection|traffic.har>  Generate an OpenAPI 3.0 spec from a collection, its history or a HAR
+                                                  (-o api.yaml, --format yaml|json, --title, --server)
+          dispatch scaffold <spec.yaml> [-o f]    Create tests from an OpenAPI spec: happy paths, schema checks, 4xx negatives
+                                                  (--save puts them in the app)
           dispatch compare <collection> -e a -e b  Run against two environments or base URLs and diff every response
                                                   (--ignore $.timestamp, --fail-on-diff, -r cli,html,json)
           dispatch tls <host[:port]|collection>    Inspect TLS: chain, expiry, protocol, cipher, ALPN (--warn-days 21)
@@ -118,6 +122,8 @@ public static class Program
                 "monitor" => await MonitorCommand.ExecuteAsync(rest, cancel.Token),
                 "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),
                 "fuzz-client" => await FuzzClientCommand.ExecuteAsync(rest, cancel.Token),
+                "openapi" => await OpenApiCommand.ExecuteAsync(rest, cancel.Token),
+                "scaffold" => await ScaffoldCommand.ExecuteAsync(rest, cancel.Token),
                 "compare" => await CompareCommand.ExecuteAsync(rest, cancel.Token),
                 "tls" => await TlsCommand.ExecuteAsync(rest, cancel.Token),
                 "webhooks" or "webhook" => await WebhooksCommand.ExecuteAsync(rest, cancel.Token),

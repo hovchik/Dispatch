@@ -481,6 +481,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     [RelayCommand]
     private void OpenCollectionSettings() => OpenCollectionTool(CollectionAction.Settings);
 
+    [RelayCommand]
+    private void GenerateOpenApi() => OpenCollectionTool(CollectionAction.GenerateOpenApi);
+
     /// <summary>Compare environments: run the current collection against two environments or base URLs and diff the responses.</summary>
     [RelayCommand]
     private void OpenCompare()
@@ -563,6 +566,29 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
                     if (html)
                         ShellOpener.Open(path);
                     ShowInfo($"Documentation for {collection.Requests.Count} endpoint(s) saved to {path}");
+                });
+                break;
+            case CollectionAction.GenerateOpenApi:
+                await SafeAsync(async () =>
+                {
+                    var slug = DispatchFormat.Slug(collection.Name);
+                    var path = await Dialogs.SaveFileAsync("Generate OpenAPI spec", slug + ".openapi.yaml",
+                        new FileFilter("OpenAPI YAML", "*.yaml", "*.yml"), new FileFilter("OpenAPI JSON", "*.json"));
+                    if (path is null)
+                        return;
+                    IReadOnlyList<HistoryEntry> history = [];
+                    try
+                    {
+                        history = await _services.HistoryStore.GetRecentAsync(5000);
+                    }
+                    catch (Exception)
+                    {
+                        // A spec without history is still a spec.
+                    }
+                    var spec = Application.Spec.OpenApiWriter.FromCollection(collection, history);
+                    var json = path.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
+                    await File.WriteAllTextAsync(path, json ? Application.Spec.OpenApiWriter.ToJson(spec) : Application.Spec.OpenApiWriter.ToYaml(spec));
+                    ShowInfo($"OpenAPI spec with {Application.Spec.OpenApiWriter.OperationCount(spec)} operation(s) saved to {path}");
                 });
                 break;
             case CollectionAction.ExportFolder:
@@ -680,6 +706,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         foreach (var collection in Collections.Items)
             yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
                 () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));
+        foreach (var collection in Collections.Items)
+            yield return new PaletteItem($"Generate OpenAPI spec: {collection.Name}", "OpenAPI 3.0 from requests, examples and history",
+                () => _ = RunCollectionActionAsync(collection, CollectionAction.GenerateOpenApi));
         yield return new PaletteItem("Toggle theme", "Light / dark", ToggleTheme);
         yield return new PaletteItem("Toggle sidebar", "Show or hide the sidebar (Ctrl+B)", ToggleSidebar);
         yield return new PaletteItem("Toggle layout", "Request and response side by side or stacked", ToggleLayout);
