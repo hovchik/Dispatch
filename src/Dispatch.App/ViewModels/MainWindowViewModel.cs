@@ -481,6 +481,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     [RelayCommand]
     private void OpenCollectionSettings() => OpenCollectionTool(CollectionAction.Settings);
 
+    /// <summary>Compare environments: run the current collection against two environments or base URLs and diff the responses.</summary>
+    [RelayCommand]
+    private void OpenCompare()
+    {
+        var node = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId) ?? Collections.Items.FirstOrDefault();
+        if (node is null)
+        {
+            ErrorMessage = "Create or import a collection first.";
+            return;
+        }
+        var environments = Environments.Items.Where(e => !e.IsNone).Select(e => e.ToModel()).ToList();
+        Dialogs.ShowTool(new CompareViewModel(node.Model, new Dispatch.Application.Compare.EnvironmentComparer(_services.Tabs.Sender), Dialogs,
+            environments, ActiveEnvironment));
+    }
+
     /// <summary>Toolbar tools act on the collection of the current tab, else the first collection.</summary>
     private void OpenCollectionTool(CollectionAction action)
     {
@@ -655,6 +670,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         yield return new PaletteItem("Test flows…", "Chain requests with conditions, loops and waits", OpenFlows);
         yield return new PaletteItem("Security scan…", "Passive checks and active probes", OpenSecurityScan);
         yield return new PaletteItem("API laws…", "Mine rules the API always follows, then check them", OpenLaws);
+        yield return new PaletteItem("Compare environments…", "Run the collection on two environments and diff every response", OpenCompare);
         yield return new PaletteItem("Collection settings…", "Variables, auth and defaults of the current collection", OpenCollectionSettings);
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
         yield return new PaletteItem("Capture proxy…", "Record browser / app traffic into a collection", OpenCapture);

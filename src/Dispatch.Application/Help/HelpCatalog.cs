@@ -81,6 +81,7 @@ public static class HelpCatalog
     public const string Protocols = "protocols";
     public const string Cli = "cli";
     public const string Shortcuts = "shortcuts";
+    public const string CompareEnvironments = "compare-environments";
     public const string Tls = "tls";
     public const string NetworkConditions = "network-conditions";
 
@@ -515,6 +516,25 @@ public static class HelpCatalog
         ],
         ["cli", "command line", "terminal", "ci", "pipeline", "headless", "github actions", "jenkins", "exit code"],
         null, [Runner, ImportExport]),
+
+        new(CompareEnvironments, "Tools", "Compare environments & load baselines", "Diff two deployments, and catch load regressions.",
+        [
+            new HelpParagraph("Compare environments sends every chosen request to two environments (or two base URLs) at the same moment and diffs the answers: status, the structure of JSON bodies, non-volatile headers and latency. Each side chains its own extracted variables, so a login on staging never leaks a token into production."),
+            new HelpSteps(
+            [
+                "Open More → Compare environments… (or search it in the command palette).",
+                "Pick an environment for each side, or type a base URL such as https://staging.example.com to re-point absolute request URLs.",
+                "List paths that legitimately differ under Ignore paths, e.g. $.timestamp, $..id, $.items[*].updatedAt.",
+                "Press Compare. Rows marked ≠ differ; Diff opens both bodies side by side. Export the report as HTML or JSON."
+            ]),
+            new HelpExample("From the CLI (exit code 1 when anything differs)", "dispatch compare \"My Collection\" -e Staging -e Production --ignore $.timestamp --fail-on-diff -r cli,html"),
+            new HelpParagraph("Load baselines: in a load test report, Baseline → Set as baseline saves the run as a JSON file. Later runs choose Compare with baseline and show p50 / p95 / p99, throughput and error-rate deltas per request with a verdict: REGRESSED when a metric is worse by more than the allowed percentage (10 % by default), IMPROVED, or UNCHANGED."),
+            new HelpExample("Baselines in CI", "dispatch load api.dispatch.json --users 20 --duration 60s --save-baseline base.json\ndispatch load api.dispatch.json --users 20 --duration 60s --baseline base.json --max-regression 10%"),
+            new HelpParagraph("Streaming load: WebSocket, SSE, Socket.IO, MQTT, Kafka, AMQP and gRPC streaming requests can be part of the journey. Each virtual user holds one connection at a time and reconnects after the request's listen time; the report adds connections, connect errors, drops, messages per second and message latency."),
+            new HelpTip("Ignore paths accept the same syntax as the response diff and snapshot assertions.")
+        ],
+        ["compare", "environment", "parity", "staging", "production", "diff", "baseline", "regression", "load", "websocket", "sse", "mqtt", "streaming", "p95", "throughput"],
+        null, [LoadTest, Variables, Cli]),
 
         new(Shortcuts, "Basics", "Keyboard shortcuts", "Work faster without the mouse.",
         [

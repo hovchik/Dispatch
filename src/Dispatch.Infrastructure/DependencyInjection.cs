@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddSingleton<IRequestSender, RequestSender>();
         services.AddSingleton<Dispatch.Application.Running.CollectionRunner>();
         services.AddSingleton<Dispatch.Application.Load.LoadTester>();
+        services.AddSingleton<Dispatch.Application.Compare.EnvironmentComparer>();
         services.AddSingleton<Dispatch.Application.Security.SecurityScanner>();
         services.AddSingleton<Dispatch.Application.Minimize.RequestMinimizer>();
         services.AddSingleton<Dispatch.Application.RateLimits.RateLimitProber>();

@@ -24,7 +24,8 @@ public static class Program
           dispatch list                           List saved collections and environments
           dispatch mock <collection> [options]    Serve a collection's examples as a mock server
                                                   (--dynamic: fresh fake data from schemas, --stateful: CRUD memory)
-          dispatch load <collection> [options]    Load test a collection
+          dispatch load <collection> [options]    Load test a collection (HTTP and streaming requests; --baseline base.json
+                                                  --max-regression 10%, --save-baseline base.json, -r cli,html,json,csv)
           dispatch docs <collection> [options]    Generate API documentation (--format html|md, --out <file>)
           dispatch scan <collection> [options]    Security-test a collection you are authorised to test
           dispatch minimize <collection> [...]    Shrink a request to the parts its outcome depends on
@@ -45,6 +46,8 @@ public static class Program
                                                   (--network 3g, or --latency 300ms --bandwidth 1mbps --loss 2%)
           dispatch fuzz-client [--port 8899] [...] Vary responses to an app through a proxy to find how it breaks
                                                   (--host h, --window 5s, --kinds NullField,EmptyArray,…, --duration 10m)
+          dispatch compare <collection> -e a -e b  Run against two environments or base URLs and diff every response
+                                                  (--ignore $.timestamp, --fail-on-diff, -r cli,html,json)
           dispatch tls <host[:port]|collection>    Inspect TLS: chain, expiry, protocol, cipher, ALPN (--warn-days 21)
           dispatch webhooks [--port 9000] [...]    Receive and record webhooks locally (--out hooks.json, --expect n,
                                                   --path /hooks/orders, --duration 10m, --status 200)
@@ -115,6 +118,7 @@ public static class Program
                 "monitor" => await MonitorCommand.ExecuteAsync(rest, cancel.Token),
                 "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),
                 "fuzz-client" => await FuzzClientCommand.ExecuteAsync(rest, cancel.Token),
+                "compare" => await CompareCommand.ExecuteAsync(rest, cancel.Token),
                 "tls" => await TlsCommand.ExecuteAsync(rest, cancel.Token),
                 "webhooks" or "webhook" => await WebhooksCommand.ExecuteAsync(rest, cancel.Token),
                 "version" or "--version" => Version(),
