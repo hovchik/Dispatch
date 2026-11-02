@@ -44,6 +44,8 @@ public static class Program
           dispatch capture [--port 8899] [...]     Record proxied traffic to a HAR or Dispatch collection
           dispatch fuzz-client [--port 8899] [...] Vary responses to an app through a proxy to find how it breaks
                                                   (--host h, --window 5s, --kinds NullField,EmptyArray,…, --duration 10m)
+          dispatch webhooks [--port 9000] [...]    Receive and record webhooks locally (--out hooks.json, --expect n,
+                                                  --path /hooks/orders, --duration 10m, --status 200)
           dispatch version
 
         <collection> is a file (Dispatch, Postman, Insomnia, Thunder Client, Hoppscotch, Bruno, HAR, OpenAPI, .http), a Dispatch or Bruno folder, a URL,
@@ -111,6 +113,7 @@ public static class Program
                 "monitor" => await MonitorCommand.ExecuteAsync(rest, cancel.Token),
                 "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),
                 "fuzz-client" => await FuzzClientCommand.ExecuteAsync(rest, cancel.Token),
+                "webhooks" or "webhook" => await WebhooksCommand.ExecuteAsync(rest, cancel.Token),
                 "version" or "--version" => Version(),
                 _ => throw new UsageException($"Unknown command '{command}'. Run 'dispatch --help'.")
             };

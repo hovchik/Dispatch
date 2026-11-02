@@ -74,6 +74,24 @@ count. Expected values can use variables extracted from the response. The checks
 app, the collection runner, flows, monitors and `dispatch run`, with how long the message took or what arrived instead.
 Edit them in a request's **Checks** tab.
 
+### Webhook receiver
+
+A local HTTP endpoint (**More → Webhook receiver…**) that records every callback it gets, whatever the method or path:
+use `http://localhost:9000/hooks/orders` as the callback URL while developing against a payment, messaging or CI
+provider. Each hook is listed with its headers and body; **replay** it to your own handler, open it as a request, or
+**save it as an example** on the matching request of the collection (created in a *Webhooks* folder when missing), so
+it is documented and the mock server can serve the same payload. Choose the status, body and delay every callback is
+answered with to see how the sender retries. Save all hooks as JSON or an HTML report. Dispatch bundles no tunnel; for
+callbacks from the internet expose the port with `cloudflared tunnel --url http://localhost:9000` or `ngrok http 9000`
+and give the provider the public URL.
+
+Webhooks are also a **message check**: in a request's Checks tab pick *Webhook receiver* as the listener, put the
+callback path in the filter (`/hooks/orders`, or `POST /hooks/*`) and the condition on the payload, e.g. after
+`POST /orders` a webhook arrives at `/hooks/orders` with `$.status == paid` within 5 s. The receiver starts on demand
+(port `DISPATCH_WEBHOOK_PORT`, default 9000), only callbacks after the request count, and the result shows with the
+other tests in the app, runner, flows, monitors and `dispatch run`. `dispatch webhooks --port 9000 --out hooks.json`
+records from the CLI; `--expect n --path /hooks/orders --duration 30s` makes it exit 1 when fewer arrive.
+
 ### Client fuzzing
 
 **Fuzz app** in the toolbar (or `dispatch fuzz-client`) fuzzes the client instead of the server. It is a proxy, like
@@ -255,6 +273,7 @@ dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
 dotnet run --project src/Dispatch.Cli -- monitor --watch
 dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
 dotnet run --project src/Dispatch.Cli -- fuzz-client --port 8899 --host api.myapp.com --duration 10m -r cli,html
+dotnet run --project src/Dispatch.Cli -- webhooks --port 9000 --out hooks.json
 ```
 
 `<collection>` can be any importable file, a URL, a Dispatch folder, or the name of a collection saved in the
