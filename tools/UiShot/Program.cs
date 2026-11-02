@@ -118,6 +118,7 @@ foreach (var kind in new[] { Dispatch.Domain.RequestKind.GraphQl, Dispatch.Domai
 Pump(300);
 Shot("07-many-tabs-grpc");
 
+vm.SelectedTab = tab; // the tab with a response, so the narrow response pane is exercised
 vm.IsSideBySide = true;
 Pump(300);
 Shot("08-side-by-side");
