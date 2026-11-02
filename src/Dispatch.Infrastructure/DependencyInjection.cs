@@ -82,6 +82,7 @@ public static class DependencyInjection
         // The same CA on every launch, so trusting it once is enough.
         services.AddSingleton(_ => new Capture.CertificateAuthority(Capture.CertificateAuthority.LoadOrCreate(DispatchPaths.CaptureCaFile)));
         services.AddTransient<Capture.CaptureProxy>();
+        services.AddSingleton<Dispatch.Application.Webhooks.IWebhookReceiver, Webhooks.WebhookReceiver>();
         return services;
     }
 }

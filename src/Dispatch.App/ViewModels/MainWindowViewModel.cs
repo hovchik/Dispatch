@@ -41,7 +41,8 @@ public sealed record MainServices(
     Dispatch.Infrastructure.Capture.CertificateAuthority CaptureAuthority,
     Func<Dispatch.Infrastructure.Capture.CaptureProxy> CaptureProxyFactory,
     GrpcSchemaProvider GrpcSchemas,
-    Infrastructure.Auth.SystemBrowserInteraction OAuth);
+    Infrastructure.Auth.SystemBrowserInteraction OAuth,
+    Dispatch.Application.Webhooks.IWebhookReceiver Webhooks);
 
 /// <summary>The panels the activity rail can show in the sidebar.</summary>
 public enum SidebarSection
@@ -58,6 +59,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
     private readonly MainServices _services;
     private HelpViewModel? _help;
+    private WebhookViewModel? _webhooks;
 
     public MainWindowViewModel(MainServices services, CollectionsViewModel collections, HistoryViewModel history,
         EnvironmentsViewModel environments)
@@ -432,6 +434,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     [RelayCommand]
     private void OpenRunner() => OpenCollectionTool(CollectionAction.Run);
 
+    /// <summary>One window for the shared receiver: reopening shows the same callbacks, and closing keeps it listening.</summary>
+    [RelayCommand]
+    private void OpenWebhooks() => Dialogs.ShowTool(_webhooks ??= new WebhookViewModel(_services.Webhooks, _services.Tabs.Sender,
+        _services.Tabs.Collections, Dialogs, _services.Tabs.Clipboard, () => ActiveEnvironment,
+        () => FindCollection(SelectedTab?.CollectionId) ?? FindCollection(Collections.Items.FirstOrDefault()?.Id),
+        () => SafeAsync(Collections.LoadAsync), AddTab));
+
     [RelayCommand]
     private void OpenMockServer() => OpenCollectionTool(CollectionAction.Mock);
 
@@ -631,6 +640,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
         yield return new PaletteItem("Capture proxy…", "Record browser / app traffic into a collection", OpenCapture);
         yield return new PaletteItem("Client fuzzing…", "Vary responses to an app through a proxy to find how it breaks", OpenClientFuzz);
+        yield return new PaletteItem("Webhook receiver…", "Receive, inspect, replay and check callbacks locally", OpenWebhooks);
         foreach (var collection in Collections.Items)
             yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
                 () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));

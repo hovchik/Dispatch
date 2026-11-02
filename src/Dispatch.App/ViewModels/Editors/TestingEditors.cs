@@ -316,6 +316,8 @@ public sealed class ExpectationsEditor : RowListEditor<ExpectationRow, MessageEx
         var options = collectionRequests.Where(r => r.Id != self && ListenerKinds.Contains(r.Kind))
             .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .Select(r => new ListenerOption(r.Id, r.Name, KindLabel(r.Kind))).ToList();
+        // The local webhook receiver is always available: its Channel is the callback path (e.g. /hooks/orders).
+        options.Add(new ListenerOption(Dispatch.Application.Webhooks.WebhookListener.Id, Dispatch.Application.Webhooks.WebhookListener.Name, "HTTP callback"));
         // Keep references that are not (or no longer) in the collection, so nothing is lost silently.
         foreach (var row in Rows)
             if (row.Listener is { } current && options.All(o => o.Id != current.Id))

@@ -72,6 +72,7 @@ public static class HelpCatalog
     public const string Minimize = "minimize";
     public const string RateLimit = "rate-limit";
     public const string Capture = "capture";
+    public const string Webhooks = "webhooks";
     public const string ImportExport = "import-export";
     public const string Docs = "docs";
     public const string Protocols = "protocols";
@@ -386,6 +387,23 @@ public static class HelpCatalog
         ],
         ["rate limit", "ratelimit", "throttle", "429", "retry-after", "quota", "token bucket", "sliding window", "fixed window", "burst"],
         null, [LoadTest, Cli]),
+
+        new(Webhooks, "Tools", "Webhook receiver", "Receive callbacks locally, inspect and replay them, and check that a request causes one.",
+        [
+            new HelpParagraph("The webhook receiver is a local HTTP endpoint that records every callback it gets, whatever the method or path. Use it as the callback URL while developing against a payment, messaging or CI provider: each hook appears with its headers and body, and you can replay it to your own handler, open it as a request, or save it as an example so the mock server can serve the same payload later."),
+            new HelpSteps(
+            [
+                "Open More → Webhook receiver… (or search the command palette), pick a port and what every callback is answered with, and click Start.",
+                "Give the sender the address shown in the header plus any path, e.g. http://localhost:9000/hooks/orders. For senders on the internet, expose the port with a tunnel such as cloudflared or ngrok and use the public URL instead.",
+                "Select a callback to read it. Replay re-sends it to the replay target (your handler), Open as request puts it in a tab, and Save as example stores the payload on the matching request of the current collection.",
+                "Save everything as JSON or an HTML report, or load a JSON file saved earlier."
+            ]),
+            new HelpParagraph("Webhooks are also a message check. In a request's Checks tab choose Webhook receiver as the listener, put the callback path in the filter (/hooks/orders, or POST /hooks/* with wildcards) and the condition on the payload, e.g. $.status equals paid within 5000 ms. The receiver is started on demand, only callbacks that arrive after the request is sent count, and the result appears with the other tests in the app, the runner, flows, monitors and dispatch run."),
+            new HelpExample("From the command line", "dispatch webhooks --port 9000 --out hooks.json\ndispatch webhooks --path /hooks/orders --expect 1 --duration 30s\ndispatch webhooks --status 500 --delay 2s   # see how the sender retries"),
+            new HelpTip("Set DISPATCH_WEBHOOK_PORT to change the port message checks and the CLI use by default. Dispatch does not bundle a tunnel: cloudflared quick tunnels and ngrok's free tier work without an account for quick tests.")
+        ],
+        ["webhook", "webhooks", "callback", "receiver", "listener", "hook", "tunnel", "ngrok", "cloudflared", "replay", "payload", "callback url"],
+        null, [MessageChecks, Mock, Cli]),
 
         new(Capture, "Tools", "Capture proxy", "Record traffic from a browser or app.",
         [
