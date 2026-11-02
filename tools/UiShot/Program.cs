@@ -33,6 +33,13 @@ _ = Task.Run(async () =>
     {
         var ctx = await listener.GetContextAsync();
         var json = """{"id":42,"name":"Ada Lovelace","email":"ada@example.com","roles":["admin","analyst"],"address":{"city":"London","zip":"SW1A"},"active":true,"score":98.6,"tags":[],"createdAt":"2026-10-08T09:12:00Z"}""";
+        if (ctx.Request.Url!.AbsolutePath == "/items")
+        {
+            // A paged list with a classic bug for the pagination walker: page 2 starts one item early.
+            var page = int.TryParse(ctx.Request.QueryString["page"], out var p) ? p : 1;
+            var skip = Math.Max(0, (page - 1) * 5 - (page > 1 ? 1 : 0));
+            json = "{\"data\":[" + string.Join(",", Enumerable.Range(1, 18).Skip(skip).Take(5).Select(i => $"{{\"id\":{i}}}")) + "],\"total\":20}";
+        }
         var bytes = Encoding.UTF8.GetBytes(json);
         ctx.Response.ContentType = "application/json; charset=utf-8";
         ctx.Response.Headers["X-Request-Id"] = "7f3a9c1e";
@@ -158,6 +165,22 @@ ToolShot("11-loadtest", () => vm.OpenLoadTestCommand.Execute(null));
 ToolShot("12-import", () => vm.OpenImportCommand.Execute(null));
 ToolShot("13-mock", () => vm.OpenMockServerCommand.Execute(null));
 ToolShot("14-capture", () => vm.OpenCaptureCommand.Execute(null));
+
+// Endpoint probes, run against the local API before the shot.
+void ProbeShot(string name, Dispatch.Application.Probes.ProbeKind kind, string url, Dispatch.Domain.HttpVerb method)
+{
+    var request = new Dispatch.Domain.ApiRequest { Name = kind.ToString(), Method = method, Url = url };
+    ToolShot(name, () =>
+    {
+        vm.ShowEndpointProbe(request, kind);
+        Pump(300);
+        if (OpenToolWindows().LastOrDefault()?.DataContext is Dispatch.App.ViewModels.Tools.EndpointProbeViewModel probe)
+            Wait(probe.RunCommand.ExecuteAsync(null));
+    });
+}
+ProbeShot("15-pagination", Dispatch.Application.Probes.ProbeKind.Pagination, "http://127.0.0.1:18777/items?page=1", Dispatch.Domain.HttpVerb.Get);
+ProbeShot("16-idempotency", Dispatch.Application.Probes.ProbeKind.Idempotency, "http://127.0.0.1:18777/orders", Dispatch.Domain.HttpVerb.Post);
+ProbeShot("17-caching", Dispatch.Application.Probes.ProbeKind.Caching, "http://127.0.0.1:18777/users/42", Dispatch.Domain.HttpVerb.Get);
 
 listener.Stop();
 Console.WriteLine("done");

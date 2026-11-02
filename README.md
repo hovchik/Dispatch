@@ -144,6 +144,32 @@ Two investigative tools that go beyond what API clients usually offer. Open them
   reports remaining quota. `dispatch ratelimit <collection> --request Login --expect-limit` fails CI when an endpoint
   has no rate limit.
 
+### Endpoint probes: pagination, idempotency and caching
+
+Three more probes in the same flask menu. Each one sends a small number of real requests, lists its findings as
+problems, warnings and passes, and exports an HTML or JSON report. In the CLI, `--fail-on bad|warning|never` sets when
+the exit code is 1.
+
+* **Pagination walker**: follows a list endpoint to the last page. It works out the paging from a `Link: rel="next"`
+  header, a next URL in the body, a cursor (`next_cursor`, `nextPageToken`, …) sent back as a parameter, or
+  page / offset parameters. It flags items that appear on two pages, an advertised total (`total`, `totalCount`,
+  `X-Total-Count`, …) that doesn't match what can be reached, loops, short pages in the middle, pages larger than the
+  requested limit and deep pages that get slower. It fetches page 1 again to check that the order is stable, and tries a
+  page past the end, invalid page numbers and page sizes of 0 and 100000.
+  `dispatch paginate <collection> --request "List orders" --page-size 5`
+* **Idempotency & race probe**: sends a POST, PUT, PATCH or DELETE with an `Idempotency-Key`, retries it with the same
+  key, reuses the key with a changed body and sends several copies at the same moment, with one key and with none. It
+  compares the resources created (from `Location` or an id in the body) and flags retries that duplicate, reused keys
+  that are accepted, and 5xx under concurrency. PUT and DELETE are repeated as HTTP requires them to be idempotent. It
+  creates data, so point it at a test environment.
+  `dispatch idempotency <collection> --request "Create order" --parallel 8`
+* **Caching checker**: reads `Cache-Control`, `Expires`, `Vary`, `ETag` and `Last-Modified`, then checks that
+  `If-None-Match` and `If-Modified-Since` really answer 304, that an unknown ETag doesn't, that the ETag is stable while
+  the body is, and that HEAD matches GET. It flags authenticated responses that shared caches may store, cookies on
+  cacheable responses, compressed bodies without `Vary: Accept-Encoding` and a specific CORS origin without
+  `Vary: Origin`, and shows CDN cache headers such as `X-Cache` and `CF-Cache-Status`.
+  `dispatch cache <collection> --request "Get product" --fail-on warning`
+
 ## Developer tools
 
 * **Import**: Postman (collections and environments), OpenAPI / Swagger (JSON or YAML), Insomnia (v4 JSON and v5 YAML),
@@ -221,6 +247,9 @@ dotnet run --project src/Dispatch.Cli -- scan petstore.yaml --fail-on high -r cl
 dotnet run --project src/Dispatch.Cli -- docs "My Collection" --format html -o api.html
 dotnet run --project src/Dispatch.Cli -- minimize "My Collection" --request "Create order" -r cli,html
 dotnet run --project src/Dispatch.Cli -- ratelimit "My Collection" --request Login --expect-limit
+dotnet run --project src/Dispatch.Cli -- paginate "My Collection" --request "List orders" --page-size 5
+dotnet run --project src/Dispatch.Cli -- idempotency "My Collection" --request "Create order" -e staging.json
+dotnet run --project src/Dispatch.Cli -- cache "My Collection" --request "Get product" --fail-on warning
 dotnet run --project src/Dispatch.Cli -- impact "My Collection" --request "Get user" --baseline snapshot -r cli,html
 dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
 dotnet run --project src/Dispatch.Cli -- monitor --watch
