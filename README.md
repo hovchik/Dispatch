@@ -177,6 +177,7 @@ Two investigative tools that go beyond what API clients usually offer. Open them
   send. Monitors can **fail and alert when a certificate expires within N days**. `dispatch tls api.example.com
   --warn-days 21` (or `dispatch tls <collection>` for every HTTPS host it uses) exits 1 on problems and writes
   `-r cli,html,json` reports.
+
 ### Endpoint probes: pagination, idempotency and caching
 
 Three more probes in the same flask menu. Each one sends a small number of real requests, lists its findings as
