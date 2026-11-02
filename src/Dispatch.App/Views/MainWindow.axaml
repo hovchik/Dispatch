@@ -244,6 +244,7 @@
                     </MenuItem>
                     <MenuItem Header="Sync with folder…" Command="{Binding OpenSyncCommand}" ToolTip.Tip="Keep the collection and a git-friendly folder the same in both directions">
                       <MenuItem.Icon><PathIcon Data="{StaticResource IconFolderOpen}" Width="12" Height="12" /></MenuItem.Icon>
+                    </MenuItem>
                     <MenuItem Header="Spec coverage…" Command="{Binding OpenSpecCoverageCommand}" ToolTip.Tip="Score the collection, a run or captured traffic against its OpenAPI document">
                       <MenuItem.Icon><PathIcon Data="{StaticResource IconGauge}" Width="12" Height="12" /></MenuItem.Icon>
                     </MenuItem>
