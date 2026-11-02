@@ -62,14 +62,21 @@ public sealed class CompareTarget
     /// </summary>
     public static string Rebase(string url, Uri baseUrl)
     {
-        var trimmed = url.Trim();
-        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var original) || original.Scheme is not ("http" or "https" or "ws" or "wss"))
+        // Textual, not via System.Uri: the path may still hold {{placeholders}}, which Uri would percent-encode before
+        // the sender gets to resolve them.
+        var match = SchemeAndAuthority.Match(url.Trim());
+        if (!match.Success)
             return url;
         var prefix = baseUrl.GetLeftPart(UriPartial.Path).TrimEnd('/');
-        if (original.Scheme is "ws" or "wss")
+        var scheme = match.Groups["scheme"].Value.ToLowerInvariant();
+        if (scheme is "ws" or "wss")
             prefix = (baseUrl.Scheme == "https" ? "wss" : "ws") + prefix[baseUrl.Scheme.Length..];
-        return prefix + original.PathAndQuery + original.Fragment;
+        var rest = url.Trim()[match.Length..];
+        return prefix + (rest.Length == 0 || rest[0] is '/' or '?' or '#' ? rest : "/" + rest);
     }
+
+    private static readonly System.Text.RegularExpressions.Regex SchemeAndAuthority =
+        new(@"^(?<scheme>https?|wss?)://[^/?#]+", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 }
 
 public sealed class CompareOptions
@@ -109,9 +116,12 @@ public enum CompareOutcome
 
 /// <summary>What one side answered, reduced to what the comparison needs.</summary>
 public sealed record CompareSide(int Status, string StatusText, double Milliseconds, long Bytes, string? Error, string Body, string? ContentType,
-    IReadOnlyList<ResponseHeader> Headers)
+    IReadOnlyList<ResponseHeader> Headers, IReadOnlyList<TestResult>? Checks = null)
 {
     public bool HasResponse => Error is null;
+
+    /// <summary>Assertions and script tests that failed on this side (empty when checks were not run).</summary>
+    public IReadOnlyList<TestResult> FailedChecks => (Checks ?? []).Where(t => !t.Passed).ToList();
 
     public static CompareSide From(ApiResponse response) => new(
         response.StatusCode,
@@ -121,7 +131,8 @@ public sealed record CompareSide(int Status, string StatusText, double Milliseco
         response.Error,
         response.Body,
         response.ContentType,
-        response.Headers);
+        response.Headers,
+        response.TestResults);
 }
 
 public sealed record HeaderChange(string Name, string? Left, string? Right)
@@ -148,6 +159,9 @@ public sealed class CompareRequestResult
 
     public bool BodyDiffers => BodyChanges.Count > 0 || LineChanges > 0;
 
+    /// <summary>A check (assertion or script test) failed on at least one side; the request counts as different.</summary>
+    public bool ChecksFailed => Left.FailedChecks.Count > 0 || Right.FailedChecks.Count > 0;
+
     /// <summary>Right minus left, in milliseconds (positive = right is slower).</summary>
     public double LatencyDeltaMs => Right.Milliseconds - Left.Milliseconds;
 
@@ -172,6 +186,10 @@ public sealed class CompareRequestResult
                 parts.Add($"{LineChanges} changed line(s)");
             if (HeaderChanges.Count > 0)
                 parts.Add($"{HeaderChanges.Count} header(s)");
+            if (Left.FailedChecks.Count > 0)
+                parts.Add($"{Left.FailedChecks.Count} check(s) failed on left");
+            if (Right.FailedChecks.Count > 0)
+                parts.Add($"{Right.FailedChecks.Count} check(s) failed on right");
             return string.Join(", ", parts);
         }
     }
@@ -265,7 +283,8 @@ public sealed class EnvironmentComparer(IRequestSender sender)
         var statusDiffers = left.Status != right.Status;
         var (isJson, changes, lineChanges) = CompareBodies(left, right, options.IgnorePaths);
         var headers = CompareHeaders(left.Headers, right.Headers, options.IgnoreHeaders);
-        var differs = statusDiffers || changes.Count > 0 || lineChanges > 0 || headers.Count > 0;
+        var differs = statusDiffers || changes.Count > 0 || lineChanges > 0 || headers.Count > 0
+                      || left.FailedChecks.Count > 0 || right.FailedChecks.Count > 0;
         return new CompareRequestResult
         {
             Name = name,

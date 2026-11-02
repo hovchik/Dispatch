@@ -40,6 +40,8 @@ public sealed record CompareRow(CompareRequestResult Result, IDialogService Dial
             .Concat(Result.BodyChanges.Take(20).Select(c => c.ToString()))
             .Concat(Result.BodyChanges.Count > 20 ? [$"… {Result.BodyChanges.Count - 20} more"] : [])
             .Concat(Result.HeaderChanges.Select(h => $"header {h}"))
+            .Concat(Result.Left.FailedChecks.Select(c => $"check failed on left: {c.Name}{(c.Message is null ? "" : $" — {c.Message}")}"))
+            .Concat(Result.Right.FailedChecks.Select(c => $"check failed on right: {c.Name}{(c.Message is null ? "" : $" — {c.Message}")}"))
             .ToList();
     public bool HasDetails => Details.Count > 0;
     public bool CanDiff => Result.Left.HasResponse && Result.Right.HasResponse && Result.BodyDiffers;

@@ -29,6 +29,9 @@ public class EnvironmentComparerTests
         Assert.Equal("https://staging.example.com/api/v1/users?x=1", CompareTarget.Rebase("https://api.example.com/v1/users?x=1", staging));
         Assert.Equal("wss://staging.example.com/api/live", CompareTarget.Rebase("ws://api.example.com/live", staging));
         Assert.Equal("{{baseUrl}}/users", CompareTarget.Rebase("{{baseUrl}}/users", staging));
+        // Placeholders in the path and query survive untouched (System.Uri would percent-encode the braces).
+        Assert.Equal("https://staging.example.com/api/users/{{id}}?q={{term}}", CompareTarget.Rebase("https://api.example.com/users/{{id}}?q={{term}}", staging));
+        Assert.Equal("https://staging.example.com/api", CompareTarget.Rebase("https://api.example.com", staging));
         Assert.Throws<ArgumentException>(() => CompareTarget.FromBaseUrl("staging"));
     }
 
@@ -78,6 +81,27 @@ public class EnvironmentComparerTests
         var failed = EnvironmentComparer.Analyze(request, Side(200, "{}"), new CompareSide(0, "error", 1, 0, "refused", "", null, []), Options);
         Assert.Equal(CompareOutcome.Failed, failed.Outcome);
         Assert.Equal("right failed", failed.Summary);
+    }
+
+    [Fact]
+    public void Failed_checks_make_identical_responses_different()
+    {
+        var request = new ApiRequest { Name = "health", Url = "http://x/health" };
+        var body = """{"status":"down"}""";
+        var left = Side(500, body) with { Checks = [new TestResult("status is 200", false, "expected 200, got 500")] };
+        var right = Side(500, body) with { Checks = [new TestResult("status is 200", false, "expected 200, got 500")] };
+
+        var result = EnvironmentComparer.Analyze(request, left, right, Options);
+
+        Assert.Equal(CompareOutcome.Different, result.Outcome);
+        Assert.True(result.ChecksFailed);
+        Assert.Equal("1 check(s) failed on left, 1 check(s) failed on right", result.Summary);
+        var report = new CompareReport { LeftName = "a", RightName = "b", Results = [result] };
+        Assert.True(report.HasDifferences);
+        Assert.Contains(CompareReportWriter.Insights(report), i => i.Text.Contains("failed an assertion"));
+        Assert.Contains("check failed on left: status is 200", CompareReportWriter.Text(report));
+        Assert.Contains("check failed on right", CompareReportWriter.Html(report));
+        Assert.True(JsonNode.Parse(CompareReportWriter.Json(report))!["requests"]![0]!["checksFailed"]!.GetValue<bool>());
     }
 
     [Fact]
@@ -312,6 +336,23 @@ public class StreamingLoadTests
         var json = JsonNode.Parse(LoadReportWriter.Json(report, "ws"))!;
         Assert.Equal(12, json["streaming"]!["messagesReceived"]!.GetValue<int>());
         Assert.Contains("Streaming", LoadReportWriter.Html(report, "ws"));
+    }
+
+    [Fact]
+    public async Task Streams_ended_early_by_the_server_are_drops()
+    {
+        var sender = new RequestSender([new FakeExecutor(_ => new ApiResponse
+        {
+            Kind = RequestKind.Sse, StatusCode = 200, Succeeded = true, Elapsed = TimeSpan.FromMilliseconds(20),
+            Messages = [StreamMessage.Info("Connected; listening for events"), StreamMessage.Received("data: 1"), StreamMessage.Info("Stream ended by the server")]
+        })], new NullHistory());
+        var request = new ApiRequest { Name = "events", Kind = RequestKind.Sse, Url = "http://x/events" };
+
+        var report = await new LoadTester(sender).RunAsync(new LoadOptions { Requests = [request], VirtualUsers = 1, IterationsPerUser = 2 });
+
+        Assert.Equal(2, report.Streaming!.Drops);
+        Assert.Equal(2, report.Errors);
+        Assert.Contains("Stream ended by the server", Assert.Single(report.SampleErrors));
     }
 
     [Fact]

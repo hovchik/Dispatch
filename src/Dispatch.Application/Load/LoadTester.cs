@@ -361,13 +361,22 @@ public sealed class LoadTester(IRequestSender sender)
                 case MessageDirection.Error:
                     dropped = true;
                     break;
-                case MessageDirection.Info when message.Content.StartsWith("Server closed the connection", StringComparison.Ordinal):
+                case MessageDirection.Info when EndedByServer(message.Content):
                     dropped = true;
                     break;
             }
         }
         return new StreamSample(false, dropped, sent, received, latencies.ToArray(), seconds.ToArray());
     }
+
+    /// <summary>
+    /// The executors log one of these when the server, not the listen window or the message limit, ended the session
+    /// (WebSocket and Socket.IO close, SSE stream end, Socket.IO disconnect).
+    /// </summary>
+    private static readonly string[] ServerEndedMessages =
+        ["Server closed the connection", "Stream ended by the server", "Server closed the session", "Disconnected by the server"];
+
+    private static bool EndedByServer(string info) => ServerEndedMessages.Any(m => info.StartsWith(m, StringComparison.Ordinal));
 
     /// <summary>Time until the session was established: the first logged message, else the whole call.</summary>
     private static double ConnectMilliseconds(ApiResponse response, DateTimeOffset sentAt)
@@ -398,7 +407,7 @@ public sealed class LoadTester(IRequestSender sender)
             return response.Error;
         if (stream is { Dropped: true })
             return response.Messages.LastOrDefault(m => m.Direction == MessageDirection.Error)?.Content
-                   ?? response.Messages.LastOrDefault(m => m.Direction == MessageDirection.Info && m.Content.StartsWith("Server closed", StringComparison.Ordinal))?.Content
+                   ?? response.Messages.LastOrDefault(m => m.Direction == MessageDirection.Info && EndedByServer(m.Content))?.Content
                    ?? "connection dropped";
         if (failedChecks && response.TestResults.FirstOrDefault(t => !t.Passed) is { } failed)
             return $"{failed.Name}: {failed.Message}";

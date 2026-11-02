@@ -52,6 +52,11 @@ public static class CompareReportWriter
                 _ => $"{g.Key.Path} changes type"
             })) + "."));
 
+        var checks = report.Results.Where(r => r.ChecksFailed).ToList();
+        if (checks.Count > 0)
+            list.Add(new(InsightLevel.Bad, $"{checks.Count} request(s) failed an assertion or script test: " +
+                                           string.Join(", ", checks.Take(5).Select(r => r.Name)) + "."));
+
         var headers = report.Results.Where(r => r.HeaderChanges.Count > 0 && !r.StatusDiffers && !r.BodyDiffers).ToList();
         if (headers.Count > 0)
             list.Add(new(InsightLevel.Info, $"{headers.Count} request(s) differ only in headers " +
@@ -105,6 +110,8 @@ public static class CompareReportWriter
                 sb.AppendLine($"    … {r.BodyChanges.Count - 12} more");
             foreach (var header in r.HeaderChanges.Take(6))
                 sb.AppendLine(Paint($"    header {header}", "36"));
+            foreach (var (side, check) in r.Left.FailedChecks.Select(c => ("left", c)).Concat(r.Right.FailedChecks.Select(c => ("right", c))))
+                sb.AppendLine(Paint($"    check failed on {side}: {check.Name}{(check.Message is null ? "" : $" — {check.Message}")}", "31"));
         }
         sb.AppendLine();
         foreach (var insight in Insights(report))
@@ -153,8 +160,10 @@ public static class CompareReportWriter
                 .Append($"<td style=\"color:{StatusColour(r.Right.Status.ToString(CultureInfo.InvariantCulture))}\">{E(r.Right.StatusText)}</td>")
                 .Append($"<td class=\"r\">{N(r.Left.Milliseconds)}</td><td class=\"r\">{N(r.Right.Milliseconds)}</td>")
                 .Append($"<td class=\"r\">{N(r.LatencyDeltaPercent, "+0;-0;0")}%</td><td>{E(r.Summary)}</td></tr>");
-            if (r.Outcome == CompareOutcome.Failed || r.BodyChanges.Count > 0 || r.HeaderChanges.Count > 0)
+            if (r.Outcome == CompareOutcome.Failed || r.BodyChanges.Count > 0 || r.HeaderChanges.Count > 0 || r.ChecksFailed)
             {
+                foreach (var (side, check) in r.Left.FailedChecks.Select(c => ("left", c)).Concat(r.Right.FailedChecks.Select(c => ("right", c))))
+                    sb.Append($"<div class=\"err\">check failed on {side}: {E(check.Name)}{(check.Message is null ? "" : $" — {E(check.Message)}")}</div>");
                 sb.Append("<tr><td></td><td colspan=\"7\">");
                 if (r.Left.Error is not null)
                     sb.Append($"<div class=\"err\">left: {E(r.Left.Error)}</div>");
@@ -187,7 +196,8 @@ public static class CompareReportWriter
             ["status"] = s.HasResponse ? s.Status : null,
             ["ms"] = Math.Round(s.Milliseconds, 1),
             ["bytes"] = s.Bytes,
-            ["error"] = s.Error
+            ["error"] = s.Error,
+            ["failedChecks"] = new JsonArray(s.FailedChecks.Select(c => (JsonNode?)new JsonObject { ["name"] = c.Name, ["message"] = c.Message }).ToArray())
         };
 
         var root = new JsonObject
@@ -213,6 +223,7 @@ public static class CompareReportWriter
                 ["outcome"] = r.Outcome.ToString().ToLowerInvariant(),
                 ["summary"] = r.Summary,
                 ["statusDiffers"] = r.StatusDiffers,
+                ["checksFailed"] = r.ChecksFailed,
                 ["left"] = Side(r.Left),
                 ["right"] = Side(r.Right),
                 ["latencyDeltaMs"] = Math.Round(r.LatencyDeltaMs, 1),
