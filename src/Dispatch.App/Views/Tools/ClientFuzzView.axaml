@@ -17,10 +17,10 @@
     </Style>
   </UserControl.Styles>
 
-  <Grid RowDefinitions="Auto,Auto,*" Margin="16">
+  <Grid RowDefinitions="Auto,Auto,*" Margin="12">
     <!-- Header: title, state, proxy address, start / stop -->
     <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="12" Margin="0,0,0,10">
-      <TextBlock Text="Client fuzzing" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <TextBlock Text="Client fuzzing" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
       <Border Grid.Column="1" Classes="pill" Classes.running="{Binding IsRunning}" Classes.stopped="{Binding !IsRunning}">
         <StackPanel Orientation="Horizontal" Spacing="6">
           <Ellipse Width="8" Height="8" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding IsRunning}" />

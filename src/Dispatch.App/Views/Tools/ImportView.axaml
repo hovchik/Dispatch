@@ -5,9 +5,9 @@
              xmlns:conv="using:Dispatch.App.Converters"
              x:Class="Dispatch.App.Views.Tools.ImportView"
              x:DataType="tools:ImportViewModel">
-  <DockPanel Margin="18">
+  <DockPanel Margin="12">
     <StackPanel DockPanel.Dock="Top" Spacing="6">
-      <TextBlock Text="Import" FontSize="18" FontWeight="SemiBold" />
+      <TextBlock Text="Import" FontSize="15" FontWeight="SemiBold" />
       <TextBlock Classes="muted" TextWrapping="Wrap" Text="{x:Static tools:ImportViewModel.SupportedFormats}" />
     </StackPanel>
 

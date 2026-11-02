@@ -32,12 +32,12 @@
   </Window.DataTemplates>
   <DockPanel>
     <!-- Tools linked to a help topic get a "How does this work?" link above their content. -->
-    <Border x:Name="HelpBar" DockPanel.Dock="Top" IsVisible="False" Padding="14,6"
+    <Border x:Name="HelpBar" DockPanel.Dock="Top" IsVisible="False" Padding="12,2"
             Background="{DynamicResource SurfaceAltBrush}" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="*,Auto">
         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
           <Border Classes="kbd"><TextBlock Text="F1" /></Border>
-          <TextBlock Classes="muted" FontSize="11.5" Text="opens the guide for this tool" VerticalAlignment="Center" />
+          <TextBlock Classes="muted" FontSize="11.5" Text="guide for this tool" VerticalAlignment="Center" />
         </StackPanel>
         <Button Grid.Column="1" Classes="link" Click="OnHelpClick" ToolTip.Tip="Open the guide for this tool (F1)">
           <StackPanel Orientation="Horizontal" Spacing="5">

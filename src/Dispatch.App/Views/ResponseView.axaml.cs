@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Dispatch.App.ViewModels;
@@ -7,7 +8,17 @@ namespace Dispatch.App.Views;
 
 public partial class ResponseView : UserControl
 {
+    /// <summary>Extra controls the host places on the status line, next to the status, time and size.</summary>
+    public static readonly StyledProperty<object?> ActionsProperty =
+        AvaloniaProperty.Register<ResponseView, object?>(nameof(Actions));
+
     private ResponseViewModel? _viewModel;
+
+    public object? Actions
+    {
+        get => GetValue(ActionsProperty);
+        set => SetValue(ActionsProperty, value);
+    }
 
     public ResponseView()
     {

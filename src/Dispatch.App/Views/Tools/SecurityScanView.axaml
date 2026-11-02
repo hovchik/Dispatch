@@ -4,9 +4,9 @@
              xmlns:sec="using:Dispatch.Application.Security"
              x:Class="Dispatch.App.Views.Tools.SecurityScanView"
              x:DataType="tools:SecurityScanViewModel">
-  <Grid ColumnDefinitions="300,*" Margin="18">
-    <DockPanel Margin="0,0,16,0">
-      <TextBlock DockPanel.Dock="Top" Text="Security scan" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,4" />
+  <Grid ColumnDefinitions="300,*" Margin="12">
+    <DockPanel Margin="0,0,12,0">
+      <TextBlock DockPanel.Dock="Top" Text="Security scan" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4" />
       <TextBlock DockPanel.Dock="Top" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,10"
                  Text="Only scan APIs you own or are authorised to test." />
       <StackPanel DockPanel.Dock="Top" Spacing="8">

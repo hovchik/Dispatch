@@ -7,10 +7,10 @@
              x:Class="Dispatch.App.Views.Tools.CookiesView"
              x:DataType="tools:CookiesViewModel"
              x:Name="Root">
-  <DockPanel Margin="18">
+  <DockPanel Margin="12">
     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
       <StackPanel Spacing="4">
-        <TextBlock Text="Cookie jar" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Text="Cookie jar" FontSize="15" FontWeight="SemiBold" />
         <TextBlock Classes="muted" TextWrapping="Wrap"
                    Text="Cookies set by responses are sent automatically with later requests to the same domain (unless disabled in a request's Settings)." />
       </StackPanel>

@@ -6,7 +6,7 @@
              x:DataType="vm:EnvironmentsViewModel">
 
   <Grid RowDefinitions="Auto,Auto,Auto,*">
-    <Grid ColumnDefinitions="*,Auto" Margin="14,0,10,6">
+    <Grid ColumnDefinitions="*,Auto" Margin="12,0,8,4">
       <TextBlock Classes="muted" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"
                  Text="Variables used as {{name}} in requests. Pick the active one at the top right." />
       <Button Grid.Column="1" Classes="icon" Command="{Binding AddCommand}" ToolTip.Tip="New environment" VerticalAlignment="Top">
@@ -37,7 +37,7 @@
       <ContentControl Content="{Binding Selected}">
         <ContentControl.ContentTemplate>
           <DataTemplate x:DataType="vm:EnvironmentItemViewModel">
-            <DockPanel Margin="12,10,12,12">
+            <DockPanel Margin="10,8,10,10">
               <TextBlock DockPanel.Dock="Top" Text="NAME" Classes="eyebrow" Margin="2,0,0,4" />
               <TextBox DockPanel.Dock="Top" Text="{Binding Name}" Margin="0,0,0,10" />
               <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto,*,Auto" Margin="0,10,0,0">

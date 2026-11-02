@@ -1,0 +1,67 @@
+
+Welcome to .NET 10.0!
+---------------------
+SDK Version: 10.0.403
+
+Telemetry
+---------
+The .NET tools collect usage data in order to help us improve your experience. It is collected by Microsoft and shared with the community. You can opt-out of telemetry by setting the DOTNET_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your favorite shell.
+
+Read more about .NET CLI Tools telemetry: https://aka.ms/dotnet-cli-telemetry
+
+----------------
+Installed an ASP.NET Core HTTPS development certificate.
+To trust the certificate, run 'dotnet dev-certs https --trust'
+Learn about HTTPS: https://aka.ms/dotnet-https
+
+----------------
+Write your first app: https://aka.ms/dotnet-hello-world
+Find out what's new: https://aka.ms/dotnet-whats-new
+Explore documentation: https://aka.ms/dotnet-docs
+Report issues and find source on GitHub: https://github.com/dotnet/core
+Use 'dotnet --help' to see available commands or visit: https://aka.ms/dotnet-cli
+--------------------------------------------------------------------------------------
+  Determining projects to restore...
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1510: PackageReference Microsoft.Extensions.DependencyInjection will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+  Restored /home/user/Dispatch/src/Dispatch.Application/Dispatch.Application.csproj (in 172 ms).
+  Restored /home/user/Dispatch/src/Dispatch.Domain/Dispatch.Domain.csproj (in 139 ms).
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+  Restored /home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj (in 6.4 sec).
+/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+  Restored /home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj (in 8.4 sec).
+/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1510: PackageReference Microsoft.Extensions.DependencyInjection will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+  Dispatch.Domain -> /home/user/Dispatch/src/Dispatch.Domain/bin/Debug/net10.0/Dispatch.Domain.dll
+/home/user/Dispatch/src/Dispatch.Application/Requests/RequestMessageBuilder.cs(136,31): warning CA2014: Potential stack overflow. Move the stackalloc out of the loop. (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca2014) [/home/user/Dispatch/src/Dispatch.Application/Dispatch.Application.csproj]
+  Dispatch.Application -> /home/user/Dispatch/src/Dispatch.Application/bin/Debug/net10.0/Dispatch.Application.dll
+/home/user/Dispatch/src/Dispatch.Infrastructure/Protocols/Messaging/MqttExecutor.cs(41,72): warning CS0618: 'MqttUserProperty.Value' is obsolete: 'Please use more performance property ValueBuffer or the MqttUserPropertyExtensionMethod `ReadValueAsString`' [/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj]
+/home/user/Dispatch/src/Dispatch.Infrastructure/Protocols/Messaging/MqttExecutor.cs(189,23): warning CS0618: 'MqttApplicationMessageBuilder.WithUserProperty(string, string)' is obsolete: 'Use the WithUserProperty accepting a ReadOnlyMemory<byte> for better performance.' [/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj]
+  Dispatch.Infrastructure -> /home/user/Dispatch/src/Dispatch.Infrastructure/bin/Debug/net10.0/Dispatch.Infrastructure.dll
+/home/user/Dispatch/src/Dispatch.App/Views/MainWindow.axaml.cs(146,24): warning CS0618: 'DataObject' is obsolete: 'Use DataTransfer instead' [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+/home/user/Dispatch/src/Dispatch.App/Views/MainWindow.axaml.cs(148,13): warning CS0618: 'DragDrop.DoDragDrop(PointerEventArgs, IDataObject, DragDropEffects)' is obsolete: 'Use DoDragDropAsync instead.' [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+/home/user/Dispatch/src/Dispatch.App/Views/MainWindow.axaml.cs(153,25): warning CS0618: 'DragEventArgs.Data' is obsolete: 'Use DataTransfer instead.' [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+/home/user/Dispatch/src/Dispatch.App/Views/MainWindow.axaml.cs(159,35): warning CS0618: 'DragEventArgs.Data' is obsolete: 'Use DataTransfer instead.' [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+/home/user/Dispatch/src/Dispatch.App/ViewModels/MainWindowViewModel.cs(256,13): warning MVVMTK0034: The field Dispatch.App.ViewModels.MainWindowViewModel._isSideBySide is annotated with [ObservableProperty] and should not be directly referenced (use the generated property instead) (https://aka.ms/mvvmtoolkit/errors/mvvmtk0034) [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+  Dispatch.App -> /home/user/Dispatch/src/Dispatch.App/bin/Debug/net10.0/Dispatch.dll
+
+Build succeeded.
+
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1510: PackageReference Microsoft.Extensions.DependencyInjection will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1510: PackageReference Microsoft.Extensions.DependencyInjection will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+/home/user/Dispatch/src/Dispatch.Application/Requests/RequestMessageBuilder.cs(136,31): warning CA2014: Potential stack overflow. Move the stackalloc out of the loop. (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/quality-rules/ca2014) [/home/user/Dispatch/src/Dispatch.Application/Dispatch.Application.csproj]
+/home/user/Dispatch/src/Dispatch.Infrastructure/Protocols/Messaging/MqttExecutor.cs(41,72): warning CS0618: 'MqttUserProperty.Value' is obsolete: 'Please use more performance property ValueBuffer or the MqttUserPropertyExtensionMethod `ReadValueAsString`' [/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj]
+/home/user/Dispatch/src/Dispatch.Infrastructure/Protocols/Messaging/MqttExecutor.cs(189,23): warning CS0618: 'MqttApplicationMessageBuilder.WithUserProperty(string, string)' is obsolete: 'Use the WithUserProperty accepting a ReadOnlyMemory<byte> for better performance.' [/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj]
+/home/user/Dispatch/src/Dispatch.App/Views/MainWindow.axaml.cs(146,24): warning CS0618: 'DataObject' is obsolete: 'Use DataTransfer instead' [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+/home/user/Dispatch/src/Dispatch.App/Views/MainWindow.axaml.cs(148,13): warning CS0618: 'DragDrop.DoDragDrop(PointerEventArgs, IDataObject, DragDropEffects)' is obsolete: 'Use DoDragDropAsync instead.' [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+/home/user/Dispatch/src/Dispatch.App/Views/MainWindow.axaml.cs(153,25): warning CS0618: 'DragEventArgs.Data' is obsolete: 'Use DataTransfer instead.' [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+/home/user/Dispatch/src/Dispatch.App/Views/MainWindow.axaml.cs(159,35): warning CS0618: 'DragEventArgs.Data' is obsolete: 'Use DataTransfer instead.' [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+/home/user/Dispatch/src/Dispatch.App/ViewModels/MainWindowViewModel.cs(256,13): warning MVVMTK0034: The field Dispatch.App.ViewModels.MainWindowViewModel._isSideBySide is annotated with [ObservableProperty] and should not be directly referenced (use the generated property instead) (https://aka.ms/mvvmtoolkit/errors/mvvmtk0034) [/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj]
+    14 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:39.04

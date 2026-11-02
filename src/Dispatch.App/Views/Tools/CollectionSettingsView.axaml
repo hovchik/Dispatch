@@ -5,7 +5,7 @@
              xmlns:conv="using:Dispatch.App.Converters"
              x:Class="Dispatch.App.Views.Tools.CollectionSettingsView"
              x:DataType="tools:CollectionSettingsViewModel">
-  <DockPanel Margin="18">
+  <DockPanel Margin="12">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" Margin="0,12,0,0">
       <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Classes="muted" />
       <Button Classes="accent" Content="Save" Command="{Binding SaveCommand}" Padding="18,6" />

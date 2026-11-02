@@ -438,6 +438,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     [RelayCommand]
     private void OpenLoadTest() => OpenCollectionTool(CollectionAction.LoadTest);
 
+    [RelayCommand]
+    private void OpenFlows() => OpenCollectionTool(CollectionAction.Flows);
+
+    [RelayCommand]
+    private void OpenMonitors() => OpenCollectionTool(CollectionAction.Monitors);
+
+    [RelayCommand]
+    private void OpenSecurityScan() => OpenCollectionTool(CollectionAction.Scan);
+
+    [RelayCommand]
+    private void OpenLaws() => OpenCollectionTool(CollectionAction.Laws);
+
+    [RelayCommand]
+    private void OpenCollectionSettings() => OpenCollectionTool(CollectionAction.Settings);
+
     /// <summary>Toolbar tools act on the collection of the current tab, else the first collection.</summary>
     private void OpenCollectionTool(CollectionAction action)
     {
@@ -608,24 +623,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         yield return new PaletteItem("Run collection…", "Collection runner", OpenRunner);
         yield return new PaletteItem("Mock server…", "Serve saved examples", OpenMockServer);
         yield return new PaletteItem("Load test…", "Virtual users, latency percentiles", OpenLoadTest);
-        yield return new PaletteItem("Monitors…", "Scheduled runs with Slack / webhook / email alerts", () =>
-        {
-            var node = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId) ?? Collections.Items.FirstOrDefault();
-            if (node is not null)
-                _ = RunCollectionActionAsync(node, CollectionAction.Monitors);
-        });
-        yield return new PaletteItem("Test flows…", "Chain requests with conditions, loops and waits", () =>
-        {
-            var node = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId) ?? Collections.Items.FirstOrDefault();
-            if (node is not null)
-                _ = RunCollectionActionAsync(node, CollectionAction.Flows);
-        });
-        yield return new PaletteItem("Security scan…", "Passive checks and active probes", () =>
-        {
-            var node = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId) ?? Collections.Items.FirstOrDefault();
-            if (node is not null)
-                _ = RunCollectionActionAsync(node, CollectionAction.Scan);
-        });
+        yield return new PaletteItem("Monitors…", "Scheduled runs with Slack / webhook / email alerts", OpenMonitors);
+        yield return new PaletteItem("Test flows…", "Chain requests with conditions, loops and waits", OpenFlows);
+        yield return new PaletteItem("Security scan…", "Passive checks and active probes", OpenSecurityScan);
+        yield return new PaletteItem("API laws…", "Mine rules the API always follows, then check them", OpenLaws);
+        yield return new PaletteItem("Collection settings…", "Variables, auth and defaults of the current collection", OpenCollectionSettings);
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
         yield return new PaletteItem("Capture proxy…", "Record browser / app traffic into a collection", OpenCapture);
         yield return new PaletteItem("Client fuzzing…", "Vary responses to an app through a proxy to find how it breaks", OpenClientFuzz);

@@ -4,11 +4,11 @@
              xmlns:imp="using:Dispatch.Application.Impact"
              x:Class="Dispatch.App.Views.Tools.ImpactView"
              x:DataType="tools:ImpactViewModel">
-  <Grid ColumnDefinitions="320,*" Margin="18">
+  <Grid ColumnDefinitions="320,*" Margin="12">
     <!-- Baseline and shape changes -->
-    <DockPanel Margin="0,0,16,0">
+    <DockPanel Margin="0,0,12,0">
       <StackPanel DockPanel.Dock="Top" Spacing="8">
-        <TextBlock Text="Change impact" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Text="Change impact" FontSize="15" FontWeight="SemiBold" />
         <TextBlock Classes="muted" TextWrapping="Wrap"
                    Text="Compares the latest response's structure with a baseline and lists every test, variable, request and flow that depends on what changed." />
         <TextBlock Classes="section" Text="COMPARE WITH" Margin="0,6,0,0" />

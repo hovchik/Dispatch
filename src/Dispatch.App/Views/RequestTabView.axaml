@@ -20,14 +20,14 @@
     </DataTemplate>
   </UserControl.Resources>
 
-  <Grid RowDefinitions="Auto,*" Margin="16,12,16,12">
+  <Grid RowDefinitions="Auto,*" Margin="10,8,10,8">
 
     <!-- Address bar: PROTOCOL | METHOD | URL  [Send]  [layout] [code] [tools] -->
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
-      <Border Classes="card" CornerRadius="8" Padding="0" Background="{DynamicResource SurfaceSunkenBrush}" ClipToBounds="True">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
+      <Border Classes="card" CornerRadius="6" Padding="0" Background="{DynamicResource SurfaceSunkenBrush}" ClipToBounds="True">
         <Grid ColumnDefinitions="Auto,1,Auto,Auto,*">
           <ComboBox Classes="bare" ItemsSource="{x:Static vm:RequestTabViewModel.Kinds}" SelectedItem="{Binding Kind}"
-                    MinWidth="100" VerticalAlignment="Stretch" ToolTip.Tip="Protocol">
+                    MinWidth="86" VerticalAlignment="Stretch" ToolTip.Tip="Protocol">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="domain:RequestKind">
                 <StackPanel Orientation="Horizontal" Spacing="8">
@@ -48,7 +48,7 @@
           </ComboBox>
           <Border Grid.Column="1" Background="{DynamicResource DividerBrush}" />
           <ComboBox Grid.Column="2" Classes="bare" ItemsSource="{x:Static vm:RequestTabViewModel.Methods}" SelectedItem="{Binding Method}"
-                    IsVisible="{Binding ShowMethod}" MinWidth="112" VerticalAlignment="Stretch" ToolTip.Tip="Method">
+                    IsVisible="{Binding ShowMethod}" MinWidth="104" VerticalAlignment="Stretch" ToolTip.Tip="Method">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="domain:HttpVerb">
                 <TextBlock Text="{Binding Converter={x:Static conv:MethodFullTextConverter.Instance}}"
@@ -59,7 +59,7 @@
           </ComboBox>
           <Border Grid.Column="3" Width="1" Background="{DynamicResource DividerBrush}" IsVisible="{Binding ShowMethod}" />
           <TextBox Grid.Column="4" Classes="mono bare" Text="{Binding Url}" Watermark="{Binding UrlWatermark}"
-                   VerticalContentAlignment="Center" MinHeight="38" Padding="12,0" FontSize="13">
+                   VerticalContentAlignment="Center" MinHeight="32" Padding="10,0" FontSize="13">
             <TextBox.KeyBindings>
               <KeyBinding Gesture="Enter" Command="{Binding SendOrStopCommand}" />
             </TextBox.KeyBindings>
@@ -67,16 +67,16 @@
         </Grid>
       </Border>
 
-      <Button Grid.Column="1" Margin="10,0,0,0" MinWidth="118" Classes.accent="{Binding !IsSending}" Classes.danger="{Binding IsSending}"
+      <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="100" Classes.accent="{Binding !IsSending}" Classes.danger="{Binding IsSending}"
               Command="{Binding SendOrStopCommand}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-              VerticalAlignment="Stretch" CornerRadius="8" ToolTip.Tip="Send (Ctrl+Enter)">
+              VerticalAlignment="Stretch" CornerRadius="6" ToolTip.Tip="Send (Ctrl+Enter)">
         <StackPanel Orientation="Horizontal" Spacing="8">
           <PathIcon Data="{StaticResource IconSend}" Width="13" Height="13" IsVisible="{Binding !IsSending}" />
           <PathIcon Data="{StaticResource IconStop}" Width="11" Height="11" IsVisible="{Binding IsSending}" />
           <TextBlock Text="{Binding SendLabel}" FontWeight="SemiBold" />
         </StackPanel>
       </Button>
-      <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="6,0,0,0" Spacing="2" VerticalAlignment="Center">
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,0,0,0" Spacing="0" VerticalAlignment="Center">
         <Button Classes="icon" Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ToggleLayoutCommand}"
                 ToolTip.Tip="Switch between stacked and side-by-side request / response (Ctrl+Shift+L)">
           <Panel>
@@ -111,13 +111,13 @@
     </Grid>
 
     <!-- Request editors / response: stacked by default, side by side with the layout toggle (see code-behind). -->
-    <Grid x:Name="SplitGrid" Grid.Row="1" RowDefinitions="*,8,1.25*">
+    <Grid x:Name="SplitGrid" Grid.Row="1" RowDefinitions="*,6,1.25*">
       <TabControl x:Name="EditorTabs" Grid.Row="0" Padding="0">
 
         <!-- ===== Protocol-specific main tabs (first so they are selected by default) ===== -->
 
         <TabItem Header="Query" IsVisible="{Binding IsGraphQl}">
-          <Grid ColumnDefinitions="3*,6,2*,6,270" Margin="0,8,0,0" DataContext="{Binding GraphQl}" x:DataType="ed:GraphQlEditor">
+          <Grid ColumnDefinitions="3*,6,2*,6,270" Margin="0,6,0,0" DataContext="{Binding GraphQl}" x:DataType="ed:GraphQlEditor">
             <DockPanel>
               <TextBlock DockPanel.Dock="Top" Text="QUERY" Classes="section" Margin="2,0,0,4" />
               <views:CodeEditor Text="{Binding Query}" Format="Text" />
@@ -125,7 +125,7 @@
             <GridSplitter Grid.Column="1" Background="Transparent" ResizeDirection="Columns" />
             <DockPanel Grid.Column="2">
               <TextBlock DockPanel.Dock="Top" Text="VARIABLES (JSON)" Classes="section" Margin="2,0,0,4" />
-              <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,8,0,0">
+              <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,6,0,0">
                 <TextBox Text="{Binding OperationName}" Watermark="Operation name (optional)" />
                 <TextBox Text="{Binding SubscriptionUrl}" Watermark="Subscription URL (default: ws(s):// of the endpoint)" />
               </StackPanel>
@@ -160,7 +160,7 @@
         </TabItem>
 
         <TabItem Header="Message" IsVisible="{Binding IsGrpc}">
-          <DockPanel Margin="0,8,0,0" DataContext="{Binding Grpc}" x:DataType="ed:GrpcEditor">
+          <DockPanel Margin="0,6,0,0" DataContext="{Binding Grpc}" x:DataType="ed:GrpcEditor">
             <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
               <WrapPanel ItemSpacing="8" LineSpacing="6">
                 <ComboBox ItemsSource="{x:Static ed:GrpcEditor.Sources}" SelectedItem="{Binding SchemaSource}" MinWidth="170"
@@ -239,7 +239,7 @@
         </TabItem>
 
         <TabItem Header="Envelope" IsVisible="{Binding IsSoap}">
-          <DockPanel Margin="0,8,0,0">
+          <DockPanel Margin="0,6,0,0">
             <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8" DataContext="{Binding Soap}" x:DataType="ed:SoapEditor">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBox Classes="mono" Text="{Binding WsdlUrl}" Watermark="WSDL URL or file, e.g. https://example.com/service?wsdl" />
@@ -276,7 +276,7 @@
         </TabItem>
 
         <TabItem Header="Messages" IsVisible="{Binding IsWebSocket}">
-          <Grid RowDefinitions="Auto,*,Auto,*" Margin="0,8,0,0" DataContext="{Binding Stream}" x:DataType="ed:StreamEditor">
+          <Grid RowDefinitions="Auto,*,Auto,*" Margin="0,6,0,0" DataContext="{Binding Stream}" x:DataType="ed:StreamEditor">
             <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
               <TextBlock Text="Subprotocols" Classes="label" />
               <TextBox Text="{Binding Subprotocols}" Watermark="e.g. graphql-ws, mqtt (comma-separated)" MinWidth="320" />
@@ -291,7 +291,7 @@
         </TabItem>
 
         <TabItem Header="Event" IsVisible="{Binding IsSocketIo}">
-          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,*" Margin="0,10,0,0"
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,*" Margin="0,6,0,0"
                 DataContext="{Binding SocketIo}" x:DataType="ed:SocketIoEditor">
             <TextBlock Text="Namespace" Classes="label" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,6">
@@ -313,7 +313,7 @@
         </TabItem>
 
         <TabItem Header="Message" IsVisible="{Binding IsMqtt}">
-          <DockPanel Margin="0,10,0,0" DataContext="{Binding Mqtt}" x:DataType="ed:MqttEditor">
+          <DockPanel Margin="0,6,0,0" DataContext="{Binding Mqtt}" x:DataType="ed:MqttEditor">
             <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
               <WrapPanel ItemSpacing="8" LineSpacing="6">
                 <ComboBox ItemsSource="{x:Static ed:MqttEditor.Modes}" SelectedItem="{Binding Mode}" ItemTemplate="{StaticResource EnumLabel}" MinWidth="190" />
@@ -341,7 +341,7 @@
         </TabItem>
 
         <TabItem Header="Record" IsVisible="{Binding IsKafka}">
-          <Grid ColumnDefinitions="2*,8,*" Margin="0,10,0,0" DataContext="{Binding Kafka}" x:DataType="ed:KafkaEditor">
+          <Grid ColumnDefinitions="2*,8,*" Margin="0,6,0,0" DataContext="{Binding Kafka}" x:DataType="ed:KafkaEditor">
             <DockPanel>
               <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
                 <WrapPanel ItemSpacing="8" LineSpacing="6">
@@ -372,7 +372,7 @@
         </TabItem>
 
         <TabItem Header="Message" IsVisible="{Binding IsAmqp}">
-          <Grid ColumnDefinitions="2*,8,*" Margin="0,10,0,0" DataContext="{Binding Amqp}" x:DataType="ed:AmqpEditor">
+          <Grid ColumnDefinitions="2*,8,*" Margin="0,6,0,0" DataContext="{Binding Amqp}" x:DataType="ed:AmqpEditor">
             <DockPanel>
               <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,8">
                 <WrapPanel ItemSpacing="8" LineSpacing="6">
@@ -400,7 +400,7 @@
         </TabItem>
 
         <TabItem Header="Payload" IsVisible="{Binding IsSocket}">
-          <DockPanel Margin="0,10,0,0" DataContext="{Binding Socket}" x:DataType="ed:SocketEditor">
+          <DockPanel Margin="0,6,0,0" DataContext="{Binding Socket}" x:DataType="ed:SocketEditor">
             <WrapPanel DockPanel.Dock="Top" ItemSpacing="8" LineSpacing="6" Margin="0,0,0,8">
               <TextBlock Text="Encoding" Classes="label" />
               <ComboBox ItemsSource="{x:Static ed:SocketEditor.Encodings}" SelectedItem="{Binding Encoding}" ItemTemplate="{StaticResource EnumLabel}" />
@@ -428,7 +428,7 @@
               <Border Classes="count" IsVisible="{Binding Params.HasActive}"><TextBlock Text="{Binding Params.ActiveCount}" /></Border>
             </StackPanel>
           </TabItem.Header>
-          <views:KeyValueEditor DataContext="{Binding Params}" Margin="0,8,0,0" />
+          <views:KeyValueEditor DataContext="{Binding Params}" Margin="0,6,0,0" />
         </TabItem>
 
         <TabItem IsVisible="{Binding ShowHeaders}">
@@ -438,11 +438,11 @@
               <Border Classes="count" IsVisible="{Binding Headers.HasActive}"><TextBlock Text="{Binding Headers.ActiveCount}" /></Border>
             </StackPanel>
           </TabItem.Header>
-          <views:KeyValueEditor DataContext="{Binding Headers}" Margin="0,8,0,0" />
+          <views:KeyValueEditor DataContext="{Binding Headers}" Margin="0,6,0,0" />
         </TabItem>
 
         <TabItem Header="Body" IsVisible="{Binding ShowHttpBody}">
-          <DockPanel Margin="0,8,0,0">
+          <DockPanel Margin="0,6,0,0">
             <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
               <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.BodyModes}" SelectedItem="{Binding BodyMode}" MinWidth="200"
                         ItemTemplate="{StaticResource EnumLabel}" />
@@ -470,7 +470,7 @@
         </TabItem>
 
         <TabItem Header="Auth" IsVisible="{Binding ShowAuth}">
-          <ScrollViewer Margin="0,12,0,0" DataContext="{Binding Auth}" x:DataType="ed:AuthEditor">
+          <ScrollViewer Margin="0,8,0,0" DataContext="{Binding Auth}" x:DataType="ed:AuthEditor">
             <Grid ColumnDefinitions="240,*">
               <StackPanel Spacing="8" Margin="0,0,24,0">
                 <TextBlock Text="Type" Classes="section" />
@@ -575,7 +575,7 @@
               <Border Classes="count" IsVisible="{Binding Assertions.HasRows}"><TextBlock Text="{Binding Assertions.Count}" /></Border>
             </StackPanel>
           </TabItem.Header>
-          <Grid RowDefinitions="Auto,*,6,*" Margin="0,8,0,0">
+          <Grid RowDefinitions="Auto,*,6,*" Margin="0,6,0,0">
             <Grid ColumnDefinitions="*,Auto">
               <StackPanel Orientation="Horizontal" Spacing="4">
                 <TextBlock Text="ASSERTIONS · checked after every send, and by the runner and CLI" Classes="section" VerticalAlignment="Center" />
@@ -665,7 +665,7 @@
               <Border Classes="count" IsVisible="{Binding Extractions.HasRows}"><TextBlock Text="{Binding Extractions.Count}" /></Border>
             </StackPanel>
           </TabItem.Header>
-          <DockPanel Margin="0,8,0,0">
+          <DockPanel Margin="0,6,0,0">
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">
               <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
                          Text="Copy values from the response into variables, e.g. a login token used by later requests as {{token}}." />
@@ -707,7 +707,7 @@
               <Border Classes="count" IsVisible="{Binding Expectations.HasRows}"><TextBlock Text="{Binding Expectations.Count}" /></Border>
             </StackPanel>
           </TabItem.Header>
-          <DockPanel Margin="0,8,0,0">
+          <DockPanel Margin="0,6,0,0">
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,6">
               <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
                          Text="Check what this request causes elsewhere: a listener (a saved MQTT, Kafka, AMQP, WebSocket, SSE or Socket.IO request in this collection) subscribes before the request is sent, then a matching message must arrive in time. Expected values can use variables extracted from this response, e.g. {{orderId}}." />
@@ -761,7 +761,7 @@
         </TabItem>
 
         <TabItem Header="Docs">
-          <DockPanel Margin="0,8,0,0">
+          <DockPanel Margin="0,6,0,0">
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6">
               <TextBlock Classes="muted" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"
                          Text="Describe this endpoint in Markdown. It goes into generated API docs (collection menu → Generate API docs) and exports." />
@@ -777,7 +777,7 @@
         </TabItem>
 
         <TabItem Header="Pre-request">
-          <DockPanel Margin="0,8,0,0">
+          <DockPanel Margin="0,6,0,0">
             <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
               <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
                          Text="Runs before sending. Change variables (pm.variables.set), headers (pm.request.headers.upsert) or the body (pm.request.body.raw)." />
@@ -788,7 +788,7 @@
         </TabItem>
 
         <TabItem Header="Settings">
-          <ScrollViewer Margin="0,10,0,0">
+          <ScrollViewer Margin="0,6,0,0">
             <StackPanel Spacing="10" MaxWidth="760" HorizontalAlignment="Left">
               <Grid ColumnDefinitions="200,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" DataContext="{Binding Settings}" x:DataType="ed:SettingsEditor">
                 <TextBlock Text="Timeout (ms)" Classes="label" />
@@ -846,7 +846,7 @@
               <Border Classes="count" IsVisible="{Binding Examples.HasRows}"><TextBlock Text="{Binding Examples.Count}" /></Border>
             </StackPanel>
           </TabItem.Header>
-          <Grid ColumnDefinitions="220,8,*" Margin="0,8,0,0" DataContext="{Binding Examples}" x:DataType="ed:ExamplesEditor">
+          <Grid ColumnDefinitions="220,8,*" Margin="0,6,0,0" DataContext="{Binding Examples}" x:DataType="ed:ExamplesEditor">
             <DockPanel>
               <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
                 <TextBlock Text="SAVED RESPONSES · served by the mock server" Classes="section" TextWrapping="Wrap" VerticalAlignment="Center" />
@@ -913,7 +913,7 @@
       <Panel x:Name="ResponsePane" Grid.Row="2" Margin="0,6,0,0">
         <!-- Live session: streaming protocols show messages as they arrive, with a composer. -->
         <DockPanel IsVisible="{Binding ShowLiveSession}">
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,4">
             <StackPanel Orientation="Horizontal" Spacing="8">
               <Border Classes="pill" Background="{DynamicResource SuccessSoftBrush}" Padding="8,2">
                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -1000,22 +1000,27 @@
               <Binding Path="Response" Converter="{x:Static ObjectConverters.IsNotNull}" />
             </MultiBinding>
           </DockPanel.IsVisible>
-          <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" Margin="0,6,0,0">
-            <Button Classes="ghost compact" Command="{Binding CompareWithPreviousCommand}" IsVisible="{Binding HasPreviousResponse}">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Data="{StaticResource IconDiff}" Width="12" Height="12" />
-                <TextBlock Text="Compare with previous" />
+          <views:ResponseView DataContext="{Binding Response}">
+            <!-- Request-level actions shown on the response status line (their DataContext is this tab, not the response). -->
+            <views:ResponseView.Actions>
+              <StackPanel Orientation="Horizontal" Spacing="2" DataContext="{Binding $parent[views:RequestTabView].DataContext}">
+                <Button Classes="icon compact" Command="{Binding CompareWithPreviousCommand}" IsVisible="{Binding HasPreviousResponse}"
+                        ToolTip.Tip="Compare with the previous response">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <PathIcon Data="{StaticResource IconDiff}" Width="12" Height="12" />
+                    <TextBlock Text="Compare" FontSize="12" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="icon compact" Command="{Binding SaveResponseAsExampleCommand}"
+                        ToolTip.Tip="Save as example: keep this response as documentation and for the mock server">
+                  <StackPanel Orientation="Horizontal" Spacing="5">
+                    <PathIcon Data="{StaticResource IconSave}" Width="12" Height="12" />
+                    <TextBlock Text="Example" FontSize="12" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
               </StackPanel>
-            </Button>
-            <Button Classes="ghost compact" Command="{Binding SaveResponseAsExampleCommand}"
-                    ToolTip.Tip="Keep this response as documentation and for the mock server">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <PathIcon Data="{StaticResource IconSave}" Width="12" Height="12" />
-                <TextBlock Text="Save as example" />
-              </StackPanel>
-            </Button>
-          </StackPanel>
-          <views:ResponseView DataContext="{Binding Response}" />
+            </views:ResponseView.Actions>
+          </views:ResponseView>
         </DockPanel>
       </Panel>
     </Grid>
