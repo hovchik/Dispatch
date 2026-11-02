@@ -1,0 +1,143 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:spec="using:Dispatch.Application.Spec"
+             x:Class="Dispatch.App.Views.Tools.SpecCoverageView"
+             x:DataType="tools:SpecCoverageViewModel">
+  <Grid ColumnDefinitions="300,*" Margin="12">
+    <!-- Spec, sources and actions -->
+    <ScrollViewer Margin="0,0,16,0">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Spec coverage" FontSize="15" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="How much of the OpenAPI document this collection exercises: operations never called, documented status codes never seen, parameters never varied, required inputs never omitted, and calls the spec does not document." />
+        <TextBlock Classes="section" Text="OPENAPI DOCUMENT" Margin="0,6,0,0" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+          <TextBox Text="{Binding SpecPath}" Watermark="path or URL of the spec (YAML or JSON)" />
+          <Button Grid.Column="1" Content="…" Command="{Binding BrowseSpecCommand}" ToolTip.Tip="Choose a file" />
+        </Grid>
+        <TextBlock Classes="section" Text="WHAT TO SCORE" Margin="0,6,0,0" />
+        <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding AnalyzeCommand}"
+                Content="Score collection as defined" ToolTip.Tip="Uses the saved requests: URLs, parameters, headers, bodies and the statuses they assert or have examples for" />
+        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding RunAndAnalyzeCommand}"
+                ToolTip.Tip="Send every request and score the real requests and responses">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" />
+            <TextBlock Text="Run collection and score" />
+          </StackPanel>
+        </Button>
+        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding ImportHarCommand}"
+                Content="Add traffic (HAR or run report)…" ToolTip.Tip="From the capture proxy, browser devtools or dispatch run -r json" />
+        <TextBlock Classes="section" Text="CI THRESHOLD" Margin="0,6,0,0" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBlock Text="Minimum overall coverage" VerticalAlignment="Center" />
+          <NumericUpDown Grid.Column="1" Value="{Binding Minimum}" Minimum="0" Maximum="100" Increment="5" FormatString="0'%'" Width="118" />
+        </Grid>
+        <DropDownButton Content="Export report" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,8,0,0">
+          <DropDownButton.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+              <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+            </MenuFlyout>
+          </DropDownButton.Flyout>
+        </DropDownButton>
+        <TextBlock Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" FontSize="12" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Scores -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,*,Auto">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Border CornerRadius="8" Padding="14,6" Background="{DynamicResource SurfaceAltBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding OverallText}" FontSize="24" FontWeight="Bold" />
+            <TextBlock Text="Overall" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SuccessSoftBrush}" VerticalAlignment="Center" IsVisible="{Binding Passes}">
+          <TextBlock Text="meets the minimum" Foreground="{DynamicResource SuccessBrush}" FontWeight="SemiBold" FontSize="12" />
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource DangerSoftBrush}" VerticalAlignment="Center">
+          <Border.IsVisible>
+            <MultiBinding Converter="{x:Static BoolConverters.And}">
+              <Binding Path="HasReport" />
+              <Binding Path="!Passes" />
+            </MultiBinding>
+          </Border.IsVisible>
+          <TextBlock Text="below the minimum" Foreground="{DynamicResource DangerBrush}" FontWeight="SemiBold" FontSize="12" />
+        </Border>
+      </StackPanel>
+      <TextBlock Grid.Row="1" Text="{Binding Summary}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,10,0,2"
+                 IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <TextBlock Grid.Row="2" Text="{Binding SourceText}" Classes="muted" FontSize="12" Margin="0,0,0,8" />
+
+      <Grid Grid.Row="3" ColumnDefinitions="260,*" ColumnSpacing="10">
+        <!-- Metric list -->
+        <ListBox ItemsSource="{Binding Metrics}" SelectedItem="{Binding SelectedMetric}" Background="Transparent" Padding="0">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="spec:CoverageMetric">
+              <Grid ColumnDefinitions="60,*" Margin="2,4">
+                <TextBlock Text="{Binding PercentText}" FontWeight="Bold" FontSize="15" VerticalAlignment="Center"
+                           Foreground="{Binding Percent, Converter={x:Static tools:CoverageBrush.Instance}}" />
+                <StackPanel Grid.Column="1">
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                  <TextBlock Text="{Binding Ratio}" Classes="muted" FontSize="11" />
+                </StackPanel>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- Gaps of the selected metric -->
+        <Border Grid.Column="1" Classes="card" Padding="0">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Classes="muted" FontSize="12" TextWrapping="Wrap" Margin="12,8" Text="{Binding SelectedMetric.Description}" />
+            <Panel>
+              <TextBlock Classes="muted" Margin="12" Text="Fully covered." IsVisible="{Binding NoGaps}" />
+              <TextBlock Classes="muted" Margin="12" TextWrapping="Wrap" IsVisible="{Binding !HasReport}"
+                         Text="Point at the OpenAPI document, then score the collection as defined, run it, or add captured traffic." />
+              <ScrollViewer>
+                <ItemsControl ItemsSource="{Binding Gaps}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="spec:CoverageGap">
+                      <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="12,6" Background="{DynamicResource SurfaceBrush}">
+                        <Grid ColumnDefinitions="220,*">
+                          <SelectableTextBlock Text="{Binding Operation}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextWrapping="Wrap" />
+                          <StackPanel Grid.Column="1">
+                            <TextBlock Text="{Binding Detail}" FontSize="13" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Hint}" Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                       IsVisible="{Binding Hint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                          </StackPanel>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Panel>
+          </DockPanel>
+        </Border>
+      </Grid>
+
+      <!-- Per-operation table -->
+      <Expander Grid.Row="4" Header="Per operation" Margin="0,8,0,0" IsVisible="{Binding HasReport}">
+        <ScrollViewer MaxHeight="220">
+          <ItemsControl ItemsSource="{Binding Operations}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="spec:OperationCoverage">
+                <Grid ColumnDefinitions="*,60,160,120" Margin="0,2">
+                  <SelectableTextBlock Text="{Binding Key}" FontFamily="{StaticResource MonoFont}" FontSize="12" />
+                  <TextBlock Grid.Column="1" Text="{Binding Calls, StringFormat='{}{0} calls'}" FontSize="12" Classes="muted" />
+                  <TextBlock Grid.Column="2" Text="{Binding StatusesText, StringFormat='statuses {0}'}" FontSize="12" Classes="muted" />
+                  <TextBlock Grid.Column="3" FontSize="12" Classes="muted">
+                    <Run Text="{Binding ParametersVaried}" /><Run Text="/" /><Run Text="{Binding ParametersTotal}" /><Run Text=" params varied" />
+                  </TextBlock>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Expander>
+    </Grid>
+  </Grid>
+</UserControl>

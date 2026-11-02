@@ -68,6 +68,8 @@ public static class HelpCatalog
     public const string MessageChecks = "message-checks";
     public const string ChangeImpact = "change-impact";
     public const string ApiLaws = "api-laws";
+    public const string SpecCoverage = "spec-coverage";
+    public const string BreakingChanges = "breaking-changes";
     public const string ClientFuzz = "client-fuzz";
     public const string Minimize = "minimize";
     public const string RateLimit = "rate-limit";
@@ -318,6 +320,31 @@ public static class HelpCatalog
         ],
         ["impact", "breaking change", "rename", "renamed field", "schema change", "blast radius", "dependency", "json shape", "api change", "regression"],
         null, [Assertions, Extraction, Flows, Cli]),
+
+        new(SpecCoverage, "Testing", "Spec coverage", "How much of the OpenAPI document your collection, runs or traffic exercise.",
+        [
+            new HelpParagraph("Spec coverage scores a collection, a run or captured traffic (HAR) against an OpenAPI 3 / Swagger 2 document on five metrics, each a percentage with its gaps listed: operations never called, documented status codes never seen, parameters never varied (always the same value), required inputs never omitted (so the 4xx path is untested), and calls the spec does not document. Overall coverage is the mean of the metrics that have something to cover."),
+            new HelpSteps(
+            [
+                "Right-click the collection → Spec coverage… (or Tools → Spec coverage…). The spec path is pre-filled from Collection settings when set.",
+                "Score the collection as defined for a quick static picture, or run it to score the real requests and responses.",
+                "Add a HAR from the capture proxy or your browser, or a dispatch run JSON report, to include traffic you did not send from Dispatch.",
+                "Pick a metric on the left to read its gaps; export HTML or JSON for the team."
+            ]),
+            new HelpExample("In CI: fail below 80 % coverage", "dispatch coverage api.yaml tests/api.dispatch.json --run --min 80 -r cli,html\ndispatch coverage api.yaml traffic.har --min 60"),
+            new HelpTip("A parameter counts as varied when it was sent with two different values, or sent and omitted when optional. Vary ids, filters and page sizes across requests, and add one request per required field that leaves it out.")
+        ],
+        ["coverage", "spec", "openapi", "swagger", "untested", "operations", "status codes", "parameters", "har", "ci", "threshold"],
+        null, [BreakingChanges, ImportExport, Cli]),
+
+        new(BreakingChanges, "Testing", "Breaking-change detector", "Compare two spec versions and see what each change breaks.",
+        [
+            new HelpParagraph("Tools → Compare spec versions… diffs two OpenAPI / Swagger documents and classifies every change: breaking (removed or moved paths, removed or retyped fields, new required parameters or body fields, narrowed request enums, widened response enums, changed success status, new authentication), non-breaking (additions, relaxed requirements) or info (deprecations, version, servers). Choose a collection and the change impact analyzer lists the requests that call removed operations or lack a new required input, the status assertions on a changed code, and the tests, extractions, dependent requests and flows that read a removed, renamed or retyped response field."),
+            new HelpExample("In CI: fail the build on breaking changes", "dispatch breaking api-v1.yaml api-v2.yaml --collection tests/api.dispatch.json --fail-on breaking -r cli,html"),
+            new HelpTip("Renamed fields are paired when a removed and an added field of the same type are alone under one parent; the suggested path is shown next to each affected test.")
+        ],
+        ["breaking", "breaking change", "spec diff", "openapi diff", "compatibility", "contract", "version", "removed field", "required"],
+        null, [SpecCoverage, ChangeImpact, Cli]),
 
         new(ApiLaws, "Testing", "API laws", "Learn the rules an API keeps from its traffic, and spot the responses that break them.",
         [
