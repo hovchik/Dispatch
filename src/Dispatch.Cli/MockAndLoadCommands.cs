@@ -1,4 +1,5 @@
 using System.Globalization;
+using Dispatch.Application.Interop;
 using Dispatch.Application.Load;
 using Dispatch.Infrastructure.Mock;
 using Dispatch.Infrastructure.Protocols.Grpc;
@@ -107,10 +108,27 @@ public static class LoadCommand
 
     public static async Task<int> ExecuteAsync(string[] rawArgs, CancellationToken cancellationToken)
     {
-        var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string> { ["u"] = "users", ["t"] = "duration", ["e"] = "env" });
+        var args = Arguments.Parse(rawArgs, Flags, new Dictionary<string, string>
+        {
+            ["u"] = "users", ["t"] = "duration", ["e"] = "env", ["r"] = "reporter", ["o"] = "out"
+        });
         if (args.Positionals.Count != 1)
             throw new UsageException("Usage: dispatch load <collection> [--users 10] [--duration 30s] [--ramp-up 5s] [--think 0] " +
-                                     "[--iterations n] [--request name] [--folder name] [--env env] [--max-error-rate 0.01] [--max-p95 500]");
+                                     "[--iterations n] [--request name] [--folder name] [--env env] [--max-error-rate 0.01] [--max-p95 500] " +
+                                     "[--baseline base.json] [--max-regression 10%] [--save-baseline base.json] [-r cli,html,json,csv] [-o dir]");
+        var unknownReporters = args.Options("reporter").Select(r => r.ToLowerInvariant()).Except(["cli", "html", "json", "csv"]).ToList();
+        if (unknownReporters.Count > 0)
+            throw new UsageException($"Unknown reporter(s): {string.Join(", ", unknownReporters)}. Use cli, html, json or csv.");
+        LoadBaseline? baseline = null;
+        if (args.Option("baseline") is { } baselineFile)
+        {
+            if (!File.Exists(baselineFile))
+                throw new UsageException($"--baseline: '{baselineFile}' does not exist. Create one with --save-baseline {baselineFile}.");
+            baseline = LoadBaseline.Parse(await File.ReadAllTextAsync(baselineFile, cancellationToken));
+        }
+        var maxRegression = args.Option("max-regression") is { } regressionText
+            ? LoadBaselineComparer.ParsePercent(regressionText)
+            : LoadBaselineComparer.DefaultMaxRegressionPercent;
 
         await using var services = Program.BuildServices(args.Option("db"));
         var workspace = new Workspace(services);
@@ -150,8 +168,45 @@ public static class LoadCommand
         foreach (var error in report.SampleErrors.Take(5))
             Console.WriteLine($"  error: {error}");
 
+        // Compared with a saved run: p50/p95/p99, throughput and error rate per request, with a verdict.
+        var comparison = baseline is null ? null : LoadBaselineComparer.Compare(report, baseline, maxRegression);
+        if (comparison is not null)
+        {
+            Console.WriteLine();
+            Console.Write(comparison.ToText());
+            foreach (var finding in comparison.Findings)
+                Console.WriteLine($"  {finding}");
+        }
+        if (args.Option("save-baseline") is { } saveTo)
+        {
+            if (Path.GetDirectoryName(Path.GetFullPath(saveTo)) is { Length: > 0 } dir)
+                Directory.CreateDirectory(dir);
+            await File.WriteAllTextAsync(saveTo, LoadBaseline.Serialize(report, collection.Name), cancellationToken);
+            Console.WriteLine($"Baseline saved to {Path.GetFullPath(saveTo)}");
+        }
+        var outDir = args.Option("out") ?? "dispatch-reports";
+        foreach (var reporter in args.Options("reporter").Select(r => r.ToLowerInvariant()).Where(r => r != "cli").Distinct())
+        {
+            var (ext, content) = reporter switch
+            {
+                "html" => (".html", LoadReportWriter.Html(report, collection.Name, comparison)),
+                "json" => (".json", LoadReportWriter.Json(report, collection.Name, comparison)),
+                _ => (".csv", LoadReportWriter.Csv(report))
+            };
+            Directory.CreateDirectory(outDir);
+            var path = Path.Combine(outDir, $"{DispatchFormat.Slug(collection.Name)}-load-{report.StartedAt:yyyyMMdd-HHmmss}{ext}");
+            await File.WriteAllTextAsync(path, content, CancellationToken.None);
+            Console.WriteLine($"{reporter} report: {Path.GetFullPath(path)}");
+        }
+
         // Thresholds turn the load test into a CI gate.
         var failed = false;
+        if (comparison is { IsRegression: true })
+        {
+            Console.Error.WriteLine($"FAIL: regressed against baseline \"{comparison.BaselineName}\" by more than {maxRegression:0.#}%: " +
+                                    string.Join("; ", comparison.Regressions.Select(m => m.ToString()).Take(5)));
+            failed = true;
+        }
         if (args.Option("max-error-rate") is { } maxErrors
             && double.TryParse(maxErrors, NumberStyles.Float, CultureInfo.InvariantCulture, out var maxRate) && report.ErrorRate > maxRate)
         {

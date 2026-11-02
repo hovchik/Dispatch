@@ -125,6 +125,26 @@ Renames come with the corrected path, e.g. *"renamed `$.user.id` → `$.user.use
 2 requests and 1 flow"*. `dispatch impact <collection> --request "Get user"` checks the live API against the snapshot
 in CI and fails when something breaks.
 
+### Environment parity, load baselines and streaming load
+
+* **Compare environments**: run a collection against two environments, or two base URLs, side by side. Both sides are
+  called at the same moment and every response is diffed: status, the structure of JSON bodies (with ignore paths such
+  as `$.timestamp` or `$..id`), non-volatile headers and latency. Each side chains its own extracted variables, so a
+  staging login never leaks into production. Rows that differ open a side-by-side body diff; reports export to HTML /
+  JSON. `dispatch compare <collection> -e Staging -e Production --ignore $.timestamp --fail-on-diff` gates CI (`-e` also
+  accepts an `https://` base URL, which re-points absolute request URLs and defines `{{baseUrl}}`).
+* **Load baselines**: in the load-test report, **Baseline → Set as baseline** saves the run as a JSON file (any exported
+  JSON report works). Later runs choose **Compare with baseline** and show p50 / p95 / p99, throughput and error-rate
+  deltas overall and per request, with a verdict: *REGRESSED* when a metric is worse by more than the allowed percentage
+  (10 % by default, latency changes under 5 ms are ignored as noise), *IMPROVED* or *UNCHANGED*. From the CLI:
+  `dispatch load … --save-baseline base.json`, then `--baseline base.json --max-regression 10%` fails the build on a
+  regression; `-r cli,html,json,csv -o reports` writes the reports.
+* **Streaming load**: WebSocket, SSE, Socket.IO, MQTT, Kafka, AMQP and gRPC streaming requests can be part of a load-test
+  journey. Each virtual user holds one connection at a time, listens for the request's listen time (or message limit),
+  then reconnects. The report adds concurrent connections, connect errors, drops, messages per second and message
+  latency (reply after a sent message, or the gap between server pushes); the per-request latency columns then measure
+  connection setup. Same report format, same baselines.
+
 ### Experimental: request forensics
 
 Two investigative tools that go beyond what API clients usually offer. Open them from the flask button next to
@@ -226,6 +246,8 @@ dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
 dotnet run --project src/Dispatch.Cli -- monitor --watch
 dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
 dotnet run --project src/Dispatch.Cli -- fuzz-client --port 8899 --host api.myapp.com --duration 10m -r cli,html
+dotnet run --project src/Dispatch.Cli -- compare "My Collection" -e Staging -e Production --ignore $.timestamp --fail-on-diff -r cli,html
+dotnet run --project src/Dispatch.Cli -- load "My Collection" --users 20 --duration 60s --baseline base.json --max-regression 10% -r cli,json
 ```
 
 `<collection>` can be any importable file, a URL, a Dispatch folder, or the name of a collection saved in the

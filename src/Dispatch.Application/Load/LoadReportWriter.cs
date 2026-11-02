@@ -72,6 +72,18 @@ public static class LoadReportWriter
                 list.Add(new(InsightLevel.Bad, $"Most errors: {worst.Name} ({worst.Errors:N0} of {worst.Count:N0}, {(double)worst.Errors / worst.Count:P1})."));
         }
 
+        if (report.Streaming is { } st)
+        {
+            list.Add(new(InsightLevel.Info, $"Streaming: {st.Connections:N0} connection(s), {st.MessagesReceived:N0} message(s) received " +
+                                             $"({st.MessagesPerSecond:0.0} msg/s), message latency p50 {st.MessageLatency.P50:0} ms, p95 {st.MessageLatency.P95:0} ms."));
+            if (st.ConnectErrors > 0)
+                list.Add(new(InsightLevel.Bad, $"{st.ConnectErrors:N0} of {st.Connections:N0} connection attempt(s) failed."));
+            if (st.Drops > 0)
+                list.Add(new(InsightLevel.Bad, $"{st.Drops:N0} connection(s) dropped before the listen window ended."));
+            if (st.EstablishedConnections > 0 && st.MessagesReceived == 0)
+                list.Add(new(InsightLevel.Warning, "Connections were established but no message arrived; check the subscription or the initial messages."));
+        }
+
         var serverErrors = report.Statuses.Where(s => s.Key.StartsWith('5')).Sum(s => s.Value);
         if (serverErrors > 0)
             list.Add(new(InsightLevel.Bad, $"{serverErrors:N0} server error response(s) (5xx)."));
@@ -82,7 +94,7 @@ public static class LoadReportWriter
         return list;
     }
 
-    public static string Html(LoadReport report, string name)
+    public static string Html(LoadReport report, string name, LoadComparison? comparison = null)
     {
         var verdict = Verdict(report);
         var sb = Begin($"{name} · Dispatch load test", $"Load test · {name}", verdict,
@@ -101,11 +113,26 @@ public static class LoadReportWriter
             .Append(Stat("p99", $"{N(l.P99)} ms"))
             .Append(Stat("Data received", Bytes(report.TotalBytes)))
             .Append("</div>");
+        if (report.Streaming is { } st)
+        {
+            sb.Append("<h2>Streaming</h2><div class=\"stats\">")
+                .Append(Stat("Connections", st.Connections.ToString("N0", CultureInfo.InvariantCulture)))
+                .Append(Stat("Connect errors", st.ConnectErrors.ToString("N0", CultureInfo.InvariantCulture), st.ConnectErrors > 0))
+                .Append(Stat("Drops", st.Drops.ToString("N0", CultureInfo.InvariantCulture), st.Drops > 0))
+                .Append(Stat("Messages received", st.MessagesReceived.ToString("N0", CultureInfo.InvariantCulture), hint: $"{st.MessagesSent:N0} sent"))
+                .Append(Stat("Messages/s", N(st.MessagesPerSecond, "0.0")))
+                .Append(Stat("Message p50", $"{N(st.MessageLatency.P50)} ms"))
+                .Append(Stat("Message p95", $"{N(st.MessageLatency.P95)} ms", hint: $"max {N(st.MessageLatency.Max)} ms"))
+                .Append("</div>");
+        }
 
         sb.Append("<h2>Insights</h2><ul class=\"ins\">");
         foreach (var i in Insights(report))
             sb.Append($"<li class=\"{i.Css}\">{E(i.Text)}</li>");
         sb.Append("</ul>");
+
+        if (comparison is not null)
+            AppendComparison(sb, comparison);
 
         if (report.Timeline.Count > 0)
         {
@@ -161,7 +188,7 @@ public static class LoadReportWriter
         return sb.Append(End).ToString();
     }
 
-    public static string Json(LoadReport report, string name)
+    public static string Json(LoadReport report, string name, LoadComparison? comparison = null)
     {
         static JsonObject Latency(LatencyStats l) => new()
         {
@@ -200,11 +227,12 @@ public static class LoadReportWriter
                 ["requests"] = r.Count,
                 ["errors"] = r.Errors,
                 ["latencyMs"] = Latency(r.Latency),
-                ["statuses"] = new JsonObject(r.Statuses.OrderBy(s => s.Key).Select(s => KeyValuePair.Create(s.Key, (JsonNode?)s.Value)))
+                ["statuses"] = new JsonObject(r.Statuses.OrderBy(s => s.Key).Select(s => KeyValuePair.Create(s.Key, (JsonNode?)s.Value))),
+                ["streaming"] = r.Streaming is null ? null : StreamingJson(r.Streaming)
             }).ToArray()),
             ["timeline"] = new JsonArray(report.Timeline.Select(t => (JsonNode?)new JsonObject
             {
-                ["second"] = t.Second, ["requests"] = t.Requests, ["errors"] = t.Errors, ["p95Ms"] = Math.Round(t.P95, 1)
+                ["second"] = t.Second, ["requests"] = t.Requests, ["errors"] = t.Errors, ["p95Ms"] = Math.Round(t.P95, 1), ["messages"] = t.Messages
             }).ToArray()),
             ["insights"] = new JsonArray(Insights(report).Select(i => (JsonNode?)new JsonObject
             {
@@ -212,12 +240,95 @@ public static class LoadReportWriter
             }).ToArray()),
             ["errors"] = new JsonArray(report.SampleErrors.Select(e => (JsonNode?)e).ToArray())
         };
+        if (report.Streaming is { } st)
+            root["streaming"] = StreamingJson(st);
+        if (comparison is not null)
+            root["baseline"] = ComparisonJson(comparison);
         return root.ToJsonString(new JsonSerializerOptions
         {
             WriteIndented = true,
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         });
     }
+
+    private static JsonObject StreamingJson(StreamingStats s) => new()
+    {
+        ["connections"] = s.Connections,
+        ["connectErrors"] = s.ConnectErrors,
+        ["drops"] = s.Drops,
+        ["messagesSent"] = s.MessagesSent,
+        ["messagesReceived"] = s.MessagesReceived,
+        ["messagesPerSecond"] = Math.Round(s.MessagesPerSecond, 2),
+        ["messageLatencyMs"] = new JsonObject
+        {
+            ["min"] = Math.Round(s.MessageLatency.Min, 1), ["mean"] = Math.Round(s.MessageLatency.Mean, 1), ["p50"] = Math.Round(s.MessageLatency.P50, 1),
+            ["p90"] = Math.Round(s.MessageLatency.P90, 1), ["p95"] = Math.Round(s.MessageLatency.P95, 1), ["p99"] = Math.Round(s.MessageLatency.P99, 1),
+            ["max"] = Math.Round(s.MessageLatency.Max, 1)
+        }
+    };
+
+    /// <summary>The baseline comparison as it appears under <c>"baseline"</c> in the JSON report.</summary>
+    public static JsonObject ComparisonJson(LoadComparison c)
+    {
+        static JsonObject Metric(MetricDelta m) => new()
+        {
+            ["metric"] = m.Metric, ["unit"] = m.Unit, ["baseline"] = Math.Round(m.Baseline, 4), ["current"] = Math.Round(m.Current, 4),
+            ["deltaPercent"] = Math.Round(m.DeltaPercent, 1), ["verdict"] = m.Verdict
+        };
+        return new JsonObject
+        {
+            ["name"] = c.BaselineName,
+            ["startedAt"] = c.BaselineStartedAt.ToString("O", CultureInfo.InvariantCulture),
+            ["virtualUsers"] = c.BaselineVirtualUsers,
+            ["maxRegressionPercent"] = c.MaxRegressionPercent,
+            ["verdict"] = c.Verdict,
+            ["overall"] = new JsonArray(c.Overall.Select(m => (JsonNode?)Metric(m)).ToArray()),
+            ["perRequest"] = new JsonArray(c.PerRequest.Select(r => (JsonNode?)new JsonObject
+            {
+                ["name"] = r.Name, ["verdict"] = r.Verdict, ["metrics"] = new JsonArray(r.Metrics.Select(m => (JsonNode?)Metric(m)).ToArray())
+            }).ToArray()),
+            ["findings"] = new JsonArray(c.Findings.Select(f => (JsonNode?)f).ToArray())
+        };
+    }
+
+    /// <summary>The "Compared with baseline" section of the HTML report.</summary>
+    public static void AppendComparison(StringBuilder sb, LoadComparison c)
+    {
+        var css = c.Verdict == "REGRESSED" ? "failed" : c.Verdict == "IMPROVED" ? "passed" : "warn";
+        sb.Append($"<h2>Compared with baseline</h2><div class=\"card\"><div><span class=\"badge {css}\">{E(c.Verdict)}</span> ")
+            .Append($"<span class=\"muted\">{E(c.BaselineName)} · {c.BaselineStartedAt:yyyy-MM-dd HH:mm} · {c.BaselineVirtualUsers} virtual user(s) · ")
+            .Append($"allowed regression {N(c.MaxRegressionPercent, "0.#")}%</span></div><ul class=\"ins\">");
+        foreach (var finding in c.Findings)
+            sb.Append($"<li class=\"{(finding.Contains("worse", StringComparison.Ordinal) || finding.Contains("REGRESSED", StringComparison.Ordinal) ? "bad" : finding.Contains("improved", StringComparison.Ordinal) ? "good" : "info")}\">{E(finding)}</li>");
+        sb.Append("</ul><table><tr><th>Metric</th><th class=\"r\">Baseline</th><th class=\"r\">This run</th><th class=\"r\">Δ</th><th>Verdict</th></tr>");
+        foreach (var m in c.Overall)
+            sb.Append(MetricRow(m.Metric, m));
+        sb.Append("</table>");
+        if (c.PerRequest.Count > 0)
+        {
+            sb.Append("<table style=\"margin-top:12px\"><tr><th>Request</th><th class=\"r\">p95 before</th><th class=\"r\">p95 now</th><th class=\"r\">Δ</th>")
+                .Append("<th class=\"r\">req/s before</th><th class=\"r\">req/s now</th><th class=\"r\">Δ</th><th>Verdict</th></tr>");
+            foreach (var r in c.PerRequest)
+            {
+                var p95 = r["p95"];
+                var rps = r["throughput"];
+                sb.Append($"<tr><td>{E(r.Name)}</td>")
+                    .Append(p95 is null ? "<td class=\"r\">–</td><td class=\"r\">–</td><td class=\"r\">–</td>"
+                        : $"<td class=\"r\">{N(p95.Baseline)}</td><td class=\"r\">{N(p95.Current)}</td><td class=\"r\" style=\"color:{DeltaColour(p95)}\">{N(p95.DeltaPercent, "+0;-0;0")}%</td>")
+                    .Append(rps is null ? "<td class=\"r\">–</td><td class=\"r\">–</td><td class=\"r\">–</td>"
+                        : $"<td class=\"r\">{N(rps.Baseline, "0.0")}</td><td class=\"r\">{N(rps.Current, "0.0")}</td><td class=\"r\" style=\"color:{DeltaColour(rps)}\">{N(rps.DeltaPercent, "+0;-0;0")}%</td>")
+                    .Append($"<td>{E(r.Verdict)}</td></tr>");
+            }
+            sb.Append("</table>");
+        }
+        sb.Append("</div>");
+    }
+
+    private static string MetricRow(string label, MetricDelta m) =>
+        $"<tr><td>{E(label)}</td><td class=\"r\">{E(m.Format(m.Baseline))}</td><td class=\"r\">{E(m.Format(m.Current))}</td>" +
+        $"<td class=\"r\" style=\"color:{DeltaColour(m)}\">{N(m.DeltaPercent, "+0;-0;0")}%</td><td>{E(m.Verdict)}</td></tr>";
+
+    private static string DeltaColour(MetricDelta m) => m.Regressed ? "var(--bad)" : m.Improved ? "var(--ok)" : "var(--muted)";
 
     /// <summary>Per-request statistics, one row per request, for spreadsheets.</summary>
     public static string Csv(LoadReport report)

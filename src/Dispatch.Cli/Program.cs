@@ -24,7 +24,8 @@ public static class Program
           dispatch list                           List saved collections and environments
           dispatch mock <collection> [options]    Serve a collection's examples as a mock server
                                                   (--dynamic: fresh fake data from schemas, --stateful: CRUD memory)
-          dispatch load <collection> [options]    Load test a collection
+          dispatch load <collection> [options]    Load test a collection (HTTP and streaming requests; --baseline base.json
+                                                  --max-regression 10%, --save-baseline base.json, -r cli,html,json,csv)
           dispatch docs <collection> [options]    Generate API documentation (--format html|md, --out <file>)
           dispatch scan <collection> [options]    Security-test a collection you are authorised to test
           dispatch minimize <collection> [...]    Shrink a request to the parts its outcome depends on
@@ -39,6 +40,8 @@ public static class Program
           dispatch capture [--port 8899] [...]     Record proxied traffic to a HAR or Dispatch collection
           dispatch fuzz-client [--port 8899] [...] Vary responses to an app through a proxy to find how it breaks
                                                   (--host h, --window 5s, --kinds NullField,EmptyArray,…, --duration 10m)
+          dispatch compare <collection> -e a -e b  Run against two environments or base URLs and diff every response
+                                                  (--ignore $.timestamp, --fail-on-diff, -r cli,html,json)
           dispatch version
 
         <collection> is a file (Dispatch, Postman, Insomnia, Thunder Client, Hoppscotch, Bruno, HAR, OpenAPI, .http), a Dispatch or Bruno folder, a URL,
@@ -103,6 +106,7 @@ public static class Program
                 "monitor" => await MonitorCommand.ExecuteAsync(rest, cancel.Token),
                 "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),
                 "fuzz-client" => await FuzzClientCommand.ExecuteAsync(rest, cancel.Token),
+                "compare" => await CompareCommand.ExecuteAsync(rest, cancel.Token),
                 "version" or "--version" => Version(),
                 _ => throw new UsageException($"Unknown command '{command}'. Run 'dispatch --help'.")
             };

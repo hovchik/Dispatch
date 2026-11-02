@@ -239,6 +239,9 @@
                     <MenuItem Header="API laws…" Command="{Binding OpenLawsCommand}" ToolTip.Tip="Mine rules the API always follows from history, then check them">
                       <MenuItem.Icon><PathIcon Data="{StaticResource IconFlask}" Width="12" Height="12" /></MenuItem.Icon>
                     </MenuItem>
+                    <MenuItem Header="Compare environments…" Command="{Binding OpenCompareCommand}" ToolTip.Tip="Run the collection on two environments or base URLs and diff status, bodies and latency">
+                      <MenuItem.Icon><PathIcon Data="{StaticResource IconDiff}" Width="12" Height="12" /></MenuItem.Icon>
+                    </MenuItem>
                     <Separator />
                     <MenuItem Header="Collection settings &amp; variables…" Command="{Binding OpenCollectionSettingsCommand}">
                       <MenuItem.Icon><PathIcon Data="{StaticResource IconSettings}" Width="12" Height="12" /></MenuItem.Icon>
