@@ -30,6 +30,8 @@ public static class DependencyInjection
         services.AddSingleton<IFlowRepository, FlowRepository>();
         services.AddSingleton<IMonitorRepository, MonitorRepository>();
         services.AddSingleton<ISettingsRepository, SettingsRepository>();
+        services.AddSingleton(sp => new Sync.FolderSyncService(sp.GetRequiredService<ICollectionRepository>(),
+            Path.Combine(Path.GetDirectoryName(Path.GetFullPath(databasePath))!, "sync")));
 
         services.AddDispatchEngine();
         return services;

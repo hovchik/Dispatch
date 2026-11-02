@@ -39,6 +39,10 @@ public static class Program
           dispatch capture [--port 8899] [...]     Record proxied traffic to a HAR or Dispatch collection
           dispatch fuzz-client [--port 8899] [...] Vary responses to an app through a proxy to find how it breaks
                                                   (--host h, --window 5s, --kinds NullField,EmptyArray,…, --duration 10m)
+          dispatch lint <collection> [...]     Static checks: undefined/unused variables, hard-coded secrets, no assertions,
+                                                  duplicates, stale examples (--fail-on warning, --disable DP008, -r cli,html,json)
+          dispatch sync <collection> <folder>     Two-way sync between a saved collection and a git-friendly folder
+                                                  (--watch, --resolve app|folder)
           dispatch version
 
         <collection> is a file (Dispatch, Postman, Insomnia, Thunder Client, Hoppscotch, Bruno, HAR, OpenAPI, .http), a Dispatch or Bruno folder, a URL,
@@ -103,6 +107,8 @@ public static class Program
                 "monitor" => await MonitorCommand.ExecuteAsync(rest, cancel.Token),
                 "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),
                 "fuzz-client" => await FuzzClientCommand.ExecuteAsync(rest, cancel.Token),
+                "lint" => await LintCommand.ExecuteAsync(rest, cancel.Token),
+                "sync" => await SyncCommand.ExecuteAsync(rest, cancel.Token),
                 "version" or "--version" => Version(),
                 _ => throw new UsageException($"Unknown command '{command}'. Run 'dispatch --help'.")
             };
