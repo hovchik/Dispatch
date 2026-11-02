@@ -77,6 +77,8 @@ public static class HelpCatalog
     public const string Protocols = "protocols";
     public const string Cli = "cli";
     public const string Shortcuts = "shortcuts";
+    public const string CollectionLint = "collection-lint";
+    public const string FolderSync = "folder-sync";
 
     public static HelpTopic? Find(string? id) => All.FirstOrDefault(t => t.Id == id);
 
@@ -453,6 +455,36 @@ public static class HelpCatalog
             new HelpTip("Double-click a tab title to rename it.")
         ],
         ["keyboard", "shortcut", "hotkey", "keys", "palette"],
-        null, [GettingStarted])
+        null, [GettingStarted]),
+
+        new(CollectionLint, "Testing", "Lint collection", "Static checks that keep a collection clean, in the app and in CI.",
+        [
+            new HelpParagraph("The linter reads the collection without sending anything and lists problems with a rule id and a severity: variables used but defined nowhere (DP001), collection variables nothing uses (DP002), credentials written literally into URLs, headers, bodies, auth settings or collection variables (DP003), requests with no assertion, test script check or message expectation (DP004), requests that send the same thing twice (DP005), requests sharing a name in one folder (DP006), saved examples that no longer match their request (DP007), missing descriptions (DP008, off by default), empty URLs (DP009) and extractions nothing uses (DP010)."),
+            new HelpSteps(
+            [
+                "Open the collection menu → Lint collection…. Problems are listed by severity; click one to open its request.",
+                "Untick a rule or change its severity on the left; the choice is saved for this collection and used again next time.",
+                "Export the rule configuration as dispatch-lint.json and commit it next to the collection so the CLI uses the same rules."
+            ]),
+            new HelpExample("In CI: fail on warnings, hints allowed", "dispatch lint api.dispatch.json --fail-on warning -r cli,json\ndispatch lint \"My Collection\" --disable DP008 --severity DP004=error"),
+            new HelpTip("The active environment's variables count as defined. With no active environment every saved environment counts, so a variable only one of them defines is not reported.")
+        ],
+        ["lint", "linter", "hygiene", "unused variable", "undefined variable", "secret", "token", "duplicate", "stale example", "static check", "quality"],
+        null, [Variables, Assertions, Cli]),
+
+        new(FolderSync, "Tools", "Sync with a folder", "Keep a collection and a git-friendly folder the same in both directions.",
+        [
+            new HelpParagraph("Export to folder writes one file per request; Sync with folder keeps that folder and the collection in step afterwards. Edit a file in your editor, pull it from git, or add and delete files, and the app follows. Save a request in the app, and its file is rewritten. Dispatch remembers what both sides agreed on at the last sync, so it can tell which side changed."),
+            new HelpSteps(
+            [
+                "Open the collection menu → Sync with folder…, pick an empty folder or one exported earlier, and click Sync now.",
+                "Turn on Watch to keep syncing: file changes are applied within a second, app changes are written back every few seconds.",
+                "When the same request changed on both sides, it is listed as a conflict and left untouched on both sides. Show both versions and keep the app's or the folder's."
+            ]),
+            new HelpExample("In CI or a terminal", "dispatch sync \"My Collection\" ./api-tests\ndispatch sync \"My Collection\" ./api-tests --watch\ndispatch sync \"My Collection\" ./api-tests --resolve folder"),
+            new HelpTip("Secret collection variables are never written to the folder; the app keeps their values when the folder's collection file comes back.")
+        ],
+        ["sync", "folder", "git", "watch", "two-way", "conflict", "version control", "repository", "export folder"],
+        null, [ImportExport, Collections, Cli])
     ];
 }

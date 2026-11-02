@@ -144,6 +144,26 @@ Two investigative tools that go beyond what API clients usually offer. Open them
   reports remaining quota. `dispatch ratelimit <collection> --request Login --expect-limit` fails CI when an endpoint
   has no rate limit.
 
+### Collection hygiene: linter and folder sync
+
+**Lint collection** (collection menu, or `dispatch lint`) runs static checks without sending anything: variables used but
+defined nowhere (DP001), collection variables nothing uses (DP002), **hard-coded secrets** in URLs, headers, bodies, auth
+settings or collection variables (DP003, using the security scan's secret patterns), requests with no assertion, test
+script check or message expectation (DP004), duplicate requests (DP005) and names (DP006), saved examples that no longer
+match their request (DP007), missing descriptions (DP008, off by default), empty URLs (DP009) and unused extractions
+(DP010). Each rule has an id and a severity you can change or switch off per collection; the app remembers the choice
+and can export it as `dispatch-lint.json`, which the CLI picks up next to the collection. Problems are clickable and
+open the request. `dispatch lint <collection> --fail-on warning -r cli,html,json` gates CI (`--disable DP008`,
+`--severity DP004=error`, `--list-rules`).
+
+**Sync with folder** (collection menu, or `dispatch sync <collection> <folder> [--watch]`) keeps a saved collection and
+a git-friendly folder (the folder export format, one file per request) the same in both directions. Edit, add or delete
+files in your editor or pull them from git and the app follows; save in the app and the files are rewritten. Dispatch
+records what both sides agreed on at the last sync, so it knows which side changed; a request changed on both sides is
+a **conflict**, left untouched on both sides and shown with both versions until you keep one (`--resolve app|folder` in
+the CLI). Watch mode applies file changes within a second and writes app changes back every few seconds. Secret
+collection variables are never written to the folder.
+
 ## Developer tools
 
 * **Import**: Postman (collections and environments), OpenAPI / Swagger (JSON or YAML), Insomnia (v4 JSON and v5 YAML),
@@ -226,6 +246,8 @@ dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
 dotnet run --project src/Dispatch.Cli -- monitor --watch
 dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
 dotnet run --project src/Dispatch.Cli -- fuzz-client --port 8899 --host api.myapp.com --duration 10m -r cli,html
+dotnet run --project src/Dispatch.Cli -- lint tests/api.dispatch.json --fail-on warning -r cli,json
+dotnet run --project src/Dispatch.Cli -- sync "My Collection" ./api-tests --watch
 ```
 
 `<collection>` can be any importable file, a URL, a Dispatch folder, or the name of a collection saved in the

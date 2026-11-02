@@ -27,7 +27,9 @@ public enum CollectionAction
     Scan,
     Laws,
     Flows,
-    Monitors
+    Monitors,
+    Lint,
+    Sync
 }
 
 public sealed partial class CollectionsViewModel(ICollectionRepository repository) : ObservableObject

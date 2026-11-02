@@ -41,7 +41,8 @@ public sealed record MainServices(
     Dispatch.Infrastructure.Capture.CertificateAuthority CaptureAuthority,
     Func<Dispatch.Infrastructure.Capture.CaptureProxy> CaptureProxyFactory,
     GrpcSchemaProvider GrpcSchemas,
-    Infrastructure.Auth.SystemBrowserInteraction OAuth);
+    Infrastructure.Auth.SystemBrowserInteraction OAuth,
+    Dispatch.Infrastructure.Sync.FolderSyncService FolderSync);
 
 /// <summary>The panels the activity rail can show in the sidebar.</summary>
 public enum SidebarSection
@@ -453,6 +454,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     [RelayCommand]
     private void OpenCollectionSettings() => OpenCollectionTool(CollectionAction.Settings);
 
+    [RelayCommand]
+    private void OpenLint() => OpenCollectionTool(CollectionAction.Lint);
+
+    [RelayCommand]
+    private void OpenSync() => OpenCollectionTool(CollectionAction.Sync);
+
     /// <summary>Toolbar tools act on the collection of the current tab, else the first collection.</summary>
     private void OpenCollectionTool(CollectionAction action)
     {
@@ -507,6 +514,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
             case CollectionAction.Settings:
                 Dialogs.ShowTool(new CollectionSettingsViewModel(collection, _services.Tabs.Collections, Dialogs, Collections.LoadAsync));
                 break;
+            case CollectionAction.Lint:
+            {
+                var tool = new LintViewModel(collection, _services.Settings,
+                    () => ActiveEnvironment is { } active ? [active] : Environments.Items.Where(e => !e.IsNone).Select(e => e.ToModel()).ToList(),
+                    request => OpenRequest(request), Dialogs);
+                Dialogs.ShowTool(tool);
+                await tool.LoadAsync();
+                break;
+            }
+            case CollectionAction.Sync:
+            {
+                var tool = new FolderSyncViewModel(collection, _services.FolderSync, _services.Settings, Dialogs, () => SafeAsync(Collections.LoadAsync));
+                Dialogs.ShowTool(tool);
+                await tool.LoadAsync();
+                break;
+            }
             case CollectionAction.DocsHtml or CollectionAction.DocsMarkdown:
                 await SafeAsync(async () =>
                 {
@@ -628,6 +651,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         yield return new PaletteItem("Security scan…", "Passive checks and active probes", OpenSecurityScan);
         yield return new PaletteItem("API laws…", "Mine rules the API always follows, then check them", OpenLaws);
         yield return new PaletteItem("Collection settings…", "Variables, auth and defaults of the current collection", OpenCollectionSettings);
+        yield return new PaletteItem("Lint collection…", "Undefined variables, hard-coded secrets, missing checks, duplicates, stale examples", OpenLint);
+        yield return new PaletteItem("Sync with folder…", "Two-way sync with a git-friendly folder", OpenSync);
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
         yield return new PaletteItem("Capture proxy…", "Record browser / app traffic into a collection", OpenCapture);
         yield return new PaletteItem("Client fuzzing…", "Vary responses to an app through a proxy to find how it breaks", OpenClientFuzz);
