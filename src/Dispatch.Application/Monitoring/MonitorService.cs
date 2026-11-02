@@ -73,10 +73,17 @@ public sealed class MonitorService(CollectionRunner runner, IAlertSender? alerts
         var targets = TlsTargets.FromUrls(report.Results.Select(r => (r.Request.Name, r.Response.EffectiveUrl ?? r.Request.Url)));
         foreach (var target in targets)
         {
+            // Reach the host the way the monitored request did (through its proxy, if it has one).
+            var settings = report.Results.FirstOrDefault(r => target.RequestNames.Contains(r.Request.Name))?.Request.Settings;
             TlsReport tls;
             try
             {
-                tls = await _tls.InspectAsync(target.Host, target.Port, new TlsInspectOptions { WarnDays = monitor.CertificateWarnDays }, ct).ConfigureAwait(false);
+                tls = await _tls.InspectAsync(target.Host, target.Port, new TlsInspectOptions
+                {
+                    WarnDays = monitor.CertificateWarnDays,
+                    Proxy = settings?.Proxy,
+                    UseSystemProxy = settings?.UseSystemProxy ?? false
+                }, ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

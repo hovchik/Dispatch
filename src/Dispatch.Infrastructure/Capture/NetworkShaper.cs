@@ -93,13 +93,14 @@ public sealed class NetworkShaper(NetworkProfile profile, Random? random = null)
         while (sent < body.Length)
         {
             var take = (int)Math.Min(sliceBytes, body.Length - sent);
+            // Wait until the cap allows these bytes *before* handing them over: a body that fits in one slice must
+            // still take its transfer time to arrive (the client has Content-Length and stops reading once it has it).
+            var due = Profile.TransferTime(sent + take) - Stopwatch.GetElapsedTime(started);
+            if (due > TimeSpan.Zero)
+                await Task.Delay(due, ct).ConfigureAwait(false);
             await stream.WriteAsync(body.Slice((int)sent, take), ct).ConfigureAwait(false);
             await stream.FlushAsync(ct).ConfigureAwait(false);
             sent += take;
-            // Sleep until the clock catches up with what the cap allows for the bytes already sent.
-            var due = Profile.TransferTime(sent) - Stopwatch.GetElapsedTime(started);
-            if (due > TimeSpan.Zero)
-                await Task.Delay(due, ct).ConfigureAwait(false);
         }
     }
 

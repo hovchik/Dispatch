@@ -174,6 +174,44 @@ public class NetworkConditionsProxyTests
     }
 
     [Fact]
+    public async Task Bandwidth_cap_delays_even_a_body_that_fits_in_one_slice()
+    {
+        var body = new string('x', 200); // 1600 bits → 1 s at 1.6 kbps, well under the 256-byte minimum slice
+        await using var origin = await TestServer.StartAsync(app => app.MapGet("/small", () => body));
+        using var ca = new CertificateAuthority();
+        await using var proxy = new CaptureProxy(ca);
+        await proxy.StartAsync(new CaptureProxyOptions { Port = 0, Network = NetworkProfile.Build(null, bandwidth: "1600") });
+
+        using var client = ProxyClient(proxy.Port);
+        var clock = Stopwatch.StartNew();
+        var text = await client.GetStringAsync($"{origin.BaseUrl}/small");
+        Assert.Equal(body, text);
+        Assert.True(clock.ElapsedMilliseconds >= 800, $"took only {clock.ElapsedMilliseconds} ms");
+    }
+
+    [Fact]
+    public async Task Dropped_https_tunnels_are_recorded()
+    {
+        await using var tls = await TlsTestServer.StartAsync();
+        using var ca = new CertificateAuthority();
+        await using var proxy = new CaptureProxy(ca);
+        var captured = new List<CapturedExchange>();
+        proxy.Captured += captured.Add;
+        await proxy.StartAsync(new CaptureProxyOptions { Port = 0, DecryptHttps = true, Network = NetworkProfile.Build(null, loss: "100%") });
+
+        using var client = ProxyClient(proxy.Port);
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.GetStringAsync($"https://localhost:{tls.Port}/secret"));
+        // The handler retries the tunnel several times; every refused CONNECT is recorded.
+        Assert.NotEmpty(captured);
+        Assert.All(captured, exchange =>
+        {
+            Assert.Equal("CONNECT", exchange.Method);
+            Assert.Equal($"https://localhost:{tls.Port}", exchange.Url);
+            Assert.Contains("packet loss", exchange.Error);
+        });
+    }
+
+    [Fact]
     public async Task Bandwidth_cap_slows_the_download()
     {
         var body = new string('x', 8000); // 64 kbit → 1 s at 64 kbps
@@ -192,6 +230,31 @@ public class NetworkConditionsProxyTests
 
 public class TlsInspectorTests
 {
+    [Fact]
+    public async Task Inspects_through_an_http_proxy_tunnel()
+    {
+        await using var tls = await TlsTestServer.StartAsync();
+        using var ca = new CertificateAuthority();
+        await using var proxy = new CaptureProxy(ca);
+        await proxy.StartAsync(new CaptureProxyOptions { Port = 0, DecryptHttps = false }); // a blind CONNECT tunnel
+
+        var report = await new TlsInspector().InspectAsync("localhost", tls.Port,
+            new TlsInspectOptions { Proxy = $"http://127.0.0.1:{proxy.Port}", CheckRevocation = false });
+        Assert.Null(report.Error);
+        Assert.Equal("localhost", report.Leaf!.CommonName); // the origin's cert, not one minted by the proxy
+
+        var refused = await new TlsInspector().InspectAsync("localhost", tls.Port,
+            new TlsInspectOptions { Proxy = "http://127.0.0.1:1", Timeout = TimeSpan.FromSeconds(5) });
+        Assert.NotNull(refused.Error);
+    }
+
+    [Fact]
+    public void Proxy_resolution_prefers_the_explicit_proxy()
+    {
+        Assert.Equal(new Uri("http://proxy:3128"), TlsInspector.ResolveProxy(new TlsInspectOptions { Proxy = "proxy:3128", UseSystemProxy = true }, "x", 443));
+        Assert.Null(TlsInspector.ResolveProxy(new TlsInspectOptions(), "x", 443));
+    }
+
     [Theory]
     [InlineData("example.com", "example.com", 443)]
     [InlineData("example.com:8443", "example.com", 8443)]

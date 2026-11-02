@@ -27,6 +27,12 @@ public sealed class TlsInspectOptions
 
     /// <summary>Server name for SNI and hostname checks; defaults to the host.</summary>
     public string? ServerName { get; init; }
+
+    /// <summary>An HTTP proxy to tunnel through (CONNECT), e.g. <c>http://proxy:3128</c>; empty = direct or system proxy.</summary>
+    public string? Proxy { get; init; }
+
+    /// <summary>Use the system proxy for the host when <see cref="Proxy"/> is empty.</summary>
+    public bool UseSystemProxy { get; init; }
 }
 
 /// <summary>One certificate of the presented chain, leaf first.</summary>
@@ -175,7 +181,14 @@ public sealed class TlsInspector : ITlsInspector
         try
         {
             using var tcp = new TcpClient { NoDelay = true };
-            await tcp.ConnectAsync(host, port, timeout.Token).ConfigureAwait(false);
+            var proxy = ResolveProxy(options, host, port);
+            if (proxy is null)
+                await tcp.ConnectAsync(host, port, timeout.Token).ConfigureAwait(false);
+            else
+            {
+                await tcp.ConnectAsync(proxy.IdnHost, proxy.Port, timeout.Token).ConfigureAwait(false);
+                await OpenTunnelAsync(tcp.GetStream(), host, port, timeout.Token).ConfigureAwait(false);
+            }
             await using var ssl = new SslStream(tcp.GetStream(), leaveInnerStreamOpen: false, (_, certificate, chain, errors) =>
             {
                 // Record everything and accept: the point is to report problems, not to refuse the handshake.
@@ -231,6 +244,48 @@ public sealed class TlsInspector : ITlsInspector
         report.Insights.AddRange(TlsInsights.For(report, now));
         presented?.Dispose();
         return report;
+    }
+
+    /// <summary>The proxy to tunnel through: the explicit one, else the system proxy when asked, else none (direct).</summary>
+    internal static Uri? ResolveProxy(TlsInspectOptions options, string host, int port)
+    {
+        if (!string.IsNullOrWhiteSpace(options.Proxy))
+        {
+            var text = options.Proxy.Trim();
+            if (!text.Contains("://", StringComparison.Ordinal))
+                text = "http://" + text;
+            return Uri.TryCreate(text, UriKind.Absolute, out var explicitProxy) ? explicitProxy : throw new IOException($"'{options.Proxy}' is not a proxy address.");
+        }
+        if (!options.UseSystemProxy)
+            return null;
+        var target = new Uri($"https://{(host.Contains(':') ? "[" + host + "]" : host)}:{port}/");
+        var system = HttpClient.DefaultProxy;
+        return system.IsBypassed(target) ? null : system.GetProxy(target);
+    }
+
+    /// <summary>Asks an HTTP proxy for a tunnel to the host (<c>CONNECT host:port</c>) and drains its response head.</summary>
+    private static async Task OpenTunnelAsync(NetworkStream stream, string host, int port, CancellationToken ct)
+    {
+        var authority = host.Contains(':') ? $"[{host}]:{port}" : $"{host}:{port}";
+        var request = System.Text.Encoding.ASCII.GetBytes($"CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\nProxy-Connection: keep-alive\r\n\r\n");
+        await stream.WriteAsync(request, ct).ConfigureAwait(false);
+        await stream.FlushAsync(ct).ConfigureAwait(false);
+
+        // Read the status line and headers byte by byte so nothing of the TLS handshake that follows is swallowed.
+        var head = new System.Text.StringBuilder();
+        var one = new byte[1];
+        while (!head.ToString().EndsWith("\r\n\r\n", StringComparison.Ordinal))
+        {
+            if (await stream.ReadAsync(one, ct).ConfigureAwait(false) == 0)
+                throw new IOException("The proxy closed the connection before answering CONNECT.");
+            head.Append((char)one[0]);
+            if (head.Length > 16 * 1024)
+                throw new IOException("The proxy's CONNECT response is too long.");
+        }
+        var statusLine = head.ToString().Split("\r\n")[0];
+        var parts = statusLine.Split(' ', 3);
+        if (parts.Length < 2 || !int.TryParse(parts[1], out var status) || status is < 200 or > 299)
+            throw new IOException($"The proxy refused the tunnel: {statusLine}");
     }
 
     private static string RevocationStatus(X509Chain chain, bool checkedOnline)

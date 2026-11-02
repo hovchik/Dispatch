@@ -172,8 +172,22 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
             return;
         }
 
-        // Offline windows and packet loss hit the tunnel itself: the client sees the CONNECT fail outright.
-        _shaper?.Admit();
+        // Offline windows and packet loss hit the tunnel itself: the client sees the CONNECT fail outright. The drop is
+        // still recorded, so the traffic list shows what the client saw.
+        if (_shaper is not null)
+        {
+            try
+            {
+                _shaper.Admit();
+            }
+            catch (NetworkDroppedException ex)
+            {
+                var url = $"https://{authority2}";
+                if (ShouldRecord(url))
+                    Publish(new CapturedExchange { Timestamp = DateTimeOffset.Now, Method = "CONNECT", Url = url, Secure = true, Error = ex.Message });
+                throw;
+            }
+        }
         await WriteAsync(clientStream, "HTTP/1.1 200 Connection Established\r\n\r\n", ct).ConfigureAwait(false);
 
         if (!_options.DecryptHttps)
