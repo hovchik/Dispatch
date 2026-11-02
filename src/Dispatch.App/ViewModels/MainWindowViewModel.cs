@@ -67,6 +67,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         History = history;
         Environments = environments;
         Palette = new CommandPaletteViewModel(PaletteItems);
+        ResponseViewModel.TlsLookup = Services.TlsSummaryCache.LookupAsync;
 
         Collections.OpenRequested += OpenRequest;
         Collections.RequestDeleted += OnRequestDeleted;
@@ -207,6 +208,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     public void ShowRateLimit(ApiRequest request) =>
         Dialogs.ShowTool(new RateLimitViewModel(request, _services.RateLimits, Dialogs, () => ActiveEnvironment,
             FindCollection(request.CollectionId)?.Variables));
+
+    public void ShowTls(ApiRequest request)
+    {
+        var variables = Dispatch.Application.Variables.VariableContext.For(ActiveEnvironment, FindCollection(request.CollectionId)?.Variables).Merged();
+        var url = Dispatch.Application.Variables.VariableResolver.Resolve(request.Url, variables).Trim();
+        var target = Uri.TryCreate(url.Contains("://", StringComparison.Ordinal) ? url : "https://" + url, UriKind.Absolute, out var uri) && uri.IdnHost.Length > 0
+            ? (uri.IsDefaultPort ? uri.IdnHost : $"{uri.IdnHost}:{uri.Port}")
+            : url;
+        Dialogs.ShowTool(new TlsViewModel(new Dispatch.Application.Tls.TlsInspector(), Dialogs, _services.Tabs.Clipboard, target));
+    }
 
     public void ShowImpact(ApiRequest request, string? currentBody, string? previousBody)
     {
@@ -426,6 +437,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         Dialogs, _services.Tabs.Clipboard, _services.Tabs.Collections, Collections.LoadAsync));
 
     [RelayCommand]
+    private void OpenTlsInspector() => Dialogs.ShowTool(new TlsViewModel(new Dispatch.Application.Tls.TlsInspector(), Dialogs, _services.Tabs.Clipboard));
+
+    [RelayCommand]
     private void OpenClientFuzz() => Dialogs.ShowTool(new ClientFuzzViewModel(_services.CaptureProxyFactory, _services.CaptureAuthority,
         Dialogs, _services.Tabs.Clipboard));
 
@@ -631,6 +645,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);
         yield return new PaletteItem("Capture proxy…", "Record browser / app traffic into a collection", OpenCapture);
         yield return new PaletteItem("Client fuzzing…", "Vary responses to an app through a proxy to find how it breaks", OpenClientFuzz);
+        yield return new PaletteItem("TLS inspector…", "Certificate chain, expiry, protocol, cipher and ALPN of a host", OpenTlsInspector);
         foreach (var collection in Collections.Items)
             yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
                 () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));

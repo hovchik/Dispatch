@@ -144,6 +144,22 @@ Two investigative tools that go beyond what API clients usually offer. Open them
   reports remaining quota. `dispatch ratelimit <collection> --request Login --expect-limit` fails CI when an endpoint
   has no rate limit.
 
+### Network conditions and TLS inspector
+
+* **Network conditions in the capture proxy**: the capture and client-fuzzing proxies can impose added **latency**, a
+  **bandwidth cap** on responses, random **dropped connections** and periodic **offline windows**, so you can watch a
+  browser, mobile app or SDK cope with a bad link. Presets: `2g`, `3g`, `4g`, `dsl`, `satellite`, `flaky-wifi`
+  (5% drops, offline 3 s every 30 s) and `offline` (10 s every minute), or a custom mix. Pick a profile in the Capture
+  window, or from the CLI: `dispatch capture --network 3g` / `dispatch capture --latency 300ms --bandwidth 1mbps --loss 2%
+  --offline-every 60s --offline-for 10s` (the same options work on `dispatch fuzz-client`).
+* **TLS / certificate inspector**: one handshake with a host shows the certificate chain (subject, issuer, validity,
+  SANs, key and signature), days to expiry, TLS version, cipher suite, ALPN (is HTTP/2 offered?), hostname and trust
+  problems and revocation status, with plain-language insights. Open it from Tools → TLS inspector…, from the flask
+  menu of any request (prefilled with its host), and the response **Timeline** tab shows the TLS summary of every HTTPS
+  send. Monitors can **fail and alert when a certificate expires within N days**. `dispatch tls api.example.com
+  --warn-days 21` (or `dispatch tls <collection>` for every HTTPS host it uses) exits 1 on problems and writes
+  `-r cli,html,json` reports.
+
 ## Developer tools
 
 * **Import**: Postman (collections and environments), OpenAPI / Swagger (JSON or YAML), Insomnia (v4 JSON and v5 YAML),
@@ -226,6 +242,8 @@ dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
 dotnet run --project src/Dispatch.Cli -- monitor --watch
 dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
 dotnet run --project src/Dispatch.Cli -- fuzz-client --port 8899 --host api.myapp.com --duration 10m -r cli,html
+dotnet run --project src/Dispatch.Cli -- capture --network 3g --out traffic.har
+dotnet run --project src/Dispatch.Cli -- tls api.example.com --warn-days 21 -r cli,json
 ```
 
 `<collection>` can be any importable file, a URL, a Dispatch folder, or the name of a collection saved in the

@@ -266,6 +266,22 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+            <StackPanel Spacing="4" IsVisible="{Binding HasTls}">
+              <TextBlock Text="TLS" Classes="section" />
+              <Border Classes="card" Padding="10">
+                <StackPanel Spacing="3">
+                  <SelectableTextBlock Text="{Binding Tls.Line}" FontSize="12" TextWrapping="Wrap" />
+                  <SelectableTextBlock Text="{Binding Tls.CertificateLine}" FontSize="12" Classes="muted" TextWrapping="Wrap" />
+                  <ItemsControl ItemsSource="{Binding Tls.Problems}" IsVisible="{Binding Tls.HasProblems}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <TextBlock Text="{Binding}" FontSize="12" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+            </StackPanel>
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Text="REQUEST AS SENT" Classes="section" VerticalAlignment="Center" />
               <Button Grid.Column="1" Classes="icon compact" Command="{Binding CopyRawRequestCommand}" ToolTip.Tip="Copy">

@@ -78,6 +78,7 @@ public static class DependencyInjection
         services.AddSingleton<Dispatch.Application.RateLimits.RateLimitProber>();
         services.AddSingleton<Dispatch.Application.Flows.FlowRunner>();
         services.AddSingleton<Dispatch.Application.Monitoring.IAlertSender, Monitoring.AlertSender>();
+        services.AddSingleton<Dispatch.Application.Tls.ITlsInspector, Dispatch.Application.Tls.TlsInspector>();
         services.AddSingleton<Dispatch.Application.Monitoring.MonitorService>();
         // The same CA on every launch, so trusting it once is enough.
         services.AddSingleton(_ => new Capture.CertificateAuthority(Capture.CertificateAuthority.LoadOrCreate(DispatchPaths.CaptureCaFile)));
