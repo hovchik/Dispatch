@@ -72,6 +72,10 @@ public class WebhookUnitTests
         Assert.Equal(BodyMode.Json, request.Body.Mode);
         Assert.Equal(["X-Signature", "Content-Type"], request.Headers.Select(h => h.Key));
 
+        var form = WebhookReplay.ToRequest(new ReceivedWebhook { ContentType = "application/x-www-form-urlencoded", Body = "event=paid&id=4%202" }, "http://localhost:1");
+        Assert.Equal(BodyMode.FormUrlEncoded, form.Body.Mode);
+        Assert.Equal([("event", "paid"), ("id", "4 2")], form.Body.FormFields.Select(f => (f.Key, f.Value)));
+
         var example = WebhookReplay.ToExample(hook);
         Assert.Equal(200, example.StatusCode);
         Assert.Contains("\"status\": \"paid\"", example.Body);

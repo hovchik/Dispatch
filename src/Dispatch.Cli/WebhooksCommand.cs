@@ -36,7 +36,7 @@ public static class WebhooksCommand
             var matches = WebhookMatcher.Matches(hook, pathFilter);
             if (!quiet)
                 Console.WriteLine((matches ? Paint("←", "32", color) : Paint("·", "90", color)) + WebhookReportWriter.Line(hook));
-            if (matches && expect > 0 && Interlocked.Increment(ref matched) >= expect)
+            if (matches && Interlocked.Increment(ref matched) >= expect && expect > 0)
                 stop.Cancel();
         };
 
@@ -71,9 +71,11 @@ public static class WebhooksCommand
         var baseUrl = receiver.BaseUrl;
         await receiver.StopAsync();
 
-        var hits = pathFilter.Length == 0 ? hooks.Count : hooks.Count(h => WebhookMatcher.Matches(h, pathFilter));
+        // Counted on arrival, so the result is right even when the bounded log has dropped early callbacks.
+        var received = receiver.Log.Total;
+        var hits = pathFilter.Length == 0 ? received : Volatile.Read(ref matched);
         Console.WriteLine();
-        Console.WriteLine($"Received {hooks.Count} callback(s)" + (pathFilter.Length > 0 ? $", {hits} to {pathFilter}." : "."));
+        Console.WriteLine($"Received {received} callback(s)" + (pathFilter.Length > 0 ? $", {hits} to {pathFilter}." : "."));
         if (reporters.Contains("cli") && hooks.Count > 0)
             Console.WriteLine(WebhookReportWriter.Text(hooks, baseUrl));
 

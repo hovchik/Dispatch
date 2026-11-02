@@ -36,7 +36,13 @@ public static class WebhookReplay
             Description = $"Replay of a callback received at {hook.ReceivedAt:yyyy-MM-dd HH:mm:ss} from {hook.RemoteAddress}."
         };
         if (hook.HasBody)
-            request.Body = new RequestBody { Mode = BodyMode(hook), Content = hook.Body };
+        {
+            var mode = BodyMode(hook);
+            // Form bodies are sent from FormFields, so the recorded pairs go there; everything else is sent as raw content.
+            request.Body = mode == Domain.BodyMode.FormUrlEncoded
+                ? new RequestBody { Mode = mode, FormFields = Requests.QueryString.ParseForm(hook.Body), Content = hook.Body }
+                : new RequestBody { Mode = mode, Content = hook.Body };
+        }
         return request;
     }
 
