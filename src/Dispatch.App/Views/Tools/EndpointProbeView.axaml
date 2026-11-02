@@ -1,0 +1,164 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:probes="using:Dispatch.Application.Probes"
+             x:Class="Dispatch.App.Views.Tools.EndpointProbeView"
+             x:DataType="tools:EndpointProbeViewModel">
+  <Grid ColumnDefinitions="300,*" Margin="12">
+    <!-- Settings -->
+    <ScrollViewer Margin="0,0,16,0">
+      <StackPanel Spacing="8">
+        <TextBlock Text="{Binding ToolName}" FontSize="15" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding Intro}" />
+        <SelectableTextBlock Text="{Binding RequestLine}" FontFamily="{StaticResource MonoFont}" FontSize="11" TextWrapping="Wrap" />
+
+        <!-- Pagination -->
+        <StackPanel Spacing="6" IsVisible="{Binding IsPagination}">
+          <TextBlock Classes="section" Text="PAGING" Margin="0,6,0,0" />
+          <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
+            <TextBlock Text="Strategy" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Strategies}" SelectedIndex="{Binding StrategyIndex}" Width="140" />
+            <TextBlock Grid.Row="1" Text="Items path" VerticalAlignment="Center" />
+            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ItemsPath}" Watermark="auto ($.data…)" Width="140" />
+            <TextBlock Grid.Row="2" Text="Item id field" VerticalAlignment="Center" />
+            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding IdField}" Watermark="auto (id…)" Width="140" />
+            <TextBlock Grid.Row="3" Text="Page / offset param" VerticalAlignment="Center" />
+            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding PageParam}" Watermark="auto (page…)" Width="140" />
+            <TextBlock Grid.Row="4" Text="Page size param" VerticalAlignment="Center" />
+            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding SizeParam}" Watermark="auto (limit…)" Width="140" />
+            <TextBlock Grid.Row="5" Text="Page size" VerticalAlignment="Center" />
+            <NumericUpDown Grid.Row="5" Grid.Column="1" Value="{Binding PageSize}" Minimum="1" Maximum="10000" Width="140" FormatString="0"
+                           Watermark="as sent" />
+            <TextBlock Grid.Row="6" Text="Max pages" VerticalAlignment="Center" />
+            <NumericUpDown Grid.Row="6" Grid.Column="1" Value="{Binding MaxPages}" Minimum="1" Maximum="5000" Width="140" FormatString="0" />
+          </Grid>
+          <CheckBox Content="Try out-of-range and invalid paging input" IsChecked="{Binding EdgeCases}" />
+          <CheckBox Content="Fetch page 1 again to check the order" IsChecked="{Binding CheckStability}" />
+        </StackPanel>
+
+        <!-- Idempotency -->
+        <StackPanel Spacing="6" IsVisible="{Binding IsIdempotency}">
+          <TextBlock Classes="section" Text="RETRIES" Margin="0,6,0,0" />
+          <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="6" ColumnSpacing="8">
+            <TextBlock Text="Key header" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" Text="{Binding KeyHeader}" Width="140" />
+            <TextBlock Grid.Row="1" Text="Parallel requests" VerticalAlignment="Center" />
+            <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding Parallel}" Minimum="0" Maximum="50" Width="140" FormatString="0" />
+          </Grid>
+          <CheckBox Content="Also race copies without a key" IsChecked="{Binding RaceWithoutKey}" />
+        </StackPanel>
+
+        <!-- Caching -->
+        <StackPanel Spacing="6" IsVisible="{Binding IsCaching}">
+          <TextBlock Classes="section" Text="CHECKS" Margin="0,6,0,0" />
+          <CheckBox Content="Compare HEAD with GET" IsChecked="{Binding CheckHead}" />
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBlock Text="Max requests" VerticalAlignment="Center" />
+          <NumericUpDown Grid.Column="1" Value="{Binding MaxRequests}" Minimum="2" Maximum="5000" Width="140" FormatString="0" />
+        </Grid>
+
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,8,0,0">
+          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding RunCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconPlay}" Width="12" Height="12" />
+              <TextBlock Text="Run" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StopCommand}">
+            <TextBlock Text="Stop" />
+          </Button>
+        </Grid>
+        <DropDownButton Content="Export report" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+          <DropDownButton.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+              <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+            </MenuFlyout>
+          </DropDownButton.Flyout>
+        </DropDownButton>
+        <TextBlock Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" FontSize="12" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Results -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,*">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding Sent}" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="Requests" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource DangerSoftBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding Problems}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource DangerBrush}" />
+            <TextBlock Text="Problems" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding Warnings}" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="Warnings" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}"
+                IsVisible="{Binding Verdict, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <StackPanel>
+            <TextBlock Text="{Binding Verdict}" FontSize="22" FontWeight="Bold" />
+            <TextBlock Text="Verdict" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <TextBlock Grid.Row="1" Text="{Binding Summary}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,12,0,8"
+                 IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <ItemsControl Grid.Row="2" ItemsSource="{Binding Stats}" Margin="0,0,0,10">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="probes:ProbeStat">
+            <Border Classes="card" Padding="10,6" Margin="0,0,8,8" MinWidth="150" MaxWidth="320">
+              <StackPanel>
+                <TextBlock Text="{Binding Label}" Classes="muted" FontSize="11" />
+                <TextBlock Text="{Binding Value}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Hint}" Classes="muted" FontSize="11" TextWrapping="Wrap"
+                           IsVisible="{Binding Hint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Grid Grid.Row="3" ColumnDefinitions="3*,2*" ColumnSpacing="12">
+        <Border Classes="card" Padding="12">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Classes="section" Text="FINDINGS" Margin="0,0,0,6" />
+            <ScrollViewer>
+              <ItemsControl ItemsSource="{Binding Insights}" />
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+        <Border Grid.Column="1" Classes="card" Padding="12">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Classes="section" Text="REQUESTS (NEWEST FIRST)" Margin="0,0,0,6" />
+            <ScrollViewer HorizontalScrollBarVisibility="Auto">
+              <ItemsControl ItemsSource="{Binding Log}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <TextBlock Text="{Binding}" FontFamily="{StaticResource MonoFont}" FontSize="11" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+      </Grid>
+    </Grid>
+  </Grid>
+</UserControl>

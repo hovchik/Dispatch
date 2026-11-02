@@ -40,6 +40,7 @@ public static class FuzzClientCommand
             ? $"  {Paint("✗ BREAKS", "31", color)} {string.Join("; ", e.Signals)}"
             : $"  {Paint("✓ copes", "32", color)} ({e.RequestsAfter} request(s) afterwards)");
 
+        var network = NetworkOptions.Parse(args);
         await using var proxy = new CaptureProxy(authority);
         await proxy.StartAsync(new CaptureProxyOptions
         {
@@ -47,10 +48,12 @@ public static class FuzzClientCommand
             Public = args.Flag("public"),
             HostFilter = options.HostFilter,
             DecryptHttps = !args.Flag("no-decrypt"),
-            Interceptor = fuzzer
+            Interceptor = fuzzer,
+            Network = network
         });
 
-        Console.WriteLine($"Client fuzzing proxy on http://127.0.0.1:{proxy.Port}" + (options.HostFilter.Length > 0 ? $" · fuzzing {options.HostFilter}" : ""));
+        Console.WriteLine($"Client fuzzing proxy on http://127.0.0.1:{proxy.Port}" + (options.HostFilter.Length > 0 ? $" · fuzzing {options.HostFilter}" : "")
+                          + (network is null ? "" : $" · network {network.Describe()}"));
         Console.WriteLine("Point your app at it and use the app as usual: after a few normal responses per endpoint, one response at a time is varied.");
         Console.WriteLine("Only fuzz apps you own or may test. Press Ctrl+C to stop" + (args.Option("duration") is null ? "." : $" (stops after {args.Option("duration")})."));
 

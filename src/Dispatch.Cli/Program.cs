@@ -31,6 +31,11 @@ public static class Program
           dispatch minimize <collection> [...]    Shrink a request to the parts its outcome depends on
                                                   (--request n, --match status|class|tests|body, --contains text)
           dispatch ratelimit <collection> [...]   Discover an endpoint's real rate limit (--request n, --expect-limit)
+          dispatch paginate <collection> [...]    Walk a list endpoint's pages: duplicates, gaps, totals, loops (--request n,
+                                                  --strategy auto|link|next|cursor|page|offset, --page-size n)
+          dispatch idempotency <collection> [...] Check a request is safe to retry: same key, reused key, parallel
+                                                  duplicates (--request n, --key-header h, --parallel n)
+          dispatch cache <collection> [...]       Check HTTP caching: Cache-Control, Vary, ETag / 304 revalidation (--request n)
           dispatch impact <collection> [...]      What breaks because a response changed shape (--request n,
                                                   --baseline snapshot|example|file, --current file)
           dispatch laws <traffic.har|collection>  Infer API laws and anomalies from traffic (--runs n, --write,
@@ -38,10 +43,14 @@ public static class Program
           dispatch flow <collection> [--name n]   Run saved test flow(s) of a collection
           dispatch monitor [--once|--watch] [...]  Run scheduled monitors and send alerts
           dispatch capture [--port 8899] [...]     Record proxied traffic to a HAR or Dispatch collection
+                                                  (--network 3g, or --latency 300ms --bandwidth 1mbps --loss 2%)
           dispatch fuzz-client [--port 8899] [...] Vary responses to an app through a proxy to find how it breaks
                                                   (--host h, --window 5s, --kinds NullField,EmptyArray,…, --duration 10m)
           dispatch compare <collection> -e a -e b  Run against two environments or base URLs and diff every response
                                                   (--ignore $.timestamp, --fail-on-diff, -r cli,html,json)
+          dispatch tls <host[:port]|collection>    Inspect TLS: chain, expiry, protocol, cipher, ALPN (--warn-days 21)
+          dispatch webhooks [--port 9000] [...]    Receive and record webhooks locally (--out hooks.json, --expect n,
+                                                  --path /hooks/orders, --duration 10m, --status 200)
           dispatch version
 
         <collection> is a file (Dispatch, Postman, Insomnia, Thunder Client, Hoppscotch, Bruno, HAR, OpenAPI, .http), a Dispatch or Bruno folder, a URL,
@@ -100,6 +109,9 @@ public static class Program
                 "scan" => await ScanCommand.ExecuteAsync(rest, cancel.Token),
                 "minimize" or "minimise" => await MinimizeCommand.ExecuteAsync(rest, cancel.Token),
                 "ratelimit" or "rate-limit" => await RateLimitCommand.ExecuteAsync(rest, cancel.Token),
+                "paginate" or "pagination" => await PaginateCommand.ExecuteAsync(rest, cancel.Token),
+                "idempotency" or "idempotent" => await IdempotencyCommand.ExecuteAsync(rest, cancel.Token),
+                "cache" or "caching" => await CacheCommand.ExecuteAsync(rest, cancel.Token),
                 "impact" => await ImpactCommand.ExecuteAsync(rest, cancel.Token),
                 "laws" => await LawsCommand.ExecuteAsync(rest, cancel.Token),
                 "flow" => await FlowCommand.ExecuteAsync(rest, cancel.Token),
@@ -107,6 +119,8 @@ public static class Program
                 "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),
                 "fuzz-client" => await FuzzClientCommand.ExecuteAsync(rest, cancel.Token),
                 "compare" => await CompareCommand.ExecuteAsync(rest, cancel.Token),
+                "tls" => await TlsCommand.ExecuteAsync(rest, cancel.Token),
+                "webhooks" or "webhook" => await WebhooksCommand.ExecuteAsync(rest, cancel.Token),
                 "version" or "--version" => Version(),
                 _ => throw new UsageException($"Unknown command '{command}'. Run 'dispatch --help'.")
             };

@@ -242,6 +242,12 @@
                     <MenuItem Header="Compare environments…" Command="{Binding OpenCompareCommand}" ToolTip.Tip="Run the collection on two environments or base URLs and diff status, bodies and latency">
                       <MenuItem.Icon><PathIcon Data="{StaticResource IconDiff}" Width="12" Height="12" /></MenuItem.Icon>
                     </MenuItem>
+                    <MenuItem Header="TLS inspector…" Command="{Binding OpenTlsInspectorCommand}" ToolTip.Tip="Certificate chain, expiry, protocol, cipher and ALPN of a host">
+                      <MenuItem.Icon><PathIcon Data="{StaticResource IconLock}" Width="12" Height="12" /></MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="Webhook receiver…" Command="{Binding OpenWebhooksCommand}" ToolTip.Tip="A local endpoint that records callbacks: inspect, replay, save as example, and check them after a request">
+                      <MenuItem.Icon><PathIcon Data="{StaticResource IconServer}" Width="12" Height="12" /></MenuItem.Icon>
+                    </MenuItem>
                     <Separator />
                     <MenuItem Header="Collection settings &amp; variables…" Command="{Binding OpenCollectionSettingsCommand}">
                       <MenuItem.Icon><PathIcon Data="{StaticResource IconSettings}" Width="12" Height="12" /></MenuItem.Icon>

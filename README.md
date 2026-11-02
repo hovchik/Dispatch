@@ -74,6 +74,24 @@ count. Expected values can use variables extracted from the response. The checks
 app, the collection runner, flows, monitors and `dispatch run`, with how long the message took or what arrived instead.
 Edit them in a request's **Checks** tab.
 
+### Webhook receiver
+
+A local HTTP endpoint (**More → Webhook receiver…**) that records every callback it gets, whatever the method or path:
+use `http://localhost:9000/hooks/orders` as the callback URL while developing against a payment, messaging or CI
+provider. Each hook is listed with its headers and body; **replay** it to your own handler, open it as a request, or
+**save it as an example** on the matching request of the collection (created in a *Webhooks* folder when missing), so
+it is documented and the mock server can serve the same payload. Choose the status, body and delay every callback is
+answered with to see how the sender retries. Save all hooks as JSON or an HTML report. Dispatch bundles no tunnel; for
+callbacks from the internet expose the port with `cloudflared tunnel --url http://localhost:9000` or `ngrok http 9000`
+and give the provider the public URL.
+
+Webhooks are also a **message check**: in a request's Checks tab pick *Webhook receiver* as the listener, put the
+callback path in the filter (`/hooks/orders`, or `POST /hooks/*`) and the condition on the payload, e.g. after
+`POST /orders` a webhook arrives at `/hooks/orders` with `$.status == paid` within 5 s. The receiver starts on demand
+(port `DISPATCH_WEBHOOK_PORT`, default 9000), only callbacks after the request count, and the result shows with the
+other tests in the app, runner, flows, monitors and `dispatch run`. `dispatch webhooks --port 9000 --out hooks.json`
+records from the CLI; `--expect n --path /hooks/orders --duration 30s` makes it exit 1 when fewer arrive.
+
 ### Client fuzzing
 
 **Fuzz app** in the toolbar (or `dispatch fuzz-client`) fuzzes the client instead of the server. It is a proxy, like
@@ -164,6 +182,48 @@ Two investigative tools that go beyond what API clients usually offer. Open them
   reports remaining quota. `dispatch ratelimit <collection> --request Login --expect-limit` fails CI when an endpoint
   has no rate limit.
 
+### Network conditions and TLS inspector
+
+* **Network conditions in the capture proxy**: the capture and client-fuzzing proxies can impose added **latency**, a
+  **bandwidth cap** on responses, random **dropped connections** and periodic **offline windows**, so you can watch a
+  browser, mobile app or SDK cope with a bad link. Presets: `2g`, `3g`, `4g`, `dsl`, `satellite`, `flaky-wifi`
+  (5% drops, offline 3 s every 30 s) and `offline` (10 s every minute), or a custom mix. Pick a profile in the Capture
+  window, or from the CLI: `dispatch capture --network 3g` / `dispatch capture --latency 300ms --bandwidth 1mbps --loss 2%
+  --offline-every 60s --offline-for 10s` (the same options work on `dispatch fuzz-client`).
+* **TLS / certificate inspector**: one handshake with a host shows the certificate chain (subject, issuer, validity,
+  SANs, key and signature), days to expiry, TLS version, cipher suite, ALPN (is HTTP/2 offered?), hostname and trust
+  problems and revocation status, with plain-language insights. Open it from Tools → TLS inspector…, from the flask
+  menu of any request (prefilled with its host), and the response **Timeline** tab shows the TLS summary of every HTTPS
+  send. Monitors can **fail and alert when a certificate expires within N days**. `dispatch tls api.example.com
+  --warn-days 21` (or `dispatch tls <collection>` for every HTTPS host it uses) exits 1 on problems and writes
+  `-r cli,html,json` reports.
+
+### Endpoint probes: pagination, idempotency and caching
+
+Three more probes in the same flask menu. Each one sends a small number of real requests, lists its findings as
+problems, warnings and passes, and exports an HTML or JSON report. In the CLI, `--fail-on bad|warning|never` sets when
+the exit code is 1.
+
+* **Pagination walker**: follows a list endpoint to the last page. It works out the paging from a `Link: rel="next"`
+  header, a next URL in the body, a cursor (`next_cursor`, `nextPageToken`, …) sent back as a parameter, or
+  page / offset parameters. It flags items that appear on two pages, an advertised total (`total`, `totalCount`,
+  `X-Total-Count`, …) that doesn't match what can be reached, loops, short pages in the middle, pages larger than the
+  requested limit and deep pages that get slower. It fetches page 1 again to check that the order is stable, and tries a
+  page past the end, invalid page numbers and page sizes of 0 and 100000.
+  `dispatch paginate <collection> --request "List orders" --page-size 5`
+* **Idempotency & race probe**: sends a POST, PUT, PATCH or DELETE with an `Idempotency-Key`, retries it with the same
+  key, reuses the key with a changed body and sends several copies at the same moment, with one key and with none. It
+  compares the resources created (from `Location` or an id in the body) and flags retries that duplicate, reused keys
+  that are accepted, and 5xx under concurrency. PUT and DELETE are repeated as HTTP requires them to be idempotent. It
+  creates data, so point it at a test environment.
+  `dispatch idempotency <collection> --request "Create order" --parallel 8`
+* **Caching checker**: reads `Cache-Control`, `Expires`, `Vary`, `ETag` and `Last-Modified`, then checks that
+  `If-None-Match` and `If-Modified-Since` really answer 304, that an unknown ETag doesn't, that the ETag is stable while
+  the body is, and that HEAD matches GET. It flags authenticated responses that shared caches may store, cookies on
+  cacheable responses, compressed bodies without `Vary: Accept-Encoding` and a specific CORS origin without
+  `Vary: Origin`, and shows CDN cache headers such as `X-Cache` and `CF-Cache-Status`.
+  `dispatch cache <collection> --request "Get product" --fail-on warning`
+
 ## Developer tools
 
 * **Import**: Postman (collections and environments), OpenAPI / Swagger (JSON or YAML), Insomnia (v4 JSON and v5 YAML),
@@ -241,6 +301,9 @@ dotnet run --project src/Dispatch.Cli -- scan petstore.yaml --fail-on high -r cl
 dotnet run --project src/Dispatch.Cli -- docs "My Collection" --format html -o api.html
 dotnet run --project src/Dispatch.Cli -- minimize "My Collection" --request "Create order" -r cli,html
 dotnet run --project src/Dispatch.Cli -- ratelimit "My Collection" --request Login --expect-limit
+dotnet run --project src/Dispatch.Cli -- paginate "My Collection" --request "List orders" --page-size 5
+dotnet run --project src/Dispatch.Cli -- idempotency "My Collection" --request "Create order" -e staging.json
+dotnet run --project src/Dispatch.Cli -- cache "My Collection" --request "Get product" --fail-on warning
 dotnet run --project src/Dispatch.Cli -- impact "My Collection" --request "Get user" --baseline snapshot -r cli,html
 dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
 dotnet run --project src/Dispatch.Cli -- monitor --watch
@@ -248,6 +311,9 @@ dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
 dotnet run --project src/Dispatch.Cli -- fuzz-client --port 8899 --host api.myapp.com --duration 10m -r cli,html
 dotnet run --project src/Dispatch.Cli -- compare "My Collection" -e Staging -e Production --ignore $.timestamp --fail-on-diff -r cli,html
 dotnet run --project src/Dispatch.Cli -- load "My Collection" --users 20 --duration 60s --baseline base.json --max-regression 10% -r cli,json
+dotnet run --project src/Dispatch.Cli -- capture --network 3g --out traffic.har
+dotnet run --project src/Dispatch.Cli -- tls api.example.com --warn-days 21 -r cli,json
+dotnet run --project src/Dispatch.Cli -- webhooks --port 9000 --out hooks.json
 ```
 
 `<collection>` can be any importable file, a URL, a Dispatch folder, or the name of a collection saved in the

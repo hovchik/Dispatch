@@ -63,6 +63,31 @@ public sealed partial class ResponseViewModel : ObservableObject
         Messages = response.Messages.Select(m => new MessageItemViewModel(m)).ToList();
         Timings = BuildTimings(response);
         Jwt = DecodeJwtInBody(response.Body);
+        if (response.Kind == RequestKind.Http && response.Timings is not null && TlsLookup is { } lookup)
+            _ = LoadTlsAsync(lookup, response.EffectiveUrl);
+    }
+
+    /// <summary>Set by the app: finds the TLS details of an HTTPS URL's host for the timeline (null in tests).</summary>
+    public static Func<string?, Task<Services.TlsSummary?>>? TlsLookup { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTls))]
+    private Services.TlsSummary? _tls;
+
+    public bool HasTls => Tls is not null;
+
+    private async Task LoadTlsAsync(Func<string?, Task<Services.TlsSummary?>> lookup, string? url)
+    {
+        try
+        {
+            var summary = await lookup(url);
+            if (summary is not null)
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => Tls = summary);
+        }
+        catch (Exception)
+        {
+            // The timeline simply shows no TLS block when the lookup fails.
+        }
     }
 
     /// <summary>Decodes a JWT returned in the body (e.g. a login response's access_token), for the JWT tab.</summary>

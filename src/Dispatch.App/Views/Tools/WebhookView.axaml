@@ -1,0 +1,258 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:wh="using:Dispatch.Application.Webhooks"
+             xmlns:domain="using:Dispatch.Domain"
+             xmlns:conv="using:Dispatch.App.Converters"
+             x:Class="Dispatch.App.Views.Tools.WebhookView"
+             x:DataType="tools:WebhookViewModel">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.fieldLabel">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,0,0,3" />
+    </Style>
+    <Style Selector="Border.running">
+      <Setter Property="Background" Value="#2622A06B" />
+    </Style>
+    <Style Selector="Border.stopped">
+      <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,*" Margin="12">
+    <!-- Header: title, state, receiver address, start / stop -->
+    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="12" Margin="0,0,0,10">
+      <TextBlock Text="Webhook receiver" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <Border Grid.Column="1" Classes="pill" Classes.running="{Binding IsRunning}" Classes.stopped="{Binding !IsRunning}">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Ellipse Width="8" Height="8" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding IsRunning}" />
+          <Ellipse Width="8" Height="8" Fill="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" IsVisible="{Binding !IsRunning}" />
+          <TextBlock Text="{Binding StateText}" FontSize="12" FontWeight="SemiBold" />
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="2" Classes="card" Padding="10,4" HorizontalAlignment="Left" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="Callback URL" Classes="muted" FontSize="12" VerticalAlignment="Center" />
+          <SelectableTextBlock Text="{Binding Address}" FontFamily="{StaticResource MonoFont}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <Button Classes="icon" Command="{Binding CopyAddressCommand}" ToolTip.Tip="Copy receiver address" Padding="4">
+            <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
+          </Button>
+        </StackPanel>
+      </Border>
+      <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8">
+        <Button Classes="accent" Command="{Binding StartCommand}" Padding="16,6">
+          <StackPanel Orientation="Horizontal" Spacing="6"><PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" /><TextBlock Text="Start" /></StackPanel>
+        </Button>
+        <Button Command="{Binding StopCommand}" Padding="16,6">
+          <StackPanel Orientation="Horizontal" Spacing="6"><PathIcon Data="{StaticResource IconStop}" Width="11" Height="11" /><TextBlock Text="Stop" /></StackPanel>
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <Border Grid.Row="1" Background="{DynamicResource SurfaceAltBrush}" CornerRadius="6" Padding="10,7" Margin="0,0,0,12">
+      <SelectableTextBlock Text="{Binding Status}" TextWrapping="Wrap" FontSize="12.5" />
+    </Border>
+
+    <Grid Grid.Row="2" ColumnDefinitions="290,*" ColumnSpacing="16">
+      <!-- Settings -->
+      <ScrollViewer>
+        <StackPanel Spacing="10" Margin="0,0,6,0">
+          <Border Background="{DynamicResource WarningSoftBrush}" CornerRadius="6" Padding="10,6" IsVisible="{Binding IsRunning}">
+            <TextBlock Classes="hint" Text="Stop the receiver to change these settings." />
+          </Border>
+
+          <Border Classes="panel" IsEnabled="{Binding !IsRunning}">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="panelTitle" Text="Endpoint" Margin="0" />
+              <StackPanel>
+                <TextBlock Classes="fieldLabel" Text="Port" />
+                <NumericUpDown Value="{Binding Port}" Minimum="0" Maximum="65535" FormatString="0" HorizontalAlignment="Stretch" />
+                <TextBlock Classes="hint" Text="0 picks a free port. Message checks start the receiver on this port (or DISPATCH_WEBHOOK_PORT) when it is not running." Margin="0,3,0,0" />
+              </StackPanel>
+              <StackPanel>
+                <CheckBox IsChecked="{Binding AllowRemote}">
+                  <TextBlock Text="Allow other machines" TextWrapping="Wrap" />
+                </CheckBox>
+                <TextBlock Classes="hint" Text="Listens on all network interfaces, for senders on the LAN or a tunnel running elsewhere." />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="panel" IsEnabled="{Binding !IsRunning}">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="panelTitle" Text="Answer every callback with" Margin="0" />
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <StackPanel>
+                  <TextBlock Classes="fieldLabel" Text="Status" />
+                  <NumericUpDown Value="{Binding ResponseStatus}" Minimum="100" Maximum="599" FormatString="0" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Width="120">
+                  <TextBlock Classes="fieldLabel" Text="Delay (ms)" />
+                  <NumericUpDown Value="{Binding ResponseDelayMs}" Minimum="0" Maximum="600000" Increment="100" FormatString="0" HorizontalAlignment="Stretch" />
+                </StackPanel>
+              </Grid>
+              <StackPanel>
+                <TextBlock Classes="fieldLabel" Text="Body (JSON)" />
+                <TextBox Classes="mono" Text="{Binding ResponseBody}" AcceptsReturn="True" MinHeight="48" TextWrapping="Wrap" />
+                <TextBlock Classes="hint" Text="Use a 500 or a delay to see how the sender retries." Margin="0,3,0,0" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="panel">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="panelTitle" Text="Receive from the internet" Margin="0" />
+              <TextBlock Classes="hint" TextWrapping="Wrap"
+                         Text="Providers cannot reach localhost. Expose the port with a tunnel of your choice and give the provider the public URL plus your path:" />
+              <Grid ColumnDefinitions="*,Auto">
+                <SelectableTextBlock Text="{Binding TunnelCommands}" FontFamily="{StaticResource MonoFont}" FontSize="11" TextWrapping="Wrap" />
+                <Button Grid.Column="1" Classes="icon" Command="{Binding CopyTunnelCommand}" ToolTip.Tip="Copy the first command" Padding="4" VerticalAlignment="Top">
+                  <PathIcon Data="{StaticResource IconCopy}" Width="12" Height="12" />
+                </Button>
+              </Grid>
+              <TextBlock Classes="hint" TextWrapping="Wrap" Text="Both work without an account for quick tests (cloudflared quick tunnels, ngrok free tier). Dispatch does not bundle a tunnel." />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="panel">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="panelTitle" Text="Replay target" Margin="0" />
+              <TextBox Classes="mono" Text="{Binding ReplayTarget}" Watermark="http://localhost:8080" />
+              <TextBlock Classes="hint" TextWrapping="Wrap" Text="Replay re-sends the selected callback (same method, path, headers and body) to this base URL, e.g. your handler under development." />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- Received hooks -->
+      <Grid Grid.Column="1" RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,8">
+          <TextBox Text="{Binding Search}" Watermark="Filter by path, method, header or body text" />
+          <TextBlock Grid.Column="1" Text="{Binding CountText}" Classes="muted" FontSize="12" VerticalAlignment="Center" Margin="4,0" />
+          <Button Grid.Column="2" Command="{Binding ClearCommand}" ToolTip.Tip="Remove all received callbacks">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconTrash}" Width="12" Height="12" />
+              <TextBlock Text="Clear" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="3" Command="{Binding ImportCommand}" ToolTip.Tip="Load callbacks saved earlier (hooks.json)">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconImport}" Width="12" Height="12" />
+              <TextBlock Text="Open…" />
+            </StackPanel>
+          </Button>
+          <DropDownButton Grid.Column="4" Content="Save">
+            <DropDownButton.Flyout>
+              <MenuFlyout>
+                <MenuItem Header="Save all as JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+                <MenuItem Header="Save HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+                <MenuItem Header="Open HTML report" Command="{Binding OpenReportCommand}" />
+              </MenuFlyout>
+            </DropDownButton.Flyout>
+          </DropDownButton>
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnDefinitions="*,1.35*" ColumnSpacing="12">
+          <Border Classes="card" Padding="0">
+            <Panel>
+              <StackPanel IsVisible="{Binding !HasHooks}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6" Margin="20" MaxWidth="280">
+                <PathIcon Data="{StaticResource IconServer}" Width="30" Height="30" Foreground="{DynamicResource MutedTextBrush}" />
+                <TextBlock Text="No callbacks received" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock Classes="hint" TextAlignment="Center" Text="Click Start, then send a callback to the address above, e.g. POST /hooks/orders. Every method and path is recorded." />
+              </StackPanel>
+              <ListBox ItemsSource="{Binding Visible}" SelectedItem="{Binding Selected}" Background="Transparent">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="wh:ReceivedWebhook">
+                    <Grid ColumnDefinitions="52,*,Auto" ColumnSpacing="6">
+                      <TextBlock Text="{Binding Method}" Classes="method" Foreground="{Binding Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+                      <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding PathAndQuery}" FontSize="12.5" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding PathAndQuery}" />
+                        <TextBlock Text="{Binding BodyPreview}" Classes="muted" FontSize="10.5" TextTrimming="CharacterEllipsis" FontFamily="{StaticResource MonoFont}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ReceivedAt, StringFormat='{}{0:HH:mm:ss.fff}'}" Classes="muted" FontSize="11" HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding BodyBytes, Converter={x:Static tools:BytesConverter.Instance}}" Classes="muted" FontSize="10.5" HorizontalAlignment="Right" />
+                      </StackPanel>
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </Panel>
+          </Border>
+
+          <Border Grid.Column="1" Classes="card" Padding="0">
+            <Panel>
+              <TextBlock Classes="hint" Text="Select a callback to inspect its headers and body, replay it, or save it as an example." HorizontalAlignment="Center" VerticalAlignment="Center"
+                         IsVisible="{Binding !HasSelection}" />
+              <DockPanel IsVisible="{Binding HasSelection}" Margin="12,10,12,4">
+                <StackPanel DockPanel.Dock="Top" Spacing="6">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                    <TextBlock Text="{Binding Selected.Method}" Classes="method" FontSize="12"
+                               Foreground="{Binding Selected.Method, Converter={x:Static conv:MethodBrushConverter.Instance}}" />
+                    <SelectableTextBlock Grid.Column="1" Text="{Binding Selected.PathAndQuery}" FontFamily="{StaticResource MonoFont}" FontSize="12.5" TextWrapping="Wrap" />
+                  </Grid>
+                  <TextBlock FontSize="12" Classes="muted">
+                    <Run Text="{Binding Selected.ReceivedAt, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss.fff}'}" />
+                    <Run Text="  ·  " /><Run Text="{Binding Selected.BodyBytes, Converter={x:Static tools:BytesConverter.Instance}}" />
+                    <Run Text="  ·  from " /><Run Text="{Binding Selected.RemoteAddress}" />
+                  </TextBlock>
+                  <TextBlock Classes="hint" Foreground="{DynamicResource WarningBrush}" Text="The body was larger than the receiver's limit and was cut." IsVisible="{Binding Selected.Truncated}" />
+                  <WrapPanel>
+                    <Button Classes="accent" Command="{Binding ReplayCommand}" Margin="0,0,6,6" ToolTip.Tip="Re-send this callback to the replay target">
+                      <StackPanel Orientation="Horizontal" Spacing="6"><PathIcon Data="{StaticResource IconSend}" Width="11" Height="11" /><TextBlock Text="Replay" /></StackPanel>
+                    </Button>
+                    <Button Command="{Binding OpenAsRequestCommand}" Margin="0,0,6,6" ToolTip.Tip="Open as an editable request in a new tab" Content="Open as request" />
+                    <Button Command="{Binding SaveAsExampleCommand}" Margin="0,0,6,6"
+                            ToolTip.Tip="Store the payload as an example on the matching request of the current collection (created in a Webhooks folder if needed)">
+                      <StackPanel Orientation="Horizontal" Spacing="6"><PathIcon Data="{StaticResource IconSave}" Width="11" Height="11" /><TextBlock Text="Save as example" /></StackPanel>
+                    </Button>
+                    <Button Command="{Binding CopyCurlCommand}" Margin="0,0,6,6" Content="Copy as cURL" />
+                    <Button Command="{Binding CopyBodyCommand}" Margin="0,0,6,6" Content="Copy body" />
+                    <Button Classes="icon" Command="{Binding RemoveCommand}" Margin="0,0,6,6" ToolTip.Tip="Remove this callback">
+                      <PathIcon Data="{StaticResource IconTrash}" Width="12" Height="12" />
+                    </Button>
+                  </WrapPanel>
+                </StackPanel>
+                <TabControl Classes="compact" Margin="0,2,0,0">
+                  <TabItem Header="Body">
+                    <DockPanel>
+                      <CheckBox DockPanel.Dock="Top" IsChecked="{Binding PrettyJson}" Content="Pretty-print JSON" FontSize="12" Margin="0,4,0,4" />
+                      <ScrollViewer>
+                        <Panel>
+                          <TextBlock Classes="hint" Text="(empty body)" Margin="0,6" IsVisible="{Binding SelectedBody, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                          <Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="6" Padding="8"
+                                  IsVisible="{Binding SelectedBody, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                            <SelectableTextBlock Text="{Binding SelectedBody}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap" />
+                          </Border>
+                        </Panel>
+                      </ScrollViewer>
+                    </DockPanel>
+                  </TabItem>
+                  <TabItem Header="Headers">
+                    <ScrollViewer>
+                      <StackPanel Spacing="8" Margin="0,6,0,8">
+                        <StackPanel IsVisible="{Binding HasSelectedQuery}" Spacing="4">
+                          <TextBlock Text="QUERY" Classes="section" />
+                          <SelectableTextBlock Text="{Binding SelectedQuery}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <TextBlock Text="HEADERS" Classes="section" />
+                        <ItemsControl ItemsSource="{Binding SelectedHeaders}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="domain:KeyValueItem">
+                              <SelectableTextBlock FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap"><Run Text="{Binding Key}" FontWeight="SemiBold" /><Run Text=": " /><Run Text="{Binding Value}" /></SelectableTextBlock>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </ScrollViewer>
+                  </TabItem>
+                </TabControl>
+              </DockPanel>
+            </Panel>
+          </Border>
+        </Grid>
+      </Grid>
+    </Grid>
+  </Grid>
+</UserControl>
