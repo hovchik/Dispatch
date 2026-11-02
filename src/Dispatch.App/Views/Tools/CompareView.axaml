@@ -1,0 +1,161 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:conv="using:Dispatch.App.Converters"
+             x:Class="Dispatch.App.Views.Tools.CompareView"
+             x:DataType="tools:CompareViewModel">
+  <UserControl.Styles>
+    <Style Selector="Grid.th TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+    </Style>
+    <Style Selector="Grid.row TextBlock">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
+  <Grid ColumnDefinitions="320,*" Margin="12">
+    <!-- Setup -->
+    <DockPanel Margin="0,0,12,0">
+      <TextBlock DockPanel.Dock="Top" Text="Compare environments" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,4" />
+      <TextBlock DockPanel.Dock="Top" Classes="muted" TextWrapping="Wrap" Margin="0,0,0,8"
+                 Text="Sends every chosen request to both sides at the same time and diffs status, body structure, headers and latency." />
+      <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,10,0,0">
+        <Border Classes="panel">
+          <StackPanel Spacing="8" IsEnabled="{Binding !IsRunning}">
+            <TextBlock Classes="panelTitle" Text="Sides" Margin="0" />
+            <Grid ColumnDefinitions="52,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
+              <TextBlock Classes="label" Text="Left" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding Environments}" SelectedItem="{Binding LeftEnvironment}" HorizontalAlignment="Stretch" />
+              <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding LeftBaseUrl}" Watermark="Base URL override, e.g. https://staging.example.com" FontSize="12" />
+              <TextBlock Grid.Row="2" Classes="label" Text="Right" />
+              <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding Environments}" SelectedItem="{Binding RightEnvironment}" HorizontalAlignment="Stretch" />
+              <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding RightBaseUrl}" Watermark="Base URL override, e.g. https://api.example.com" FontSize="12" />
+            </Grid>
+            <TextBlock Classes="hint" TextWrapping="Wrap"
+                       Text="A base URL replaces the host of absolute request URLs and defines {{baseUrl}}; each side chains its own extracted variables." />
+            <TextBlock Classes="label" Text="Ignore paths (comma separated)" />
+            <TextBox Text="{Binding IgnorePaths}" Watermark="$.timestamp, $..id, $.items[*].updatedAt" FontSize="12" />
+            <CheckBox IsChecked="{Binding RunChecks}" Content="Run assertions and scripts on both sides" />
+          </StackPanel>
+        </Border>
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StartCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconPlay}" Width="11" Height="11" />
+              <TextBlock Text="Compare" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StopCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconStop}" Width="11" Height="11" />
+              <TextBlock Text="Stop" />
+            </StackPanel>
+          </Button>
+        </Grid>
+      </StackPanel>
+      <TextBlock DockPanel.Dock="Top" Classes="section" Text="REQUESTS" Margin="0,0,0,4" />
+      <Border Classes="card" Padding="4">
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Requests}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="tools:SelectableRequest">
+                <CheckBox IsChecked="{Binding IsSelected}" Margin="4,0">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Classes="method" MinWidth="40" Text="{Binding Badge, Converter={x:Static conv:MethodTextConverter.Instance}}"
+                               Foreground="{Binding Badge, Converter={x:Static conv:BadgeBrushConverter.Instance}}" />
+                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </CheckBox>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </DockPanel>
+
+    <!-- Results -->
+    <DockPanel Grid.Column="1">
+      <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10" Margin="0,0,0,8">
+        <Border Classes="pill" Background="{Binding VerdictBrush}" IsVisible="{Binding HasReport}">
+          <TextBlock Text="{Binding Verdict}" Foreground="White" FontWeight="Bold" FontSize="12" />
+        </Border>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+          <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" IsVisible="{Binding HasReport}" />
+          <TextBlock Text="{Binding Status}" Classes="muted" FontSize="11.5" TextWrapping="Wrap" />
+        </StackPanel>
+        <CheckBox Grid.Column="2" IsChecked="{Binding OnlyDifferences}" Content="Only differences" VerticalAlignment="Center" />
+        <Button Grid.Column="3" Command="{Binding OpenReportCommand}" VerticalAlignment="Center" ToolTip.Tip="Open the HTML report in your browser">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Data="{StaticResource IconExport}" Width="12" Height="12" />
+            <TextBlock Text="Open in browser" />
+          </StackPanel>
+        </Button>
+        <DropDownButton Grid.Column="4" Content="Export" VerticalAlignment="Center">
+          <DropDownButton.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+              <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+            </MenuFlyout>
+          </DropDownButton.Flyout>
+        </DropDownButton>
+      </Grid>
+
+      <ScrollViewer>
+        <StackPanel Spacing="12" Margin="0,0,10,10">
+          <StackPanel IsVisible="{Binding HasReport}">
+            <TextBlock Classes="section" Text="INSIGHTS" Margin="0,0,0,6" />
+            <ItemsControl ItemsSource="{Binding Insights}" />
+          </StackPanel>
+
+          <Border Classes="panel">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="panelTitle" Text="Per request" />
+              <Grid Classes="th" ColumnDefinitions="22,64,*,110,110,70,70,56,180,56" Margin="0,0,0,4">
+                <TextBlock Grid.Column="1" Text="KIND" />
+                <TextBlock Grid.Column="2" Text="REQUEST" />
+                <TextBlock Grid.Column="3" Text="{Binding LeftTitle}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding LeftTitle}" />
+                <TextBlock Grid.Column="4" Text="{Binding RightTitle}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding RightTitle}" />
+                <TextBlock Grid.Column="5" Text="MS LEFT" TextAlignment="Right" />
+                <TextBlock Grid.Column="6" Text="MS RIGHT" TextAlignment="Right" />
+                <TextBlock Grid.Column="7" Text="Δ" TextAlignment="Right" />
+                <TextBlock Grid.Column="8" Text="DIFFERENCES" Margin="8,0,0,0" />
+              </Grid>
+              <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="tools:CompareRow">
+                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,5">
+                      <StackPanel Spacing="4">
+                        <Grid Classes="row" ColumnDefinitions="22,64,*,110,110,70,70,56,180,56">
+                          <TextBlock Text="{Binding Mark}" Foreground="{Binding MarkBrush}" FontWeight="Bold" />
+                          <TextBlock Grid.Column="1" Classes="method" Text="{Binding Label}" />
+                          <TextBlock Grid.Column="2" Text="{Binding Name}" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" ToolTip.Tip="{Binding Name}" />
+                          <TextBlock Grid.Column="3" Text="{Binding LeftStatus}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Grid.Column="4" Text="{Binding RightStatus}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Grid.Column="5" Text="{Binding LeftMs}" TextAlignment="Right" />
+                          <TextBlock Grid.Column="6" Text="{Binding RightMs}" TextAlignment="Right" />
+                          <TextBlock Grid.Column="7" Text="{Binding Delta}" TextAlignment="Right" Classes="muted" />
+                          <TextBlock Grid.Column="8" Text="{Binding Summary}" TextTrimming="CharacterEllipsis" Margin="8,0,0,0" ToolTip.Tip="{Binding Summary}" />
+                          <Button Grid.Column="9" Content="Diff" Padding="6,2" FontSize="11" HorizontalAlignment="Right"
+                                  Command="{Binding OpenDiffCommand}" IsVisible="{Binding CanDiff}" ToolTip.Tip="Open both bodies side by side" />
+                        </Grid>
+                        <ItemsControl ItemsSource="{Binding Details}" IsVisible="{Binding HasDetails}" Margin="86,0,0,0">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                              <SelectableTextBlock Text="{Binding}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" TextWrapping="Wrap" Classes="muted" />
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
+  </Grid>
+</UserControl>

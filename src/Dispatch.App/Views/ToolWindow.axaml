@@ -15,6 +15,7 @@
     <DataTemplate DataType="tools:SecurityScanViewModel"><tv:SecurityScanView /></DataTemplate>
     <DataTemplate DataType="tools:MinimizeViewModel"><tv:MinimizeView /></DataTemplate>
     <DataTemplate DataType="tools:RateLimitViewModel"><tv:RateLimitView /></DataTemplate>
+    <DataTemplate DataType="tools:EndpointProbeViewModel"><tv:EndpointProbeView /></DataTemplate>
     <DataTemplate DataType="tools:ImpactViewModel"><tv:ImpactView /></DataTemplate>
     <DataTemplate DataType="tools:LawsViewModel"><tv:LawsView /></DataTemplate>
     <DataTemplate DataType="tools:FlowBuilderViewModel"><tv:FlowBuilderView /></DataTemplate>
@@ -31,6 +32,11 @@
     <DataTemplate DataType="tools:HelpViewModel"><tv:HelpView /></DataTemplate>
     <DataTemplate DataType="tools:LintViewModel"><tv:LintView /></DataTemplate>
     <DataTemplate DataType="tools:FolderSyncViewModel"><tv:FolderSyncView /></DataTemplate>
+    <DataTemplate DataType="tools:SpecCoverageViewModel"><tv:SpecCoverageView /></DataTemplate>
+    <DataTemplate DataType="tools:SpecDiffViewModel"><tv:SpecDiffView /></DataTemplate>
+    <DataTemplate DataType="tools:CompareViewModel"><tv:CompareView /></DataTemplate>
+    <DataTemplate DataType="tools:TlsViewModel"><tv:TlsView /></DataTemplate>
+    <DataTemplate DataType="tools:WebhookViewModel"><tv:WebhookView /></DataTemplate>
   </Window.DataTemplates>
   <DockPanel>
     <!-- Tools linked to a help topic get a "How does this work?" link above their content. -->

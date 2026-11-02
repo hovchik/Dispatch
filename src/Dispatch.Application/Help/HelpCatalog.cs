@@ -68,10 +68,16 @@ public static class HelpCatalog
     public const string MessageChecks = "message-checks";
     public const string ChangeImpact = "change-impact";
     public const string ApiLaws = "api-laws";
+    public const string SpecCoverage = "spec-coverage";
+    public const string BreakingChanges = "breaking-changes";
     public const string ClientFuzz = "client-fuzz";
     public const string Minimize = "minimize";
     public const string RateLimit = "rate-limit";
+    public const string Pagination = "pagination";
+    public const string Idempotency = "idempotency";
+    public const string Caching = "caching";
     public const string Capture = "capture";
+    public const string Webhooks = "webhooks";
     public const string ImportExport = "import-export";
     public const string Docs = "docs";
     public const string Protocols = "protocols";
@@ -79,6 +85,10 @@ public static class HelpCatalog
     public const string Shortcuts = "shortcuts";
     public const string CollectionLint = "collection-lint";
     public const string FolderSync = "folder-sync";
+    public const string SpecGeneration = "spec-generation";
+    public const string CompareEnvironments = "compare-environments";
+    public const string Tls = "tls";
+    public const string NetworkConditions = "network-conditions";
 
     public static HelpTopic? Find(string? id) => All.FirstOrDefault(t => t.Id == id);
 
@@ -321,6 +331,31 @@ public static class HelpCatalog
         ["impact", "breaking change", "rename", "renamed field", "schema change", "blast radius", "dependency", "json shape", "api change", "regression"],
         null, [Assertions, Extraction, Flows, Cli]),
 
+        new(SpecCoverage, "Testing", "Spec coverage", "How much of the OpenAPI document your collection, runs or traffic exercise.",
+        [
+            new HelpParagraph("Spec coverage scores a collection, a run or captured traffic (HAR) against an OpenAPI 3 / Swagger 2 document on five metrics, each a percentage with its gaps listed: operations never called, documented status codes never seen, parameters never varied (always the same value), required inputs never omitted (so the 4xx path is untested), and calls the spec does not document. Overall coverage is the mean of the metrics that have something to cover."),
+            new HelpSteps(
+            [
+                "Right-click the collection → Spec coverage… (or Tools → Spec coverage…). The spec path is pre-filled from Collection settings when set.",
+                "Score the collection as defined for a quick static picture, or run it to score the real requests and responses.",
+                "Add a HAR from the capture proxy or your browser, or a dispatch run JSON report, to include traffic you did not send from Dispatch.",
+                "Pick a metric on the left to read its gaps; export HTML or JSON for the team."
+            ]),
+            new HelpExample("In CI: fail below 80 % coverage", "dispatch coverage api.yaml tests/api.dispatch.json --run --min 80 -r cli,html\ndispatch coverage api.yaml traffic.har --min 60"),
+            new HelpTip("A parameter counts as varied when it was sent with two different values, or sent and omitted when optional. Vary ids, filters and page sizes across requests, and add one request per required field that leaves it out.")
+        ],
+        ["coverage", "spec", "openapi", "swagger", "untested", "operations", "status codes", "parameters", "har", "ci", "threshold"],
+        null, [BreakingChanges, ImportExport, Cli]),
+
+        new(BreakingChanges, "Testing", "Breaking-change detector", "Compare two spec versions and see what each change breaks.",
+        [
+            new HelpParagraph("Tools → Compare spec versions… diffs two OpenAPI / Swagger documents and classifies every change: breaking (removed or moved paths, removed or retyped fields, new required parameters or body fields, narrowed request enums, widened response enums, changed success status, new authentication), non-breaking (additions, relaxed requirements) or info (deprecations, version, servers). Choose a collection and the change impact analyzer lists the requests that call removed operations or lack a new required input, the status assertions on a changed code, and the tests, extractions, dependent requests and flows that read a removed, renamed or retyped response field."),
+            new HelpExample("In CI: fail the build on breaking changes", "dispatch breaking api-v1.yaml api-v2.yaml --collection tests/api.dispatch.json --fail-on breaking -r cli,html"),
+            new HelpTip("Renamed fields are paired when a removed and an added field of the same type are alone under one parent; the suggested path is shown next to each affected test.")
+        ],
+        ["breaking", "breaking change", "spec diff", "openapi diff", "compatibility", "contract", "version", "removed field", "required"],
+        null, [SpecCoverage, ChangeImpact, Cli]),
+
         new(ApiLaws, "Testing", "API laws", "Learn the rules an API keeps from its traffic, and spot the responses that break them.",
         [
             new HelpParagraph("API laws are inferred from real responses rather than a schema. They cover required fields and types, enumerations, never-negative numbers, formats (UUID, email, date-time, URL), date ordering (createdAt ≤ updatedAt), counts and totals that match their items (count == items.length, total == sum of prices), page sizes that respect ?limit=, request fields echoed back, created resources that can be read back, deleted resources that return 404, and GETs that repeat the same body."),
@@ -389,6 +424,69 @@ public static class HelpCatalog
         ["rate limit", "ratelimit", "throttle", "429", "retry-after", "quota", "token bucket", "sliding window", "fixed window", "burst"],
         null, [LoadTest, Cli]),
 
+        new(Webhooks, "Tools", "Webhook receiver", "Receive callbacks locally, inspect and replay them, and check that a request causes one.",
+        [
+            new HelpParagraph("The webhook receiver is a local HTTP endpoint that records every callback it gets, whatever the method or path. Use it as the callback URL while developing against a payment, messaging or CI provider: each hook appears with its headers and body, and you can replay it to your own handler, open it as a request, or save it as an example so the mock server can serve the same payload later."),
+            new HelpSteps(
+            [
+                "Open More → Webhook receiver… (or search the command palette), pick a port and what every callback is answered with, and click Start.",
+                "Give the sender the address shown in the header plus any path, e.g. http://localhost:9000/hooks/orders. For senders on the internet, expose the port with a tunnel such as cloudflared or ngrok and use the public URL instead.",
+                "Select a callback to read it. Replay re-sends it to the replay target (your handler), Open as request puts it in a tab, and Save as example stores the payload on the matching request of the current collection.",
+                "Save everything as JSON or an HTML report, or load a JSON file saved earlier."
+            ]),
+            new HelpParagraph("Webhooks are also a message check. In a request's Checks tab choose Webhook receiver as the listener, put the callback path in the filter (/hooks/orders, or POST /hooks/* with wildcards) and the condition on the payload, e.g. $.status equals paid within 5000 ms. The receiver is started on demand, only callbacks that arrive after the request is sent count, and the result appears with the other tests in the app, the runner, flows, monitors and dispatch run."),
+            new HelpExample("From the command line", "dispatch webhooks --port 9000 --out hooks.json\ndispatch webhooks --path /hooks/orders --expect 1 --duration 30s\ndispatch webhooks --status 500 --delay 2s   # see how the sender retries"),
+            new HelpTip("Set DISPATCH_WEBHOOK_PORT to change the port message checks and the CLI use by default. Dispatch does not bundle a tunnel: cloudflared quick tunnels and ngrok's free tier work without an account for quick tests.")
+        ],
+        ["webhook", "webhooks", "callback", "receiver", "listener", "hook", "tunnel", "ngrok", "cloudflared", "replay", "payload", "callback url"],
+        null, [MessageChecks, Mock, Cli]),
+
+        new(Pagination, "Tools", "Pagination walker", "Follow every page of a list endpoint and check the paging.",
+        [
+            new HelpParagraph("The pagination walker follows a list endpoint to the end. It works out how the endpoint pages: a Link header with rel=\"next\", a next URL in the body, a cursor sent back as a query parameter, or page / offset parameters. Every item is identified by its id (or its whole content), so the walker can tell what each page added."),
+            new HelpParagraph("It reports items that appear on more than one page, an advertised total (total, totalCount, X-Total-Count, …) that doesn't match what can be reached, pages that loop or repeat, short pages in the middle, page sizes above the requested limit, and later pages that get slower. It then fetches page 1 again to check that the order is stable, and tries a page past the end, a negative or non-numeric page, a page size of 0 and a huge page size."),
+            new HelpSteps(
+            [
+                "Open a list request (for example GET /orders?limit=20) and choose Walk pagination… from the flask button next to Send.",
+                "Leave the strategy on Auto, or pick one and name the parameters if the endpoint is unusual. A small page size exercises more pages.",
+                "Click Run, then read the findings and export an HTML / JSON report if needed."
+            ]),
+            new HelpExample("Walk pages of 5 and fail CI on duplicates or a wrong total", "dispatch paginate \"My Collection\" --request \"List orders\" --page-size 5"),
+            new HelpTip("Duplicates and skipped items usually come from a sort that isn't unique: add a tie-breaker such as the id to ORDER BY.")
+        ],
+        ["pagination", "paging", "pages", "cursor", "offset", "limit", "next", "link header", "total", "duplicates", "x-total-count"],
+        null, [RateLimit, Cli]),
+
+        new(Idempotency, "Tools", "Idempotency & race probe", "Check that a request is safe to retry and to send twice at once.",
+        [
+            new HelpParagraph("Clients retry when a response is lost, and users double-click. The idempotency probe sends a mutating request the way that happens in practice and checks whether duplicates appear."),
+            new HelpParagraph("It sends the request with an Idempotency-Key, retries it with the same key, reuses the key with a changed body, and sends several copies at the same moment, with one key and with none. It compares the resources created (from the Location header or an id in the body) and the responses. PUT and DELETE are also repeated, because HTTP requires them to be idempotent."),
+            new HelpSteps(
+            [
+                "Open the POST, PUT, PATCH or DELETE request in a test environment and choose Check idempotency & races… from the flask button.",
+                "Set the key header if your API uses another name (for example X-Request-Id) and how many copies to send at once.",
+                "Click Run and read the findings: a second resource created by a retry, a reused key that is accepted with a new body, or 5xx under concurrency."
+            ]),
+            new HelpExample("Check an endpoint in CI", "dispatch idempotency \"My Collection\" --request \"Create order\" -e staging --parallel 8"),
+            new HelpTip("This creates data on every run. Use a test environment, never production.")
+        ],
+        ["idempotency", "idempotency-key", "idempotent", "retry", "duplicate", "race", "race condition", "concurrency", "double submit", "double charge"],
+        null, [RateLimit, Cli]),
+
+        new(Caching, "Tools", "Caching checker", "Check Cache-Control, Vary and ETag revalidation.",
+        [
+            new HelpParagraph("The caching checker reads a response's caching headers and tests them. It sends the request twice to see whether the ETag is stable, revalidates with If-None-Match and If-Modified-Since to check for 304 Not Modified, tries an unknown ETag (which must not answer 304) and compares HEAD with GET. CDN cache headers such as X-Cache and CF-Cache-Status are shown when present."),
+            new HelpParagraph("It flags responses to authenticated requests that shared caches may store, cookies on cacheable responses, compressed bodies without Vary: Accept-Encoding, a specific Access-Control-Allow-Origin without Vary: Origin, missing or malformed validators, ETags that change while the body doesn't, and 304 responses with a body."),
+            new HelpSteps(
+            [
+                "Open a GET request and choose Check caching… from the flask button next to Send.",
+                "Click Run, then read the policy summary and the findings."
+            ]),
+            new HelpExample("Fail CI on caching mistakes", "dispatch cache \"My Collection\" --request \"Get product\" --fail-on warning")
+        ],
+        ["cache", "caching", "cache-control", "etag", "304", "not modified", "if-none-match", "last-modified", "vary", "cdn", "max-age"],
+        null, [RateLimit, Cli]),
+
         new(Capture, "Tools", "Capture proxy", "Record traffic from a browser or app.",
         [
             new HelpParagraph("Capture starts a local proxy. Point a browser, a mobile app or HTTP(S)_PROXY at it and every exchange is recorded. Save the captures to a collection or export a HAR file."),
@@ -449,6 +547,25 @@ public static class HelpCatalog
         ["cli", "command line", "terminal", "ci", "pipeline", "headless", "github actions", "jenkins", "exit code"],
         null, [Runner, ImportExport]),
 
+        new(CompareEnvironments, "Tools", "Compare environments & load baselines", "Diff two deployments, and catch load regressions.",
+        [
+            new HelpParagraph("Compare environments sends every chosen request to two environments (or two base URLs) at the same moment and diffs the answers: status, the structure of JSON bodies, non-volatile headers and latency. Each side chains its own extracted variables, so a login on staging never leaks a token into production."),
+            new HelpSteps(
+            [
+                "Open More → Compare environments… (or search it in the command palette).",
+                "Pick an environment for each side, or type a base URL such as https://staging.example.com to re-point absolute request URLs.",
+                "List paths that legitimately differ under Ignore paths, e.g. $.timestamp, $..id, $.items[*].updatedAt.",
+                "Press Compare. Rows marked ≠ differ; Diff opens both bodies side by side. Export the report as HTML or JSON."
+            ]),
+            new HelpExample("From the CLI (exit code 1 when anything differs)", "dispatch compare \"My Collection\" -e Staging -e Production --ignore $.timestamp --fail-on-diff -r cli,html"),
+            new HelpParagraph("Load baselines: in a load test report, Baseline → Set as baseline saves the run as a JSON file. Later runs choose Compare with baseline and show p50 / p95 / p99, throughput and error-rate deltas per request with a verdict: REGRESSED when a metric is worse by more than the allowed percentage (10 % by default), IMPROVED, or UNCHANGED."),
+            new HelpExample("Baselines in CI", "dispatch load api.dispatch.json --users 20 --duration 60s --save-baseline base.json\ndispatch load api.dispatch.json --users 20 --duration 60s --baseline base.json --max-regression 10%"),
+            new HelpParagraph("Streaming load: WebSocket, SSE, Socket.IO, MQTT, Kafka, AMQP and gRPC streaming requests can be part of the journey. Each virtual user holds one connection at a time and reconnects after the request's listen time; the report adds connections, connect errors, drops, messages per second and message latency."),
+            new HelpTip("Ignore paths accept the same syntax as the response diff and snapshot assertions.")
+        ],
+        ["compare", "environment", "parity", "staging", "production", "diff", "baseline", "regression", "load", "websocket", "sse", "mqtt", "streaming", "p95", "throughput"],
+        null, [LoadTest, Variables, Cli]),
+
         new(Shortcuts, "Basics", "Keyboard shortcuts", "Work faster without the mouse.",
         [
             new HelpExample("Shortcuts", "F1                      Help\nCtrl+Enter              Send / connect\nCtrl+K or Ctrl+Shift+P  Command palette\nCtrl+T                  New HTTP request\nCtrl+S                  Save\nCtrl+W                  Close tab\nCtrl+O                  Import"),
@@ -485,6 +602,55 @@ public static class HelpCatalog
             new HelpTip("Secret collection variables are never written to the folder; the app keeps their values when the folder's collection file comes back.")
         ],
         ["sync", "folder", "git", "watch", "two-way", "conflict", "version control", "repository", "export folder"],
-        null, [ImportExport, Collections, Cli])
+        null, [ImportExport, Collections, Cli]),
+
+        new(SpecGeneration, "Tools", "OpenAPI generator & test scaffolding", "Write an OpenAPI spec from a collection or traffic, or turn a spec into tests.",
+        [
+            new HelpParagraph("Generate OpenAPI spec… (collection menu) writes an OpenAPI 3.0 document from the collection's requests, their saved examples and the run history. Paths are templated (/users/42 becomes /users/{userId}), query and header parameters are listed, request and response schemas are inferred from every body seen (required fields, nullable, uuid / date-time / email formats, enumerations), and the requests' auth becomes security schemes. The same works for a HAR file from the capture proxy or a browser."),
+            new HelpParagraph("Also create tests on the Import window (for OpenAPI / Swagger documents) adds to every imported request a JSON-schema assertion on the documented success response, and creates one negative request per required query/header parameter or required body field that leaves it out and expects a 4xx. They land in a Negative tests folder next to the request."),
+            new HelpSteps(
+            [
+                "Send a few requests (or run the collection) so the history holds real responses; saved examples count too.",
+                "Open the collection menu → Generate OpenAPI spec… and pick a .yaml or .json file.",
+                "To go the other way, Import a spec and tick Also create tests before pressing Import.",
+                "Run the collection to check that the API rejects the negative requests with a 4xx."
+            ]),
+            new HelpExample("Command line", "dispatch openapi \"My Collection\" -o api.yaml --server https://api.example.com\ndispatch openapi traffic.har --format json -o api.json\ndispatch scaffold api.yaml -o tests.dispatch.json\ndispatch scaffold https://api.example.com/openapi.json --save"),
+            new HelpTip("Schemas are inferred from what was seen: a field present in every sample becomes required, one that is sometimes null becomes nullable. Review the result before publishing it.")
+        ],
+        ["openapi", "swagger", "spec", "specification", "generate", "yaml", "schema", "scaffold", "negative test", "4xx", "har", "contract"],
+        null, [ImportExport, Assertions, Cli]),
+
+        new(NetworkConditions, "Tools", "Network conditions", "Slow, lossy or offline links through the capture proxy.",
+        [
+            new HelpParagraph("The capture proxy (and the client-fuzzing proxy) can impose network conditions on the traffic it relays: added latency, a bandwidth cap on responses, randomly dropped connections and periodic offline windows. Point your browser, mobile app or SDK at the proxy and watch how it copes with a bad link: spinners, retries, timeouts, stale data."),
+            new HelpSteps(
+            [
+                "Open Capture, pick a profile under Network conditions (2g, 3g, 4g, dsl, satellite, flaky-wifi, offline) or choose custom and set latency, bandwidth, loss and offline windows yourself.",
+                "Start the proxy and point your client at it as usual; the status line shows the active conditions.",
+                "Dropped and offline connections appear in the traffic list as errors, so you can see what your app saw."
+            ]),
+            new HelpExample("From the CLI", "dispatch capture --network 3g --out traffic.har\ndispatch capture --latency 300ms --bandwidth 1mbps --loss 2% --offline-every 60s --offline-for 10s\ndispatch fuzz-client --network flaky-wifi --host api.myapp.com"),
+            new HelpTip("Latency is added once per request. The bandwidth cap paces response bodies; through a blind (undecrypted) HTTPS tunnel only latency and drops apply.")
+        ],
+        ["network", "latency", "bandwidth", "throttle", "packet loss", "offline", "3g", "slow", "flaky", "conditions", "proxy"],
+        null, [Capture, Cli]),
+
+        new(Tls, "Tools", "TLS inspector", "Certificate chain, expiry, protocol, cipher and ALPN of a host.",
+        [
+            new HelpParagraph("The TLS inspector makes one handshake with a host and reports what it negotiated: the certificate chain with subject, issuer, validity and Subject Alternative Names, days to expiry, the TLS version, the cipher suite, ALPN (whether HTTP/2 is offered), hostname and trust problems and revocation status. No request is sent."),
+            new HelpSteps(
+            [
+                "Open Tools → TLS inspector… (or Inspect TLS… in the flask menu next to Send, which prefills the request's host).",
+                "Enter a host, host:port or URL, set the expiry warning threshold and click Inspect.",
+                "Read the verdict, the chain and the insights; export an HTML or JSON report if needed.",
+                "The response Timeline tab shows the TLS summary of every HTTPS send next to the timings.",
+                "In a monitor, set \"Fail if a TLS certificate expires within N days\" to be alerted before a certificate runs out."
+            ]),
+            new HelpExample("From the CLI (exit code 1 on problems)", "dispatch tls api.example.com --warn-days 21\ndispatch tls \"My Collection\" -e Production -r cli,json"),
+            new HelpTip("A self-signed or untrusted chain is reported as a problem because clients that verify certificates will refuse it; use --no-revocation when OCSP responders are blocked.")
+        ],
+        ["tls", "ssl", "certificate", "cert", "expiry", "expires", "chain", "cipher", "alpn", "http/2", "san", "ocsp", "revocation", "https"],
+        null, [Monitors, Cli])
     ];
 }

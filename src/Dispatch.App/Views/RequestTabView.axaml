@@ -88,7 +88,7 @@
                 ToolTip.Tip="Generate code (cURL, Python, C#, JavaScript, Go, grpcurl…)">
           <PathIcon Data="{StaticResource IconCode}" Width="16" Height="16" />
         </Button>
-        <Button Classes="icon" IsVisible="{Binding SupportsProbeTools}" ToolTip.Tip="Request tools: minimize, change impact, rate-limit mapper">
+        <Button Classes="icon" IsVisible="{Binding SupportsProbeTools}" ToolTip.Tip="Request tools: minimize, change impact, rate limit, pagination, idempotency, caching">
           <PathIcon Data="{StaticResource IconFlask}" Width="15" Height="15" />
           <Button.Flyout>
             <MenuFlyout Placement="BottomEdgeAlignedRight">
@@ -103,6 +103,23 @@
               <MenuItem Header="Probe rate limit…" Command="{Binding ProbeRateLimitCommand}"
                         ToolTip.Tip="Discover the endpoint's real rate-limit policy and check its headers">
                 <MenuItem.Icon><PathIcon Data="{StaticResource IconGauge}" Width="12" Height="12" /></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="Inspect TLS…" Command="{Binding InspectTlsCommand}"
+                        ToolTip.Tip="Certificate chain, expiry, protocol, cipher and ALPN of this request's host">
+                <MenuItem.Icon><PathIcon Data="{StaticResource IconLock}" Width="12" Height="12" /></MenuItem.Icon>
+              </MenuItem>
+              <Separator />
+              <MenuItem Header="Walk pagination…" Command="{Binding WalkPaginationCommand}"
+                        ToolTip.Tip="Follow every page of a list endpoint: duplicates, gaps, totals, loops and unstable order">
+                <MenuItem.Icon><PathIcon Data="{StaticResource IconCollections}" Width="12" Height="12" /></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="Check idempotency &amp; races…" Command="{Binding ProbeIdempotencyCommand}"
+                        ToolTip.Tip="Replay with the same Idempotency-Key, reuse it with another body, and send copies at once">
+                <MenuItem.Icon><PathIcon Data="{StaticResource IconRefresh}" Width="12" Height="12" /></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Header="Check caching…" Command="{Binding CheckCachingCommand}"
+                        ToolTip.Tip="Cache-Control, Vary, ETag / Last-Modified and whether revalidation answers 304">
+                <MenuItem.Icon><PathIcon Data="{StaticResource IconClock}" Width="12" Height="12" /></MenuItem.Icon>
               </MenuItem>
             </MenuFlyout>
           </Button.Flyout>
@@ -720,7 +737,7 @@
             <Border Classes="card" ClipToBounds="True">
               <Panel>
                 <TextBlock Classes="muted" Margin="12" TextWrapping="Wrap" IsVisible="{Binding !Expectations.HasRows}"
-                           Text="No message checks yet. Example: after POST /orders, a message on the Kafka topic orders.created with $.orderId equal to {{orderId}} within 2000 ms. Save a subscribing request (e.g. Kafka, consume from orders.created) in this collection first; it becomes the listener." />
+                           Text="No message checks yet. Example: after POST /orders, a message on the Kafka topic orders.created with $.orderId equal to {{orderId}} within 2000 ms. Save a subscribing request (e.g. Kafka, consume from orders.created) in this collection first; it becomes the listener. Or pick the Webhook receiver as the listener and put the callback path (e.g. /hooks/orders) in the filter: the webhook must then arrive at Dispatch's local endpoint in time." />
                 <ScrollViewer>
                   <ItemsControl ItemsSource="{Binding Expectations.Rows}">
                     <ItemsControl.ItemTemplate>
@@ -736,8 +753,8 @@
                                       Classes="compact" MinWidth="120" ItemTemplate="{StaticResource EnumLabel}" />
                             <TextBox Grid.Column="4" Classes="mono" Text="{Binding Expected}" Watermark="Expected, e.g. {{orderId}}"
                                      IsEnabled="{Binding NeedsExpected}" Margin="6,0" MinHeight="28" />
-                            <TextBox Grid.Column="5" Classes="mono" Text="{Binding Channel}" Watermark="Topic / event filter" Width="140" MinHeight="28"
-                                     ToolTip.Tip="Only messages whose topic, routing key or event name contains this text" />
+                            <TextBox Grid.Column="5" Classes="mono" Text="{Binding Channel}" Watermark="Topic / event / hook path" Width="140" MinHeight="28"
+                                     ToolTip.Tip="Only messages whose topic, routing key or event name contains this text. For the Webhook receiver: the callback path, e.g. /hooks/orders or POST /hooks/*" />
                             <NumericUpDown Grid.Column="6" Value="{Binding TimeoutMs}" Minimum="0" Maximum="600000" Increment="500" FormatString="0 ms"
                                            Width="145" Margin="6,0" ToolTip.Tip="How long after sending the message may arrive" />
                             <CheckBox Grid.Column="7" IsChecked="{Binding ExpectNone}" Content="none" MinWidth="0"

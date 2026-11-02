@@ -3,6 +3,7 @@ using Dispatch.Application.Abstractions;
 using Dispatch.Application.Requests;
 using Dispatch.Application.Testing;
 using Dispatch.Application.Variables;
+using Dispatch.Application.Webhooks;
 using Dispatch.Domain;
 using ExecutionContext = Dispatch.Application.Abstractions.ExecutionContext;
 
@@ -12,7 +13,8 @@ namespace Dispatch.Application.Consequences;
 /// Runs the listeners behind a request's <see cref="MessageExpectation"/>s: each referenced streaming request (Kafka,
 /// MQTT, AMQP, WebSocket, SSE, Socket.IO) is opened and subscribed <em>before</em> the request is sent, its messages are
 /// collected, and after the response (and its extraction rules) the expectations are checked against the messages that
-/// arrived after the request went out.
+/// arrived after the request went out. An expectation addressed to <see cref="WebhookListener"/> uses the local webhook
+/// receiver instead of a saved request: the callback must arrive at the receiver (on the path in its Channel) in time.
 /// </summary>
 internal sealed class ConsequenceSession : IAsyncDisposable
 {
@@ -38,8 +40,10 @@ internal sealed class ConsequenceSession : IAsyncDisposable
     public void MarkTriggered() => TriggeredAt = DateTimeOffset.Now;
 
     /// <summary>Opens every listener the enabled expectations need and waits until they are subscribed. Null when there are none.</summary>
+    /// <param name="webhooks">The local webhook receiver, started on demand for webhook checks; null when the host has none.</param>
     public static async Task<ConsequenceSession?> StartAsync(ApiRequest request, IReadOnlyList<ApiRequest>? collectionRequests,
-        Func<RequestKind, IProtocolExecutor?> executorFor, VariableContext variables, CancellationToken cancellationToken)
+        Func<RequestKind, IProtocolExecutor?> executorFor, VariableContext variables, CancellationToken cancellationToken,
+        IWebhookReceiver? webhooks = null)
     {
         var expectations = request.Expectations.Where(e => e.Enabled).ToList();
         if (expectations.Count == 0)
@@ -49,6 +53,24 @@ internal sealed class ConsequenceSession : IAsyncDisposable
         var byId = new Dictionary<Guid, Listener>();
         foreach (var expectation in expectations)
         {
+            if (WebhookListener.Is(expectation))
+            {
+                if (webhooks is null)
+                {
+                    session._checks.Add((expectation, null, "Webhook checks need the webhook receiver, which this host does not provide."));
+                    continue;
+                }
+                if (!byId.TryGetValue(WebhookListener.Id, out var hookListener))
+                {
+                    hookListener = new Listener(WebhookListener.Name);
+                    byId[WebhookListener.Id] = hookListener;
+                    session._listeners.Add(hookListener);
+                    hookListener.StartWebhooks(webhooks, session._stop.Token);
+                }
+                session._checks.Add((expectation, hookListener, null));
+                continue;
+            }
+
             var source = collectionRequests?.FirstOrDefault(r => r.Id == expectation.ListenerId);
             string? problem = null;
             if (source is null)
@@ -172,7 +194,7 @@ internal sealed class ConsequenceSession : IAsyncDisposable
         {
             if (message.Timestamp < TriggeredAt)
                 continue;
-            if (expectation.Channel.Length > 0 && !(message.Label ?? "").Contains(expectation.Channel, StringComparison.OrdinalIgnoreCase))
+            if (expectation.Channel.Length > 0 && !listener.ChannelMatches(message.Label, expectation.Channel))
             {
                 seen++;
                 last = message.Content;
@@ -248,6 +270,10 @@ internal sealed class ConsequenceSession : IAsyncDisposable
 
         public string Name { get; } = name;
         public bool Ready => _ready.Task.IsCompleted;
+
+        /// <summary>How the expectation's Channel filter applies to a message label (topic contains it; webhook path matches it).</summary>
+        public Func<string?, string, bool> ChannelMatches { get; private set; } =
+            (label, channel) => (label ?? "").Contains(channel, StringComparison.OrdinalIgnoreCase);
         public bool Finished => _run?.IsCompleted == true;
         public string? Failure { get; private set; }
 
@@ -280,6 +306,42 @@ internal sealed class ConsequenceSession : IAsyncDisposable
                 }
                 finally
                 {
+                    Signal();
+                }
+            }, CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Uses the local webhook receiver as the channel: every callback it records becomes a received message labelled
+        /// <c>METHOD /path</c>. The receiver is started on demand and stays running afterwards (it is shared).
+        /// </summary>
+        public void StartWebhooks(IWebhookReceiver receiver, CancellationToken stop)
+        {
+            ChannelMatches = WebhookMatcher.MatchesLabel;
+            var ended = new TaskCompletionSource<ApiResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var log = receiver.Log;
+            Action<ReceivedWebhook> onHook = hook => Report(hook.ToMessage());
+            log.Added += onHook;
+            _run = ended.Task;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await receiver.EnsureStartedAsync(stop).ConfigureAwait(false);
+                    _ready.TrySetResult();
+                    await Task.Delay(Timeout.Infinite, stop).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    Failure = $"the webhook receiver could not start: {ex.Message}";
+                }
+                finally
+                {
+                    log.Added -= onHook;
+                    ended.TrySetResult(Failure is null ? new ApiResponse() : ApiResponse.Failed(Failure, TimeSpan.Zero));
                     Signal();
                 }
             }, CancellationToken.None);

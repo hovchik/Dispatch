@@ -37,10 +37,29 @@ public sealed record LatencyStats(double Min, double Mean, double P50, double P9
     }
 }
 
-public sealed record LoadRequestStats(string Name, int Count, int Errors, LatencyStats Latency, IReadOnlyDictionary<string, int> Statuses);
+public sealed record LoadRequestStats(string Name, int Count, int Errors, LatencyStats Latency, IReadOnlyDictionary<string, int> Statuses,
+    StreamingStats? Streaming = null);
 
-/// <summary>One second of the run, for the live chart.</summary>
-public sealed record LoadSecond(int Second, int Requests, int Errors, double P95, int ActiveUsers);
+/// <summary>
+/// Streaming requests (WebSocket, SSE, Socket.IO, MQTT, Kafka, AMQP, gRPC streams) in a load test. Each virtual user
+/// holds one connection at a time: it connects, listens for the request's listen time, disconnects and reconnects. The
+/// request's latency columns then measure connection setup; message latency is the time from the last message sent
+/// to the reply, or between consecutive server pushes when nothing was sent.
+/// </summary>
+public sealed record StreamingStats(
+    int Connections,
+    int ConnectErrors,
+    int Drops,
+    int MessagesSent,
+    int MessagesReceived,
+    double MessagesPerSecond,
+    LatencyStats MessageLatency)
+{
+    public int EstablishedConnections => Connections - ConnectErrors;
+}
+
+/// <summary>One second of the run, for the live chart. <paramref name="Messages"/> are stream messages received that second.</summary>
+public sealed record LoadSecond(int Second, int Requests, int Errors, double P95, int ActiveUsers, int Messages = 0);
 
 /// <summary>A latency histogram bucket: responses that took at most <see cref="UpperMs"/> (and more than the previous bucket).</summary>
 public sealed record LatencyBucket(string Label, double UpperMs, int Count);
@@ -54,6 +73,9 @@ public sealed class LoadSnapshot
     public double RequestsPerSecond { get; init; }
     public LatencyStats Latency { get; init; } = LatencyStats.From([]);
     public IReadOnlyList<LoadSecond> Timeline { get; init; } = [];
+
+    /// <summary>Connection and message counters; null when no streaming request is part of the journey.</summary>
+    public StreamingStats? Streaming { get; init; }
 }
 
 public sealed class LoadReport
@@ -80,13 +102,20 @@ public sealed class LoadReport
     public IReadOnlyList<LoadSecond> Timeline { get; init; } = [];
     public IReadOnlyList<string> SampleErrors { get; init; } = [];
 
+    /// <summary>Connection and message counters over the whole run; null when no streaming request took part.</summary>
+    public StreamingStats? Streaming { get; init; }
+
     public string ToText() =>
         $"""
          {TotalRequests} requests in {Duration.TotalSeconds:0.0} s with {VirtualUsers} virtual users · {RequestsPerSecond:0.0} req/s · {ErrorRate:P1} errors
          latency ms  min {Latency.Min:0}  avg {Latency.Mean:0}  p50 {Latency.P50:0}  p90 {Latency.P90:0}  p95 {Latency.P95:0}  p99 {Latency.P99:0}  max {Latency.Max:0}
          statuses    {string.Join("  ", Statuses.OrderBy(s => s.Key).Select(s => $"{s.Key}: {s.Value}"))}
          {string.Join(Environment.NewLine, PerRequest.Select(r => $"  {r.Name,-40} {r.Count,7} req  {r.Errors,5} err  p95 {r.Latency.P95,6:0} ms"))}
-         """;
+         """ + (Streaming is null ? "" : Environment.NewLine + StreamingText(Streaming));
+
+    public static string StreamingText(StreamingStats s) =>
+        $"streaming    {s.Connections} connection(s), {s.ConnectErrors} connect error(s), {s.Drops} drop(s) · {s.MessagesReceived} message(s) received, " +
+        $"{s.MessagesSent} sent · {s.MessagesPerSecond:0.0} msg/s · message latency p50 {s.MessageLatency.P50:0} ms  p95 {s.MessageLatency.P95:0} ms  max {s.MessageLatency.Max:0} ms";
 }
 
 /// <summary>
@@ -101,7 +130,7 @@ public sealed class LoadTester(IRequestSender sender)
 
     private static readonly double[] BucketBounds = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
 
-    private sealed class Sample(string request, double ms, string status, bool error, int second, long bytes = 0)
+    private sealed class Sample(string request, double ms, string status, bool error, int second, long bytes = 0, StreamSample? stream = null)
     {
         public long Bytes { get; } = bytes;
         public string Request { get; } = request;
@@ -109,7 +138,17 @@ public sealed class LoadTester(IRequestSender sender)
         public string Status { get; } = status;
         public bool Error { get; } = error;
         public int Second { get; } = second;
+
+        /// <summary>Set for streaming sessions (one connection each).</summary>
+        public StreamSample? Stream { get; } = stream;
     }
+
+    /// <summary>What one streaming session (connection) did, reduced to counters.</summary>
+    private sealed record StreamSample(bool ConnectError, bool Dropped, int Sent, int Received, double[] MessageLatencies, int[] ReceivedSeconds);
+
+    /// <summary>Protocols whose request is a session rather than a call, and therefore load tested as connections.</summary>
+    public static bool IsStreaming(RequestKind kind) =>
+        kind is RequestKind.WebSocket or RequestKind.Sse or RequestKind.SocketIo or RequestKind.Mqtt or RequestKind.Kafka or RequestKind.Amqp;
 
     public async Task<LoadReport> RunAsync(LoadOptions options, IProgress<LoadSnapshot>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -171,6 +210,8 @@ public sealed class LoadTester(IRequestSender sender)
                         if (stop.IsCancellationRequested)
                             break;
                         ApiResponse response;
+                        var sentAt = DateTimeOffset.Now;
+                        var sentAtSecond = clock.Elapsed;
                         try
                         {
                             response = await sender.SendAsync(request, new SendOptions
@@ -190,15 +231,20 @@ public sealed class LoadTester(IRequestSender sender)
                             break;
 
                         var failedChecks = options.RunChecks && response.TestResults.Any(t => !t.Passed);
-                        var error = !response.IsSuccess || failedChecks;
-                        var status = response.HasResponse ? response.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture) : "error";
+                        var stream = IsStreaming(request.Kind) || response.Messages.Count > 0 ? Streamed(response, sentAt, sentAtSecond) : null;
+                        var error = !response.IsSuccess || failedChecks || stream is { Dropped: true };
+                        var status = !response.HasResponse ? "error"
+                            : stream is not null ? (stream.Dropped ? "dropped" : "connected")
+                            : response.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        // A session's elapsed time is its listen window; what varies with load is how long connecting took.
+                        var ms = stream is null ? response.Elapsed.TotalMilliseconds : ConnectMilliseconds(response, sentAt);
                         lock (gate)
                         {
-                            samples.Add(new Sample(request.Name, response.Elapsed.TotalMilliseconds, status, error, (int)clock.Elapsed.TotalSeconds,
-                                response.SizeBytes));
+                            samples.Add(new Sample(request.Name, ms, status, error, (int)(stream is null ? clock.Elapsed : sentAtSecond).TotalSeconds,
+                                response.SizeBytes, stream));
                             if (error)
                             {
-                                var message = $"{request.Name}: {DescribeError(response, failedChecks)}";
+                                var message = $"{request.Name}: {DescribeError(response, failedChecks, stream)}";
                                 if (errorSamples.TryGetValue(message, out var count))
                                     errorSamples[message] = count + 1;
                                 else if (errorOrder.Count < MaxErrorSamples)
@@ -257,9 +303,11 @@ public sealed class LoadTester(IRequestSender sender)
             Latency = LatencyStats.From(all.Select(s => s.Ms).ToList()),
             Statuses = all.GroupBy(s => s.Status).ToDictionary(g => g.Key, g => g.Count()),
             PerRequest = all.GroupBy(s => s.Request).Select(g => new LoadRequestStats(g.Key, g.Count(), g.Count(s => s.Error),
-                LatencyStats.From(g.Select(s => s.Ms).ToList()), g.GroupBy(s => s.Status).ToDictionary(x => x.Key, x => x.Count()))).ToList(),
+                LatencyStats.From(g.Select(s => s.Ms).ToList()), g.GroupBy(s => s.Status).ToDictionary(x => x.Key, x => x.Count()),
+                Streaming(g.ToList(), clock.Elapsed))).ToList(),
             Timeline = Timeline(all, 0),
-            SampleErrors = errorOrder.Select(m => errorSamples[m] == 1 ? m : $"{m} (×{errorSamples[m]})").ToList()
+            SampleErrors = errorOrder.Select(m => errorSamples[m] == 1 ? m : $"{m} (×{errorSamples[m]})").ToList(),
+            Streaming = Streaming(all, clock.Elapsed)
         };
 
         LoadSnapshot Snapshot()
@@ -276,15 +324,91 @@ public sealed class LoadTester(IRequestSender sender)
                 Errors = copy.Count(s => s.Error),
                 RequestsPerSecond = elapsed.TotalSeconds > 0 ? copy.Count / elapsed.TotalSeconds : 0,
                 Latency = LatencyStats.From(copy.Select(s => s.Ms).ToList()),
-                Timeline = Timeline(copy, Volatile.Read(ref active))
+                Timeline = Timeline(copy, Volatile.Read(ref active)),
+                Streaming = Streaming(copy, elapsed)
             };
         }
     }
 
-    private static string DescribeError(ApiResponse response, bool failedChecks)
+    /// <summary>Counters of a streaming session from the messages the executor logged.</summary>
+    private static StreamSample Streamed(ApiResponse response, DateTimeOffset sentAt, TimeSpan sentAtSecond)
+    {
+        if (!response.HasResponse)
+            return new StreamSample(true, false, 0, 0, [], []);
+        var sent = 0;
+        var received = 0;
+        var latencies = new List<double>();
+        var seconds = new List<int>();
+        DateTimeOffset? pendingSent = null;
+        var previous = sentAt;
+        var dropped = !response.IsSuccess;
+        foreach (var message in response.Messages)
+        {
+            switch (message.Direction)
+            {
+                case MessageDirection.Sent:
+                    sent++;
+                    pendingSent = message.Timestamp;
+                    break;
+                case MessageDirection.Received:
+                    received++;
+                    var since = pendingSent ?? previous;
+                    latencies.Add(Math.Max(0, (message.Timestamp - since).TotalMilliseconds));
+                    seconds.Add((int)(sentAtSecond + (message.Timestamp - sentAt)).TotalSeconds);
+                    pendingSent = null;
+                    previous = message.Timestamp;
+                    break;
+                case MessageDirection.Error:
+                    dropped = true;
+                    break;
+                case MessageDirection.Info when EndedByServer(message.Content):
+                    dropped = true;
+                    break;
+            }
+        }
+        return new StreamSample(false, dropped, sent, received, latencies.ToArray(), seconds.ToArray());
+    }
+
+    /// <summary>
+    /// The executors log one of these when the server, not the listen window or the message limit, ended the session
+    /// (WebSocket and Socket.IO close, SSE stream end, Socket.IO disconnect).
+    /// </summary>
+    private static readonly string[] ServerEndedMessages =
+        ["Server closed the connection", "Stream ended by the server", "Server closed the session", "Disconnected by the server"];
+
+    private static bool EndedByServer(string info) => ServerEndedMessages.Any(m => info.StartsWith(m, StringComparison.Ordinal));
+
+    /// <summary>Time until the session was established: the first logged message, else the whole call.</summary>
+    private static double ConnectMilliseconds(ApiResponse response, DateTimeOffset sentAt)
+    {
+        var first = response.Messages.FirstOrDefault();
+        return first is null ? response.Elapsed.TotalMilliseconds : Math.Max(0, (first.Timestamp - sentAt).TotalMilliseconds);
+    }
+
+    private static StreamingStats? Streaming(List<Sample> samples, TimeSpan elapsed)
+    {
+        var streams = samples.Where(s => s.Stream is not null).Select(s => s.Stream!).ToList();
+        if (streams.Count == 0)
+            return null;
+        var received = streams.Sum(s => s.Received);
+        return new StreamingStats(
+            streams.Count,
+            streams.Count(s => s.ConnectError),
+            streams.Count(s => s.Dropped),
+            streams.Sum(s => s.Sent),
+            received,
+            elapsed.TotalSeconds > 0 ? received / elapsed.TotalSeconds : 0,
+            LatencyStats.From(streams.SelectMany(s => s.MessageLatencies).ToList()));
+    }
+
+    private static string DescribeError(ApiResponse response, bool failedChecks, StreamSample? stream = null)
     {
         if (response.Error is not null)
             return response.Error;
+        if (stream is { Dropped: true })
+            return response.Messages.LastOrDefault(m => m.Direction == MessageDirection.Error)?.Content
+                   ?? response.Messages.LastOrDefault(m => m.Direction == MessageDirection.Info && EndedByServer(m.Content))?.Content
+                   ?? "connection dropped";
         if (failedChecks && response.TestResults.FirstOrDefault(t => !t.Passed) is { } failed)
             return $"{failed.Name}: {failed.Message}";
         return $"{response.StatusCode} {response.ReasonPhrase}".Trim();
@@ -304,8 +428,18 @@ public sealed class LoadTester(IRequestSender sender)
         return buckets;
     }
 
-    private static IReadOnlyList<LoadSecond> Timeline(List<Sample> samples, int activeUsers) =>
-        samples.GroupBy(s => s.Second).OrderBy(g => g.Key)
-            .Select(g => new LoadSecond(g.Key, g.Count(), g.Count(s => s.Error), LatencyStats.From(g.Select(s => s.Ms).ToList()).P95, activeUsers))
-            .ToList();
+    private static IReadOnlyList<LoadSecond> Timeline(List<Sample> samples, int activeUsers)
+    {
+        var messages = new Dictionary<int, int>();
+        foreach (var second in samples.Where(s => s.Stream is not null).SelectMany(s => s.Stream!.ReceivedSeconds))
+            messages[second] = messages.GetValueOrDefault(second) + 1;
+        var seconds = samples.Select(s => s.Second).Concat(messages.Keys).Distinct().Order();
+        var bySecond = samples.GroupBy(s => s.Second).ToDictionary(g => g.Key, g => g.ToList());
+        return seconds.Select(second =>
+        {
+            var inSecond = bySecond.GetValueOrDefault(second) ?? [];
+            return new LoadSecond(second, inSecond.Count, inSecond.Count(s => s.Error), LatencyStats.From(inSecond.Select(s => s.Ms).ToList()).P95,
+                activeUsers, messages.GetValueOrDefault(second));
+        }).ToList();
+    }
 }

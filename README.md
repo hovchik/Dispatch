@@ -74,6 +74,24 @@ count. Expected values can use variables extracted from the response. The checks
 app, the collection runner, flows, monitors and `dispatch run`, with how long the message took or what arrived instead.
 Edit them in a request's **Checks** tab.
 
+### Webhook receiver
+
+A local HTTP endpoint (**More → Webhook receiver…**) that records every callback it gets, whatever the method or path:
+use `http://localhost:9000/hooks/orders` as the callback URL while developing against a payment, messaging or CI
+provider. Each hook is listed with its headers and body; **replay** it to your own handler, open it as a request, or
+**save it as an example** on the matching request of the collection (created in a *Webhooks* folder when missing), so
+it is documented and the mock server can serve the same payload. Choose the status, body and delay every callback is
+answered with to see how the sender retries. Save all hooks as JSON or an HTML report. Dispatch bundles no tunnel; for
+callbacks from the internet expose the port with `cloudflared tunnel --url http://localhost:9000` or `ngrok http 9000`
+and give the provider the public URL.
+
+Webhooks are also a **message check**: in a request's Checks tab pick *Webhook receiver* as the listener, put the
+callback path in the filter (`/hooks/orders`, or `POST /hooks/*`) and the condition on the payload, e.g. after
+`POST /orders` a webhook arrives at `/hooks/orders` with `$.status == paid` within 5 s. The receiver starts on demand
+(port `DISPATCH_WEBHOOK_PORT`, default 9000), only callbacks after the request count, and the result shows with the
+other tests in the app, runner, flows, monitors and `dispatch run`. `dispatch webhooks --port 9000 --out hooks.json`
+records from the CLI; `--expect n --path /hooks/orders --duration 30s` makes it exit 1 when fewer arrive.
+
 ### Client fuzzing
 
 **Fuzz app** in the toolbar (or `dispatch fuzz-client`) fuzzes the client instead of the server. It is a proxy, like
@@ -125,6 +143,59 @@ Renames come with the corrected path, e.g. *"renamed `$.user.id` → `$.user.use
 2 requests and 1 flow"*. `dispatch impact <collection> --request "Get user"` checks the live API against the snapshot
 in CI and fails when something breaks.
 
+### Spec coverage and breaking-change detector
+
+**Spec coverage** (right-click a collection → *Spec coverage…*) scores a collection, a run or captured traffic against
+its OpenAPI 3 / Swagger 2 document on five metrics, each a percentage with the gaps listed: operations never called,
+documented status codes never seen, parameters never varied, required inputs never omitted (no negative test) and
+calls the spec does not document. Score the saved requests as defined, run the collection for real responses, or add a
+HAR from the capture proxy / browser or a `dispatch run -r json` report. `dispatch coverage api.yaml <collection|run.json|traffic.har> [--run] --min 80`
+fails CI below the threshold.
+
+**Compare spec versions** (Tools → *Compare spec versions…*) diffs two versions of a spec and classifies every change
+as breaking (removed or moved paths, removed, renamed or retyped fields, new required parameters or body fields,
+narrowed request enums, widened response enums, changed success status, new authentication), non-breaking or info.
+Pick a collection and the change impact analyzer lists what each change breaks: requests calling removed operations or
+missing a new required input, status assertions on a changed code, and the tests, extractions, dependent requests and
+flows that read a changed response field (renames come with the corrected path).
+`dispatch breaking old.yaml new.yaml --collection c --fail-on breaking` gates CI.
+
+### OpenAPI generator and test scaffolding
+
+**Collection menu → Generate OpenAPI spec…** writes an OpenAPI 3.0 document (YAML or JSON) from what Dispatch already
+knows: the collection's requests, their saved examples and the run history. Paths are templated (`/users/42` becomes
+`/users/{userId}`, `{{petId}}` becomes `{petId}`), query and header parameters are listed with inferred types, request
+and response schemas are merged from every body seen (required fields, `nullable`, `uuid` / `date-time` / `email`
+formats, enumerations) with examples, and the requests' auth becomes `securitySchemes`. The same works from captured
+traffic: `dispatch openapi traffic.har -o api.yaml`, or `dispatch openapi "My Collection" --format json --server
+https://api.example.com`. The generated file imports back into Dispatch (and any other OpenAPI tool).
+
+The other direction, **Import → Also create tests** (or `dispatch scaffold spec.yaml -o tests.dispatch.json`), turns a
+spec into a test collection: every operation gets its happy-path request with a status assertion and a JSON-schema
+assertion on the documented success body, plus one negative request per required query/header parameter and required
+body field that leaves it out and expects a 4xx. `dispatch scaffold spec.yaml --save` puts the collection straight into
+the app; `dispatch run tests.dispatch.json` runs it in CI.
+
+### Environment parity, load baselines and streaming load
+
+* **Compare environments**: run a collection against two environments, or two base URLs, side by side. Both sides are
+  called at the same moment and every response is diffed: status, the structure of JSON bodies (with ignore paths such
+  as `$.timestamp` or `$..id`), non-volatile headers and latency. Each side chains its own extracted variables, so a
+  staging login never leaks into production. Rows that differ open a side-by-side body diff; reports export to HTML /
+  JSON. `dispatch compare <collection> -e Staging -e Production --ignore $.timestamp --fail-on-diff` gates CI (`-e` also
+  accepts an `https://` base URL, which re-points absolute request URLs and defines `{{baseUrl}}`).
+* **Load baselines**: in the load-test report, **Baseline → Set as baseline** saves the run as a JSON file (any exported
+  JSON report works). Later runs choose **Compare with baseline** and show p50 / p95 / p99, throughput and error-rate
+  deltas overall and per request, with a verdict: *REGRESSED* when a metric is worse by more than the allowed percentage
+  (10 % by default, latency changes under 5 ms are ignored as noise), *IMPROVED* or *UNCHANGED*. From the CLI:
+  `dispatch load … --save-baseline base.json`, then `--baseline base.json --max-regression 10%` fails the build on a
+  regression; `-r cli,html,json,csv -o reports` writes the reports.
+* **Streaming load**: WebSocket, SSE, Socket.IO, MQTT, Kafka, AMQP and gRPC streaming requests can be part of a load-test
+  journey. Each virtual user holds one connection at a time, listens for the request's listen time (or message limit),
+  then reconnects. The report adds concurrent connections, connect errors, drops, messages per second and message
+  latency (reply after a sent message, or the gap between server pushes); the per-request latency columns then measure
+  connection setup. Same report format, same baselines.
+
 ### Experimental: request forensics
 
 Two investigative tools that go beyond what API clients usually offer. Open them from the flask button next to
@@ -163,6 +234,48 @@ records what both sides agreed on at the last sync, so it knows which side chang
 a **conflict**, left untouched on both sides and shown with both versions until you keep one (`--resolve app|folder` in
 the CLI). Watch mode applies file changes within a second and writes app changes back every few seconds. Secret
 collection variables are never written to the folder.
+
+### Network conditions and TLS inspector
+
+* **Network conditions in the capture proxy**: the capture and client-fuzzing proxies can impose added **latency**, a
+  **bandwidth cap** on responses, random **dropped connections** and periodic **offline windows**, so you can watch a
+  browser, mobile app or SDK cope with a bad link. Presets: `2g`, `3g`, `4g`, `dsl`, `satellite`, `flaky-wifi`
+  (5% drops, offline 3 s every 30 s) and `offline` (10 s every minute), or a custom mix. Pick a profile in the Capture
+  window, or from the CLI: `dispatch capture --network 3g` / `dispatch capture --latency 300ms --bandwidth 1mbps --loss 2%
+  --offline-every 60s --offline-for 10s` (the same options work on `dispatch fuzz-client`).
+* **TLS / certificate inspector**: one handshake with a host shows the certificate chain (subject, issuer, validity,
+  SANs, key and signature), days to expiry, TLS version, cipher suite, ALPN (is HTTP/2 offered?), hostname and trust
+  problems and revocation status, with plain-language insights. Open it from Tools → TLS inspector…, from the flask
+  menu of any request (prefilled with its host), and the response **Timeline** tab shows the TLS summary of every HTTPS
+  send. Monitors can **fail and alert when a certificate expires within N days**. `dispatch tls api.example.com
+  --warn-days 21` (or `dispatch tls <collection>` for every HTTPS host it uses) exits 1 on problems and writes
+  `-r cli,html,json` reports.
+
+### Endpoint probes: pagination, idempotency and caching
+
+Three more probes in the same flask menu. Each one sends a small number of real requests, lists its findings as
+problems, warnings and passes, and exports an HTML or JSON report. In the CLI, `--fail-on bad|warning|never` sets when
+the exit code is 1.
+
+* **Pagination walker**: follows a list endpoint to the last page. It works out the paging from a `Link: rel="next"`
+  header, a next URL in the body, a cursor (`next_cursor`, `nextPageToken`, …) sent back as a parameter, or
+  page / offset parameters. It flags items that appear on two pages, an advertised total (`total`, `totalCount`,
+  `X-Total-Count`, …) that doesn't match what can be reached, loops, short pages in the middle, pages larger than the
+  requested limit and deep pages that get slower. It fetches page 1 again to check that the order is stable, and tries a
+  page past the end, invalid page numbers and page sizes of 0 and 100000.
+  `dispatch paginate <collection> --request "List orders" --page-size 5`
+* **Idempotency & race probe**: sends a POST, PUT, PATCH or DELETE with an `Idempotency-Key`, retries it with the same
+  key, reuses the key with a changed body and sends several copies at the same moment, with one key and with none. It
+  compares the resources created (from `Location` or an id in the body) and flags retries that duplicate, reused keys
+  that are accepted, and 5xx under concurrency. PUT and DELETE are repeated as HTTP requires them to be idempotent. It
+  creates data, so point it at a test environment.
+  `dispatch idempotency <collection> --request "Create order" --parallel 8`
+* **Caching checker**: reads `Cache-Control`, `Expires`, `Vary`, `ETag` and `Last-Modified`, then checks that
+  `If-None-Match` and `If-Modified-Since` really answer 304, that an unknown ETag doesn't, that the ETag is stable while
+  the body is, and that HEAD matches GET. It flags authenticated responses that shared caches may store, cookies on
+  cacheable responses, compressed bodies without `Vary: Accept-Encoding` and a specific CORS origin without
+  `Vary: Origin`, and shows CDN cache headers such as `X-Cache` and `CF-Cache-Status`.
+  `dispatch cache <collection> --request "Get product" --fail-on warning`
 
 ## Developer tools
 
@@ -241,13 +354,25 @@ dotnet run --project src/Dispatch.Cli -- scan petstore.yaml --fail-on high -r cl
 dotnet run --project src/Dispatch.Cli -- docs "My Collection" --format html -o api.html
 dotnet run --project src/Dispatch.Cli -- minimize "My Collection" --request "Create order" -r cli,html
 dotnet run --project src/Dispatch.Cli -- ratelimit "My Collection" --request Login --expect-limit
+dotnet run --project src/Dispatch.Cli -- paginate "My Collection" --request "List orders" --page-size 5
+dotnet run --project src/Dispatch.Cli -- idempotency "My Collection" --request "Create order" -e staging.json
+dotnet run --project src/Dispatch.Cli -- cache "My Collection" --request "Get product" --fail-on warning
 dotnet run --project src/Dispatch.Cli -- impact "My Collection" --request "Get user" --baseline snapshot -r cli,html
 dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
+dotnet run --project src/Dispatch.Cli -- coverage api.yaml tests/api.dispatch.json --run --min 80 -r cli,html
+dotnet run --project src/Dispatch.Cli -- breaking api-v1.yaml api-v2.yaml --collection tests/api.dispatch.json --fail-on breaking
+dotnet run --project src/Dispatch.Cli -- openapi "My Collection" -o api.yaml --server https://api.example.com
+dotnet run --project src/Dispatch.Cli -- scaffold api.yaml -o tests.dispatch.json
 dotnet run --project src/Dispatch.Cli -- monitor --watch
 dotnet run --project src/Dispatch.Cli -- capture --port 8899 --out traffic.har
 dotnet run --project src/Dispatch.Cli -- fuzz-client --port 8899 --host api.myapp.com --duration 10m -r cli,html
 dotnet run --project src/Dispatch.Cli -- lint tests/api.dispatch.json --fail-on warning -r cli,json
 dotnet run --project src/Dispatch.Cli -- sync "My Collection" ./api-tests --watch
+dotnet run --project src/Dispatch.Cli -- compare "My Collection" -e Staging -e Production --ignore $.timestamp --fail-on-diff -r cli,html
+dotnet run --project src/Dispatch.Cli -- load "My Collection" --users 20 --duration 60s --baseline base.json --max-regression 10% -r cli,json
+dotnet run --project src/Dispatch.Cli -- capture --network 3g --out traffic.har
+dotnet run --project src/Dispatch.Cli -- tls api.example.com --warn-days 21 -r cli,json
+dotnet run --project src/Dispatch.Cli -- webhooks --port 9000 --out hooks.json
 ```
 
 `<collection>` can be any importable file, a URL, a Dispatch folder, or the name of a collection saved in the

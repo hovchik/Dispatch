@@ -29,7 +29,9 @@ public enum CollectionAction
     Flows,
     Monitors,
     Lint,
-    Sync
+    Sync,
+    SpecCoverage,
+    GenerateOpenApi
 }
 
 public sealed partial class CollectionsViewModel(ICollectionRepository repository) : ObservableObject
