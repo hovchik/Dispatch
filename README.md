@@ -143,6 +143,23 @@ Renames come with the corrected path, e.g. *"renamed `$.user.id` → `$.user.use
 2 requests and 1 flow"*. `dispatch impact <collection> --request "Get user"` checks the live API against the snapshot
 in CI and fails when something breaks.
 
+### Spec coverage and breaking-change detector
+
+**Spec coverage** (right-click a collection → *Spec coverage…*) scores a collection, a run or captured traffic against
+its OpenAPI 3 / Swagger 2 document on five metrics, each a percentage with the gaps listed: operations never called,
+documented status codes never seen, parameters never varied, required inputs never omitted (no negative test) and
+calls the spec does not document. Score the saved requests as defined, run the collection for real responses, or add a
+HAR from the capture proxy / browser or a `dispatch run -r json` report. `dispatch coverage api.yaml <collection|run.json|traffic.har> [--run] --min 80`
+fails CI below the threshold.
+
+**Compare spec versions** (Tools → *Compare spec versions…*) diffs two versions of a spec and classifies every change
+as breaking (removed or moved paths, removed, renamed or retyped fields, new required parameters or body fields,
+narrowed request enums, widened response enums, changed success status, new authentication), non-breaking or info.
+Pick a collection and the change impact analyzer lists what each change breaks: requests calling removed operations or
+missing a new required input, status assertions on a changed code, and the tests, extractions, dependent requests and
+flows that read a changed response field (renames come with the corrected path).
+`dispatch breaking old.yaml new.yaml --collection c --fail-on breaking` gates CI.
+
 ### OpenAPI generator and test scaffolding
 
 **Collection menu → Generate OpenAPI spec…** writes an OpenAPI 3.0 document (YAML or JSON) from what Dispatch already
@@ -322,6 +339,8 @@ dotnet run --project src/Dispatch.Cli -- idempotency "My Collection" --request "
 dotnet run --project src/Dispatch.Cli -- cache "My Collection" --request "Get product" --fail-on warning
 dotnet run --project src/Dispatch.Cli -- impact "My Collection" --request "Get user" --baseline snapshot -r cli,html
 dotnet run --project src/Dispatch.Cli -- laws traffic.har --fail-on-anomaly
+dotnet run --project src/Dispatch.Cli -- coverage api.yaml tests/api.dispatch.json --run --min 80 -r cli,html
+dotnet run --project src/Dispatch.Cli -- breaking api-v1.yaml api-v2.yaml --collection tests/api.dispatch.json --fail-on breaking
 dotnet run --project src/Dispatch.Cli -- openapi "My Collection" -o api.yaml --server https://api.example.com
 dotnet run --project src/Dispatch.Cli -- scaffold api.yaml -o tests.dispatch.json
 dotnet run --project src/Dispatch.Cli -- monitor --watch

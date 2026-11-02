@@ -479,6 +479,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     private void OpenLaws() => OpenCollectionTool(CollectionAction.Laws);
 
     [RelayCommand]
+    private void OpenSpecCoverage() => OpenCollectionTool(CollectionAction.SpecCoverage);
+
+    [RelayCommand]
+    private void OpenSpecDiff()
+    {
+        var current = Collections.Items.FirstOrDefault(c => c.Id == SelectedTab?.CollectionId)?.Model;
+        Dialogs.ShowTool(new SpecDiffViewModel(Collections.Items.Select(c => c.Model).ToList(), current, Dialogs,
+            async collection => (await _services.Flows.GetAllAsync()).Where(f => f.CollectionId == collection.Id).ToList()));
+    }
+
+    [RelayCommand]
     private void OpenCollectionSettings() => OpenCollectionTool(CollectionAction.Settings);
 
     [RelayCommand]
@@ -540,6 +551,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
             }
             case CollectionAction.Scan:
                 Dialogs.ShowTool(new SecurityScanViewModel(collection, _services.Scanner, Dialogs, () => ActiveEnvironment));
+                break;
+            case CollectionAction.SpecCoverage:
+                Dialogs.ShowTool(new SpecCoverageViewModel(collection, _services.Runner, Dialogs, () => ActiveEnvironment));
                 break;
             case CollectionAction.Flows:
                 Dialogs.ShowTool(new FlowManagerViewModel(collection, _services.Flows, _services.FlowRunner, Dialogs, () => ActiveEnvironment));
@@ -696,6 +710,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         yield return new PaletteItem("Test flows…", "Chain requests with conditions, loops and waits", OpenFlows);
         yield return new PaletteItem("Security scan…", "Passive checks and active probes", OpenSecurityScan);
         yield return new PaletteItem("API laws…", "Mine rules the API always follows, then check them", OpenLaws);
+        yield return new PaletteItem("Spec coverage…", "Score the collection against its OpenAPI document", OpenSpecCoverage);
+        yield return new PaletteItem("Compare spec versions…", "Breaking-change detector for OpenAPI documents", OpenSpecDiff);
         yield return new PaletteItem("Compare environments…", "Run the collection on two environments and diff every response", OpenCompare);
         yield return new PaletteItem("Collection settings…", "Variables, auth and defaults of the current collection", OpenCollectionSettings);
         yield return new PaletteItem("Cookies", "View and delete stored cookies", OpenCookies);

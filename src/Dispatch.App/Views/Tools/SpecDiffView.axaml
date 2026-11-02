@@ -1,0 +1,127 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             xmlns:spec="using:Dispatch.Application.Spec"
+             x:Class="Dispatch.App.Views.Tools.SpecDiffView"
+             x:DataType="tools:SpecDiffViewModel">
+  <Grid ColumnDefinitions="300,*" Margin="12">
+    <!-- Inputs -->
+    <ScrollViewer Margin="0,0,16,0">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Compare spec versions" FontSize="15" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="Diffs two versions of an OpenAPI document and classifies each change as breaking or not: removed paths, removed or retyped fields, new required inputs, narrowed enums, changed statuses. With a collection, it lists the tests, extractions, requests and flows each change breaks." />
+        <TextBlock Classes="section" Text="PREVIOUS VERSION" Margin="0,6,0,0" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+          <TextBox Text="{Binding OldPath}" Watermark="old spec: path or URL" />
+          <Button Grid.Column="1" Content="…" Command="{Binding BrowseOldCommand}" ToolTip.Tip="Choose a file" />
+        </Grid>
+        <TextBlock Classes="section" Text="NEW VERSION" Margin="0,6,0,0" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+          <TextBox Text="{Binding NewPath}" Watermark="new spec: path or URL" />
+          <Button Grid.Column="1" Content="…" Command="{Binding BrowseNewCommand}" ToolTip.Tip="Choose a file" />
+        </Grid>
+        <TextBlock Classes="section" Text="CHECK IMPACT ON" Margin="0,6,0,0" />
+        <ComboBox ItemsSource="{Binding Collections}" SelectedItem="{Binding SelectedCollection}" HorizontalAlignment="Stretch" />
+        <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding CompareCommand}" Content="Compare" Margin="0,8,0,0" />
+        <DropDownButton Content="Export report" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+          <DropDownButton.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+              <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+            </MenuFlyout>
+          </DropDownButton.Flyout>
+        </DropDownButton>
+        <TextBlock Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" FontSize="12" />
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Changes and impact -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource DangerSoftBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding BreakingCount}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource DangerBrush}" />
+            <TextBlock Text="Breaking" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SuccessSoftBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding NonBreakingCount}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource SuccessBrush}" />
+            <TextBlock Text="Non-breaking" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource WarningSoftBrush}" IsVisible="{Binding ShowImpact}">
+          <StackPanel>
+            <TextBlock Text="{Binding BreaksCount}" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource WarningBrush}" />
+            <TextBlock Text="Breaks in collection" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+      <TextBlock Grid.Row="1" Text="{Binding Summary}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,12,0,10"
+                 IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <Grid Grid.Row="2" RowDefinitions="*,Auto,*">
+        <Border Classes="card" Padding="0">
+          <Panel>
+            <TextBlock Classes="muted" Margin="12" Text="No differences between the two versions." IsVisible="{Binding NoChanges}" />
+            <TextBlock Classes="muted" Margin="12" TextWrapping="Wrap" IsVisible="{Binding !HasReport}"
+                       Text="Pick the previous and the new spec, then Compare." />
+            <ScrollViewer>
+              <ItemsControl ItemsSource="{Binding Changes}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="spec:SpecChange">
+                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="12,6" Background="{DynamicResource SurfaceBrush}">
+                      <Grid ColumnDefinitions="78,220,*">
+                        <Border CornerRadius="4" Padding="6,1" VerticalAlignment="Top" HorizontalAlignment="Left"
+                                Background="{Binding Severity, Converter={x:Static tools:ChangeSeverityBrush.Instance}}">
+                          <TextBlock Text="{Binding SeverityText}" FontSize="10" FontWeight="Bold" Foreground="White" />
+                        </Border>
+                        <SelectableTextBlock Grid.Column="1" Text="{Binding Operation}" FontFamily="{StaticResource MonoFont}" FontSize="12" TextWrapping="Wrap" />
+                        <StackPanel Grid.Column="2">
+                          <TextBlock Text="{Binding Description}" FontSize="13" TextWrapping="Wrap" />
+                          <TextBlock Text="{Binding Location}" Classes="muted" FontSize="11" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Panel>
+        </Border>
+        <TextBlock Grid.Row="1" Classes="section" Text="IMPACT ON THE COLLECTION" Margin="0,10,0,6" IsVisible="{Binding ShowImpact}" />
+        <Border Grid.Row="2" Classes="card" Padding="0" IsVisible="{Binding ShowImpact}">
+          <Panel>
+            <TextBlock Classes="muted" Margin="12" TextWrapping="Wrap" Text="Nothing in this collection depends on what changed." IsVisible="{Binding NoImpact}" />
+            <ScrollViewer>
+              <ItemsControl ItemsSource="{Binding Impact}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="spec:SpecImpactItem">
+                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="12,8" Background="{DynamicResource SurfaceBrush}">
+                      <StackPanel Spacing="3">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <Border CornerRadius="4" Padding="6,1" VerticalAlignment="Center"
+                                  Background="{Binding Severity, Converter={x:Static tools:ImpactSeverityBrush.Instance}}">
+                            <TextBlock Text="{Binding SeverityText}" FontSize="11" FontWeight="Bold" Foreground="White" />
+                          </Border>
+                          <TextBlock Text="{Binding Owner}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                          <TextBlock Text="{Binding Location}" Classes="muted" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="13" />
+                        <TextBlock Text="{Binding Change}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                        <TextBlock FontSize="12" Foreground="{DynamicResource SuccessBrush}" TextWrapping="Wrap"
+                                   IsVisible="{Binding Suggestion, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                          <Run Text="Fix:" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Suggestion}" />
+                        </TextBlock>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Panel>
+        </Border>
+      </Grid>
+    </Grid>
+  </Grid>
+</UserControl>
