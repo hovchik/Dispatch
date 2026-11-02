@@ -64,7 +64,7 @@ public sealed class FolderSyncService(ICollectionRepository collections, string 
     {
         folder = Path.GetFullPath(folder);
         var (app, folderCollection, warnings) = await LoadSidesAsync(collectionId, folder);
-        var last = LoadLast(collectionId);
+        var last = LoadLast(collectionId, folder);
         var appMap = Canonical(app);
         var folderMap = Canonical(folderCollection);
         var plan = SyncEngine.Plan(appMap, folderMap, last);
@@ -145,7 +145,7 @@ public sealed class FolderSyncService(ICollectionRepository collections, string 
     {
         folder = Path.GetFullPath(folder);
         var (app, folderCollection, _) = await LoadSidesAsync(collectionId, folder);
-        var last = LoadLast(collectionId);
+        var last = LoadLast(collectionId, folder);
         var plan = SyncEngine.Plan(Canonical(app), Canonical(folderCollection), last);
         if (plan.FirstOrDefault(d => d.Key == key && d.Action == SyncAction.Conflict) is { } conflict)
         {
@@ -173,6 +173,12 @@ public sealed class FolderSyncService(ICollectionRepository collections, string 
         var app = await LoadAppAsync(collectionId);
         Directory.CreateDirectory(folder);
         var imported = DispatchFormat.ImportFolder(folder);
+        if (imported.Warnings.Count > 0)
+        {
+            // A file that cannot be read would look like a deletion; never sync over it.
+            throw new InvalidOperationException("Some request files could not be read; fix them before syncing:\n  " +
+                                                string.Join("\n  ", imported.Warnings));
+        }
         var folderCollection = imported.Collections[0];
         if (!File.Exists(Path.Combine(folder, DispatchFormat.CollectionFileName)))
         {
@@ -253,15 +259,24 @@ public sealed class FolderSyncService(ICollectionRepository collections, string 
         }
     }
 
-    private Dictionary<string, string> LoadLast(Guid collectionId)
+    /// <summary>The state recorded at the last sync with this same folder; another folder starts from nothing.</summary>
+    private Dictionary<string, string> LoadLast(Guid collectionId, string folder)
     {
         var last = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (LoadState(collectionId)?["items"] is JsonObject items)
+        var state = LoadState(collectionId);
+        var recordedFolder = state?["folder"]?.ToString();
+        if (recordedFolder is null || !SameFolder(recordedFolder, folder))
+            return last;
+        if (state?["items"] is JsonObject items)
             foreach (var (key, value) in items)
                 if (value is not null)
                     last[key] = value.ToString();
         return last;
     }
+
+    private static bool SameFolder(string a, string b) =>
+        string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)),
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private void SaveState(Guid collectionId, string folder, Dictionary<string, string> items)
     {

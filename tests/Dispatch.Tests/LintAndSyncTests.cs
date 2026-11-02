@@ -371,6 +371,36 @@ public class FolderSyncServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Another_folder_starts_from_scratch_instead_of_reusing_the_baseline()
+    {
+        await _sync.SyncAsync(_collection.Id, Folder);
+        var other = Path.Combine(_root, "other");
+
+        var result = await _sync.SyncAsync(_collection.Id, other);
+
+        Assert.Equal(3, result.ToFolder);
+        Assert.Equal(0, result.ToApp);
+        Assert.Equal(3, (await AppAsync()).Requests.Count);
+        Assert.Equal(3, Directory.EnumerateFiles(other, "*.request.json", SearchOption.AllDirectories).Count());
+        // Going back to the first folder also starts over (and finds everything in agreement).
+        Assert.True((await _sync.SyncAsync(_collection.Id, Folder)).InSync);
+    }
+
+    [Fact]
+    public async Task Unreadable_request_file_stops_the_sync_before_anything_changes()
+    {
+        await _sync.SyncAsync(_collection.Id, Folder);
+        var listFile = RequestFile("List");
+        File.WriteAllText(listFile, "{ not json");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _sync.SyncAsync(_collection.Id, Folder));
+
+        Assert.Contains("could not be read", ex.Message);
+        Assert.Equal(3, (await AppAsync()).Requests.Count);
+        Assert.Equal("{ not json", File.ReadAllText(listFile));
+    }
+
+    [Fact]
     public async Task Watcher_picks_up_folder_edits()
     {
         await _sync.SyncAsync(_collection.Id, Folder);

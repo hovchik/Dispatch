@@ -208,7 +208,7 @@ public static partial class CollectionLinter
             var first = group.First();
             foreach (var duplicate in group.Skip(1))
                 Add(LintRules.DuplicateRequest, duplicate, "request",
-                    $"Sends the same {Verb(duplicate)} {duplicate.Url} with the same body as '{first.Name}'{(first.Folder.Length > 0 ? $" ({first.Folder})" : "")}.",
+                    $"Sends the same {Verb(duplicate)} request (URL, parameters and body) as '{first.Name}'{(first.Folder.Length > 0 ? $" ({first.Folder})" : "")}.",
                     "Delete one of them, or make them differ (parameters, body, description) if both are intended.");
         }
         foreach (var group in requests.GroupBy(r => (r.Folder.Trim(), r.Name.Trim()), new FolderNameComparer()).Where(g => g.Count() > 1))
