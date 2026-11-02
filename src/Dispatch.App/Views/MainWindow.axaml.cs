@@ -37,10 +37,17 @@ public partial class MainWindow : Window
         DataContextChanged += (_, _) =>
         {
             if (_viewModel is not null)
+            {
                 _viewModel.Palette.PropertyChanged -= OnPaletteChanged;
+                _viewModel.PropertyChanged -= OnViewModelChanged;
+            }
             _viewModel = DataContext as MainWindowViewModel;
             if (_viewModel is not null)
+            {
                 _viewModel.Palette.PropertyChanged += OnPaletteChanged;
+                _viewModel.PropertyChanged += OnViewModelChanged;
+            }
+            UpdateSidebarColumn();
         };
         // Middle-click closes a tab, like in browsers. Tunnel so the press doesn't select the tab first.
         TabStrip.AddHandler(PointerPressedEvent, OnTabStripPointerPressed, RoutingStrategies.Tunnel);
@@ -50,6 +57,36 @@ public partial class MainWindow : Window
         TabStrip.AddHandler(DragDrop.DropEvent, OnTabStripDrop);
         TabStrip.LayoutUpdated += (_, _) => UpdateTabOverflow();
         TabStrip.AddHandler(ScrollViewer.ScrollChangedEvent, (_, _) => UpdateTabOverflow());
+    }
+
+    private GridLength _sidebarWidth = new(260);
+
+    private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.IsSidebarOpen))
+            UpdateSidebarColumn();
+    }
+
+    /// <summary>
+    /// The sidebar lives in a fixed-width column so the splitter can resize it; when it is hidden the column
+    /// collapses to nothing and the last width is remembered for when it comes back.
+    /// </summary>
+    private void UpdateSidebarColumn()
+    {
+        var open = _viewModel?.IsSidebarOpen ?? true;
+        var sidebarColumn = BodyGrid.ColumnDefinitions[1];
+        if (open)
+        {
+            sidebarColumn.MinWidth = 200;
+            sidebarColumn.Width = _sidebarWidth;
+        }
+        else
+        {
+            if (sidebarColumn.Width.Value > 0)
+                _sidebarWidth = sidebarColumn.Width;
+            sidebarColumn.MinWidth = 0;
+            sidebarColumn.Width = new GridLength(0);
+        }
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)

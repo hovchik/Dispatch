@@ -3,11 +3,11 @@
              xmlns:tools="using:Dispatch.App.ViewModels.Tools"
              x:Class="Dispatch.App.Views.Tools.RateLimitView"
              x:DataType="tools:RateLimitViewModel">
-  <Grid ColumnDefinitions="300,*" Margin="18">
+  <Grid ColumnDefinitions="300,*" Margin="12">
     <!-- Settings -->
     <ScrollViewer Margin="0,0,16,0">
       <StackPanel Spacing="8">
-        <TextBlock Text="Rate-limit mapper" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Text="Rate-limit mapper" FontSize="15" FontWeight="SemiBold" />
         <TextBlock Classes="muted" TextWrapping="Wrap"
                    Text="Only probe APIs you own or are authorised to test. A cheap, read-only request works best." />
         <SelectableTextBlock Text="{Binding RequestLine}" FontFamily="{StaticResource MonoFont}" FontSize="11" TextWrapping="Wrap" />

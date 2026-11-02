@@ -3,11 +3,11 @@
              xmlns:tools="using:Dispatch.App.ViewModels.Tools"
              x:Class="Dispatch.App.Views.Tools.LawsView"
              x:DataType="tools:LawsViewModel">
-  <Grid ColumnDefinitions="290,*" Margin="18">
+  <Grid ColumnDefinitions="290,*" Margin="12">
     <!-- Sources and actions -->
     <ScrollViewer Margin="0,0,16,0">
       <StackPanel Spacing="8">
-        <TextBlock Text="API laws" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Text="API laws" FontSize="15" FontWeight="SemiBold" />
         <TextBlock Classes="muted" TextWrapping="Wrap"
                    Text="Rules this API keeps across its responses, learned from traffic: required fields, enums, formats, totals that match their items, page sizes, round trips. Rules that held except a few times are anomalies, and probably bugs." />
         <TextBlock Classes="section" Text="OBSERVATIONS" Margin="0,6,0,0" />

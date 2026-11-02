@@ -1,0 +1,23 @@
+/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q [/home/user/Dispatch/tools/UiShot/UiShot.csproj]
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1510: PackageReference Microsoft.Extensions.DependencyInjection will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/home/user/Dispatch/tools/UiShot/UiShot.csproj]
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q [/home/user/Dispatch/tools/UiShot/UiShot.csproj]
+/home/user/Dispatch/tools/UiShot/UiShot.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+/home/user/Dispatch/tools/UiShot/UiShot.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+/home/user/Dispatch/src/Dispatch.App/Dispatch.App.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1510: PackageReference Microsoft.Extensions.DependencyInjection will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/home/user/Dispatch/src/Dispatch.Infrastructure/Dispatch.Infrastructure.csproj : warning NU1903: Package 'SQLitePCLRaw.lib.e_sqlite3' 2.1.11 has a known high severity vulnerability, https://github.com/advisories/GHSA-2m69-gcr7-jv3q
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/01-welcome.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/02-empty-first-tab.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/03-samples-loaded.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/04-request-editor.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/05-response.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/06-palette.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/07-many-tabs-grpc.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/08-side-by-side.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/09-runner.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/10-help.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/11-loadtest.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/12-import.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/13-mock.png
+saved /tmp/claude-0/-home-user-Dispatch/2571faba-4233-5035-b087-3b2304fa60cb/scratchpad/shots-before/14-capture.png
+done

@@ -9,7 +9,7 @@
         x:DataType="vm:MainWindowViewModel"
         Title="Dispatch"
         Icon="/Assets/dispatch.ico"
-        Width="1400" Height="880" MinWidth="960" MinHeight="600"
+        Width="1400" Height="880" MinWidth="900" MinHeight="560"
         WindowStartupLocation="CenterScreen">
 
   <Window.KeyBindings>
@@ -70,24 +70,24 @@
   </Window.Styles>
 
   <Panel>
-    <Grid RowDefinitions="Auto,Auto,*">
+    <Grid RowDefinitions="Auto,*">
 
       <!-- ================= Header ================= -->
       <Border Grid.Row="0" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource DividerBrush}"
-              BorderThickness="0,0,0,1" Height="50">
-        <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="12,0">
+              BorderThickness="0,0,0,1" Height="40">
+        <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="8,0">
           <!-- Brand -->
-          <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center" Margin="2,0,0,0">
-            <Image Source="/Assets/dispatch-logo.png" Width="24" Height="24" RenderOptions.BitmapInterpolationMode="HighQuality" />
-            <TextBlock Text="Dispatch" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" LetterSpacing="-0.2" />
+          <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center" Margin="4,0,0,0">
+            <Image Source="/Assets/dispatch-logo.png" Width="20" Height="20" RenderOptions.BitmapInterpolationMode="HighQuality" />
+            <TextBlock Text="Dispatch" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" LetterSpacing="-0.2" />
           </StackPanel>
 
           <!-- Primary actions -->
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" Margin="22,0,0,0" VerticalAlignment="Center">
-            <SplitButton Classes="accent" Command="{Binding NewTabCommand}" Padding="12,0" MinHeight="32"
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="14,0,0,0" VerticalAlignment="Center">
+            <SplitButton Classes="accent" Command="{Binding NewTabCommand}" Padding="10,0" MinHeight="28"
                          ToolTip.Tip="New HTTP request (Ctrl+T) · arrow: other protocols">
-              <StackPanel Orientation="Horizontal" Spacing="7">
-                <PathIcon Data="{StaticResource IconPlus}" Width="12" Height="12" Foreground="White" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Data="{StaticResource IconPlus}" Width="11" Height="11" Foreground="White" />
                 <TextBlock Text="New" FontWeight="SemiBold" Foreground="White" />
               </StackPanel>
               <SplitButton.Flyout>
@@ -120,20 +120,20 @@
           </StackPanel>
 
           <!-- Command palette launcher -->
-          <Button Grid.Column="2" HorizontalAlignment="Center" Width="420" MaxWidth="520" MinHeight="32" Padding="10,0"
+          <Button Grid.Column="2" HorizontalAlignment="Center" Width="360" MaxWidth="480" MinHeight="28" Padding="10,0"
                   Command="{Binding OpenPaletteCommand}" ToolTip.Tip="Search requests and run commands (Ctrl+K)"
                   Background="{DynamicResource SurfaceSunkenBrush}" BorderBrush="{DynamicResource DividerBrush}">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <PathIcon Data="{StaticResource IconSearch}" Width="12" Height="12" Foreground="{DynamicResource MutedTextBrush}" />
-              <TextBlock Grid.Column="1" Text="Search requests, collections and commands" Classes="muted" Margin="9,0,12,0"
+              <TextBlock Grid.Column="1" Text="Search requests and commands" Classes="muted" Margin="8,0,10,0"
                          TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontWeight="Normal" />
               <Border Grid.Column="2" Classes="kbd"><TextBlock Text="Ctrl K" /></Border>
             </Grid>
           </Button>
 
           <!-- Environment -->
-          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-            <ComboBox ItemsSource="{Binding Environments.Choices}" SelectedItem="{Binding Environments.Active}" MinWidth="190"
+          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+            <ComboBox ItemsSource="{Binding Environments.Choices}" SelectedItem="{Binding Environments.Active}" MinWidth="160" Classes="compact"
                       ToolTip.Tip="Active environment: its variables replace {{placeholders}} when sending">
               <ComboBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:EnvironmentItemViewModel">
@@ -144,7 +144,7 @@
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
-            <Button Classes="icon" Margin="4,0,0,0" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="Toggle light / dark theme">
+            <Button Classes="icon" Margin="2,0,0,0" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="Toggle light / dark theme">
               <Panel>
                 <PathIcon Data="{StaticResource IconMoon}" IsVisible="{Binding IsDarkTheme}" />
                 <PathIcon Data="{StaticResource IconSun}" IsVisible="{Binding !IsDarkTheme}" />
@@ -165,38 +165,19 @@
         </Grid>
       </Border>
 
-      <!-- ================= Banners ================= -->
-      <StackPanel Grid.Row="1" Spacing="6">
-        <Border Classes="banner error" Margin="12,8,12,0"
-                IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
-          <Grid ColumnDefinitions="Auto,*,Auto">
-            <PathIcon Data="{StaticResource IconWarning}" Width="14" Height="14" Foreground="{DynamicResource DangerBrush}"
-                      VerticalAlignment="Center" Margin="0,0,10,0" />
-            <SelectableTextBlock Grid.Column="1" Text="{Binding ErrorMessage}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="12.5" />
-            <Button Grid.Column="2" Classes="icon" Command="{Binding DismissErrorCommand}" ToolTip.Tip="Dismiss">
-              <PathIcon Data="{StaticResource IconClose}" Width="11" Height="11" />
-            </Button>
-          </Grid>
-        </Border>
-        <Border Classes="banner info" Margin="12,8,12,0"
-                IsVisible="{Binding InfoMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
-          <Grid ColumnDefinitions="Auto,*,Auto">
-            <PathIcon Data="{StaticResource IconInfo}" Width="14" Height="14" Foreground="{DynamicResource AccentBrush}"
-                      VerticalAlignment="Center" Margin="0,0,10,0" />
-            <SelectableTextBlock Grid.Column="1" Text="{Binding InfoMessage}" TextWrapping="Wrap" FontSize="12.5" VerticalAlignment="Center" />
-            <Button Grid.Column="2" Classes="icon" Command="{Binding DismissInfoCommand}" ToolTip.Tip="Dismiss">
-              <PathIcon Data="{StaticResource IconClose}" Width="11" Height="11" />
-            </Button>
-          </Grid>
-        </Border>
-      </StackPanel>
-
       <!-- ================= Body ================= -->
-      <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*">
+      <Grid x:Name="BodyGrid" Grid.Row="1">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <!-- The sidebar column is resized by the splitter and collapsed from code-behind when hidden. -->
+          <ColumnDefinition Width="260" MinWidth="200" MaxWidth="560" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
         <!-- Activity rail -->
         <Border Grid.Column="0" Classes="rail">
-          <DockPanel Margin="0,8,0,8">
+          <DockPanel Margin="0,6,0,6">
             <StackPanel DockPanel.Dock="Bottom" Spacing="0">
               <Button Classes="railitem" Command="{Binding OpenCookiesCommand}" ToolTip.Tip="Cookie jar" ToolTip.Placement="Right">
                 <StackPanel><PathIcon Data="{StaticResource IconCookie}" /><TextBlock Text="Cookies" /></StackPanel>
@@ -220,7 +201,7 @@
                 <StackPanel><PathIcon Data="{StaticResource IconGlobe}" /><TextBlock Text="Envs" /></StackPanel>
               </Button>
 
-              <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="14,8" />
+              <Border Height="1" Background="{DynamicResource DividerBrush}" Margin="12,5" />
 
               <Button Classes="railitem" Command="{Binding OpenRunnerCommand}" ToolTip.Placement="Right"
                       ToolTip.Tip="Runner: run the current collection with assertions and reports">
@@ -242,12 +223,35 @@
                       ToolTip.Tip="Fuzz app: vary responses to your app through a proxy (nulls, empty lists, 500s…) and see what breaks">
                 <StackPanel><PathIcon Data="{StaticResource IconFlask}" /><TextBlock Text="Fuzz app" /></StackPanel>
               </Button>
+              <Button Classes="railitem" ToolTip.Placement="Right" ToolTip.Tip="More tools for the current collection">
+                <StackPanel><PathIcon Data="{StaticResource IconDots}" /><TextBlock Text="More" /></StackPanel>
+                <Button.Flyout>
+                  <MenuFlyout Placement="RightEdgeAlignedTop">
+                    <MenuItem Header="Test flows…" Command="{Binding OpenFlowsCommand}" ToolTip.Tip="Chain requests into end-to-end scenarios with branches and checks">
+                      <MenuItem.Icon><PathIcon Data="{StaticResource IconFlow}" Width="12" Height="12" /></MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="Monitors…" Command="{Binding OpenMonitorsCommand}" ToolTip.Tip="Run the collection on a schedule and get alerted on failures">
+                      <MenuItem.Icon><PathIcon Data="{StaticResource IconClock}" Width="12" Height="12" /></MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="Security scan…" Command="{Binding OpenSecurityScanCommand}" ToolTip.Tip="Passive checks and active probes against every request">
+                      <MenuItem.Icon><PathIcon Data="{StaticResource IconShield}" Width="12" Height="12" /></MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="API laws…" Command="{Binding OpenLawsCommand}" ToolTip.Tip="Mine rules the API always follows from history, then check them">
+                      <MenuItem.Icon><PathIcon Data="{StaticResource IconFlask}" Width="12" Height="12" /></MenuItem.Icon>
+                    </MenuItem>
+                    <Separator />
+                    <MenuItem Header="Collection settings &amp; variables…" Command="{Binding OpenCollectionSettingsCommand}">
+                      <MenuItem.Icon><PathIcon Data="{StaticResource IconSettings}" Width="12" Height="12" /></MenuItem.Icon>
+                    </MenuItem>
+                  </MenuFlyout>
+                </Button.Flyout>
+              </Button>
             </StackPanel>
           </DockPanel>
         </Border>
 
         <!-- Sidebar -->
-        <Border Grid.Column="1" Background="{DynamicResource SurfaceBrush}" Width="300" MinWidth="240"
+        <Border Grid.Column="1" Background="{DynamicResource SurfaceBrush}"
                 BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,1,0" IsVisible="{Binding IsSidebarOpen}">
           <DockPanel>
             <Border DockPanel.Dock="Top" Classes="sidebarHeader">
@@ -266,13 +270,13 @@
           </DockPanel>
         </Border>
 
-        <GridSplitter Grid.Column="2" Width="4" Margin="-2,0" Background="Transparent" ResizeDirection="Columns"
-                      IsVisible="{Binding IsSidebarOpen}" />
+        <GridSplitter Grid.Column="2" Width="5" Margin="-2,0,-3,0" Background="Transparent" ResizeDirection="Columns"
+                      ResizeBehavior="PreviousAndNext" IsVisible="{Binding IsSidebarOpen}" />
 
         <!-- Workspace -->
         <Grid Grid.Column="3" RowDefinitions="Auto,*">
           <!-- Tab strip -->
-          <Border Grid.Row="0" Background="{DynamicResource AppBackgroundBrush}" Padding="8,8,8,0"
+          <Border Grid.Row="0" Background="{DynamicResource AppBackgroundBrush}" Padding="6,4,6,0"
                   BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto,Auto">
               <ListBox x:Name="TabStrip" Classes="tabs" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
@@ -285,7 +289,7 @@
                 </ListBox.ItemsPanel>
                 <ListBox.ItemTemplate>
                   <DataTemplate x:DataType="vm:RequestTabViewModel">
-                    <Panel x:Name="TabRoot" Width="204" Height="36" Background="Transparent" ToolTip.Tip="{Binding Url}">
+                    <Panel x:Name="TabRoot" Width="180" Height="30" Background="Transparent" ToolTip.Tip="{Binding Url}">
                       <Panel.ContextMenu>
                         <ContextMenu>
                           <MenuItem Header="Save" InputGesture="Ctrl+S" Command="{Binding SaveCommand}" />
@@ -303,11 +307,11 @@
                       <Border Classes="tabline" Height="2" VerticalAlignment="Top" Margin="8,0" CornerRadius="1"
                               Background="{StaticResource AccentGradientBrush}" IsHitTestVisible="False" />
                       <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                        <TextBlock Classes="method" Margin="12,0,8,0"
+                        <TextBlock Classes="method" Margin="10,0,7,0"
                                    Text="{Binding Badge, Converter={x:Static conv:MethodTextConverter.Instance}}"
                                    Foreground="{Binding Badge, Converter={x:Static conv:BadgeBrushConverter.Instance}}" />
                         <!-- Requests not yet saved to a collection show their title in italics. -->
-                        <TextBlock Grid.Column="1" Classes="tabtitle" Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="12.5"
+                        <TextBlock Grid.Column="1" Classes="tabtitle" Text="{Binding DisplayName}" VerticalAlignment="Center" FontSize="12"
                                    TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsRenaming}"
                                    Classes.unsaved="{Binding !IsSaved}" DoubleTapped="OnTabTitleDoubleTapped" />
                         <TextBox Grid.Column="1" Classes="tabrename" Text="{Binding RenameText}"
@@ -343,7 +347,7 @@
                             </StackPanel>
                           </Border>
                         </Popup>
-                        <Panel Grid.Column="3" Width="28" Margin="0,0,4,0">
+                        <Panel Grid.Column="3" Width="24" Margin="0,0,3,0">
                           <!-- Dirty tabs show a dot; hovering the tab swaps it for the close button. -->
                           <Ellipse Classes="dirtydot" Width="7" Height="7" Fill="{StaticResource AccentGradientBrush}"
                                    IsVisible="{Binding IsDirty}" IsHitTestVisible="False" />
@@ -357,11 +361,11 @@
                 </ListBox.ItemTemplate>
               </ListBox>
               <!-- Shown when tabs don't fit; lists the hidden ones vertically. -->
-              <Button x:Name="TabOverflowButton" Grid.Column="1" Classes="icon" Margin="4,0,0,6" IsVisible="False"
+              <Button x:Name="TabOverflowButton" Grid.Column="1" Classes="icon" Margin="4,0,0,4" IsVisible="False"
                       ToolTip.Tip="More tabs" Click="OnTabOverflowClick">
                 <PathIcon Data="{StaticResource IconChevronDown}" />
               </Button>
-              <Button Grid.Column="2" Classes="icon" Command="{Binding NewTabCommand}" Margin="4,0,0,6" ToolTip.Tip="New request (Ctrl+T)">
+              <Button Grid.Column="2" Classes="icon" Command="{Binding NewTabCommand}" Margin="2,0,0,4" ToolTip.Tip="New request (Ctrl+T)">
                 <PathIcon Data="{StaticResource IconPlus}" />
               </Button>
             </Grid>
@@ -403,6 +407,33 @@
         </Grid>
       </Grid>
     </Grid>
+
+    <!-- ================= Toasts (error / info) =================
+         Overlaid on the workspace so they never push the layout around. -->
+    <StackPanel Spacing="6" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,14" MaxWidth="720" MinWidth="360" ZIndex="5">
+      <Border Classes="banner error" BoxShadow="0 8 24 0 #40000000"
+              IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <PathIcon Data="{StaticResource IconWarning}" Width="13" Height="13" Foreground="{DynamicResource DangerBrush}"
+                    VerticalAlignment="Center" Margin="0,0,8,0" />
+          <SelectableTextBlock Grid.Column="1" Text="{Binding ErrorMessage}" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="12.5" />
+          <Button Grid.Column="2" Classes="icon" Command="{Binding DismissErrorCommand}" ToolTip.Tip="Dismiss" Margin="6,0,0,0">
+            <PathIcon Data="{StaticResource IconClose}" Width="10" Height="10" />
+          </Button>
+        </Grid>
+      </Border>
+      <Border Classes="banner info" BoxShadow="0 8 24 0 #40000000"
+              IsVisible="{Binding InfoMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <PathIcon Data="{StaticResource IconInfo}" Width="13" Height="13" Foreground="{DynamicResource AccentBrush}"
+                    VerticalAlignment="Center" Margin="0,0,8,0" />
+          <SelectableTextBlock Grid.Column="1" Text="{Binding InfoMessage}" TextWrapping="Wrap" FontSize="12.5" VerticalAlignment="Center" />
+          <Button Grid.Column="2" Classes="icon" Command="{Binding DismissInfoCommand}" ToolTip.Tip="Dismiss" Margin="6,0,0,0">
+            <PathIcon Data="{StaticResource IconClose}" Width="10" Height="10" />
+          </Button>
+        </Grid>
+      </Border>
+    </StackPanel>
 
     <!-- ================= Welcome card (first launch, or Help → Getting started) ================= -->
     <Border Background="{DynamicResource ScrimBrush}" IsVisible="{Binding IsWelcomeOpen}">

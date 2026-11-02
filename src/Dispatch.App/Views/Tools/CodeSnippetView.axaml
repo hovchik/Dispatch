@@ -6,7 +6,7 @@
              xmlns:interop="using:Dispatch.Application.Interop"
              x:Class="Dispatch.App.Views.Tools.CodeSnippetView"
              x:DataType="tools:CodeSnippetViewModel">
-  <DockPanel Margin="18">
+  <DockPanel Margin="12">
     <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,12">
       <ComboBox ItemsSource="{Binding Targets}" SelectedItem="{Binding SelectedTarget}" MinWidth="180" IsVisible="{Binding HasTargets}">
         <ComboBox.ItemTemplate>

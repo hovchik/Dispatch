@@ -6,7 +6,7 @@
              xmlns:diff="using:Dispatch.Application.Diff"
              x:Class="Dispatch.App.Views.Tools.DiffView"
              x:DataType="tools:DiffViewModel">
-  <DockPanel Margin="18">
+  <DockPanel Margin="12">
     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,*" Margin="0,0,0,10">
       <StackPanel Spacing="2">
         <TextBlock Text="{Binding LeftTitle}" FontWeight="SemiBold" Foreground="{DynamicResource DangerBrush}" />

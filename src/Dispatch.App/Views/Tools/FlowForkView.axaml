@@ -6,11 +6,11 @@
              xmlns:views="using:Dispatch.App.Views"
              x:Class="Dispatch.App.Views.Tools.FlowForkView"
              x:DataType="tools:FlowForkViewModel">
-  <Grid ColumnDefinitions="430,*" Margin="18">
+  <Grid ColumnDefinitions="430,*" Margin="12">
     <!-- The edited response -->
-    <DockPanel Margin="0,0,16,0">
+    <DockPanel Margin="0,0,12,0">
       <StackPanel DockPanel.Dock="Top" Spacing="6">
-        <TextBlock Text="What if…" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Text="What if…" FontSize="15" FontWeight="SemiBold" />
         <TextBlock TextWrapping="Wrap">
           <Run Text="{Binding Heading}" FontWeight="SemiBold" /><Run Text=" originally returned " Foreground="{DynamicResource MutedTextBrush}" /><Run Text="{Binding Original}" />
         </TextBlock>

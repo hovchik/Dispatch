@@ -32,8 +32,8 @@
     </Border>
 
     <!-- Status line: sits on the right of the tab strip. -->
-    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="4,0" HorizontalAlignment="Right"
-                Height="30" IsVisible="{Binding HasResponse}" ZIndex="1">
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="4,0,0,0" HorizontalAlignment="Right"
+                Height="28" IsVisible="{Binding HasResponse}" ZIndex="1">
       <Border Classes="pill" Padding="9,2" IsVisible="{Binding HasTests}"
               Background="{Binding AllTestsPassed, Converter={x:Static conv:PassBrushConverter.Instance}}">
         <TextBlock Text="{Binding TestsSummary, StringFormat='Tests {0}'}" FontWeight="SemiBold" FontSize="11.5" Foreground="White" />
@@ -51,12 +51,14 @@
         <TextBlock Text="Size" Classes="muted" FontSize="11.5" VerticalAlignment="Center" />
         <TextBlock Text="{Binding SizeText}" FontWeight="SemiBold" FontSize="11.5" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" />
       </StackPanel>
+      <!-- Extra actions supplied by the host view (e.g. Compare / Save as example on a request tab). -->
+      <ContentPresenter Content="{Binding $parent[views:ResponseView].Actions}" VerticalAlignment="Center" Margin="4,0,0,0" />
     </StackPanel>
 
     <TabControl Grid.Row="0" Grid.RowSpan="2" Classes="compact" IsVisible="{Binding HasResponse}" Padding="0">
       <TabItem Header="Body">
-        <DockPanel Margin="0,6,0,0">
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="0,0,0,6">
+        <DockPanel Margin="0,4,0,0">
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="0,0,0,4">
             <!-- Pretty / Raw switch -->
             <Border Classes="segmented">
               <StackPanel Orientation="Horizontal">
@@ -76,7 +78,7 @@
               </ComboBox.ItemTemplate>
             </ComboBox>
             <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0" Spacing="6">
-              <TextBox Classes="mono" Text="{Binding Filter}" Watermark="Filter: $.items[*].id or //xpath" MinWidth="240" MinHeight="28"
+              <TextBox Classes="mono" Text="{Binding Filter}" Watermark="Filter: $.items[*].id or //xpath" MinWidth="240" MinHeight="26"
                        FontSize="12" ToolTip.Tip="Show only what a JSONPath or XPath selects. Ctrl+F in the body searches text." />
               <TextBlock Text="{Binding FilterError}" Foreground="{DynamicResource DangerBrush}" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                          MaxWidth="260" />
@@ -103,7 +105,7 @@
       </TabItem>
 
       <TabItem Header="Table" IsVisible="{Binding HasTable}">
-        <DockPanel Margin="0,6,0,0">
+        <DockPanel Margin="0,4,0,0">
           <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
             <TextBox Classes="mono" Text="{Binding TablePath}" Watermark="Array to show (JSONPath), e.g. $.data" MinWidth="260" MinHeight="28" FontSize="12" />
             <TextBlock Grid.Column="1" Text="{Binding TableSummary}" Classes="muted" FontSize="12" Margin="10,0" VerticalAlignment="Center"
@@ -123,7 +125,7 @@
       </TabItem>
 
       <TabItem Header="Preview" IsVisible="{Binding HasPreview}">
-        <DockPanel Margin="0,6,0,0">
+        <DockPanel Margin="0,4,0,0">
           <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
             <TextBlock Text="{Binding PreviewHint}" Classes="muted" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" />
             <Button Grid.Column="1" Classes="compact" Command="{Binding OpenExternallyCommand}" Padding="10,3"
@@ -150,7 +152,7 @@
       </TabItem>
 
       <TabItem Header="Visualize" IsVisible="{Binding HasVisualization}">
-        <DockPanel Margin="0,6,0,0">
+        <DockPanel Margin="0,4,0,0">
           <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
             <TextBlock Classes="muted" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"
                        Text="Rendered by pm.visualizer.set(template, data) in the test script." />

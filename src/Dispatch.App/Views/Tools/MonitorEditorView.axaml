@@ -6,7 +6,7 @@
              x:Class="Dispatch.App.Views.Tools.MonitorEditorView"
              x:DataType="tools:MonitorEditorViewModel">
   <UserControl.Resources><conv:EnumLabelConverter x:Key="EnumLabel" /></UserControl.Resources>
-  <Grid ColumnDefinitions="*,300" Margin="16">
+  <Grid ColumnDefinitions="*,300" Margin="12">
     <ScrollViewer Margin="0,0,14,0">
       <StackPanel Spacing="10">
         <Grid ColumnDefinitions="*,Auto">
