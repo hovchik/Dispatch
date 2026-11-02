@@ -12,7 +12,17 @@ public partial class ResponseView : UserControl
     public static readonly StyledProperty<object?> ActionsProperty =
         AvaloniaProperty.Register<ResponseView, object?>(nameof(Actions));
 
+    /// <summary>Right margin for the tab header row, equal to the width of the status line that overlays it.</summary>
+    public static readonly StyledProperty<Thickness> HeaderRightInsetProperty =
+        AvaloniaProperty.Register<ResponseView, Thickness>(nameof(HeaderRightInset));
+
     private ResponseViewModel? _viewModel;
+
+    public Thickness HeaderRightInset
+    {
+        get => GetValue(HeaderRightInsetProperty);
+        set => SetValue(HeaderRightInsetProperty, value);
+    }
 
     public object? Actions
     {
@@ -24,6 +34,20 @@ public partial class ResponseView : UserControl
     {
         InitializeComponent();
         DataContextChanged += (_, _) => Attach(DataContext as ResponseViewModel);
+        StatusStrip.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == BoundsProperty || e.Property == IsVisibleProperty)
+                UpdateHeaderInset();
+        };
+    }
+
+    /// <summary>Keeps the tab headers clear of the status line, which shares their row and would otherwise cover them.</summary>
+    private void UpdateHeaderInset()
+    {
+        var width = StatusStrip.IsVisible ? StatusStrip.Bounds.Width + 8 : 0;
+        var inset = new Thickness(0, 0, width, 0);
+        if (HeaderRightInset != inset)
+            HeaderRightInset = inset;
     }
 
     private void Attach(ResponseViewModel? viewModel)
