@@ -29,6 +29,7 @@ public interface ITabHost
     void ShowMinimizer(ApiRequest request);
     void ShowRateLimit(ApiRequest request);
     void ShowTls(ApiRequest request);
+    void ShowEndpointProbe(ApiRequest request, Dispatch.Application.Probes.ProbeKind kind);
     void ShowImpact(ApiRequest request, string? currentBody, string? previousBody);
     void ShowDiff(string title, ResponseViewModel left, ResponseViewModel right);
     void ShowHelp(string? topicId);
@@ -708,6 +709,15 @@ public sealed partial class RequestTabViewModel : ObservableObject
 
     [RelayCommand]
     private void InspectTls() => _host.ShowTls(ToModel());
+
+    [RelayCommand]
+    private void WalkPagination() => _host.ShowEndpointProbe(ToModel(), Dispatch.Application.Probes.ProbeKind.Pagination);
+
+    [RelayCommand]
+    private void ProbeIdempotency() => _host.ShowEndpointProbe(ToModel(), Dispatch.Application.Probes.ProbeKind.Idempotency);
+
+    [RelayCommand]
+    private void CheckCaching() => _host.ShowEndpointProbe(ToModel(), Dispatch.Application.Probes.ProbeKind.Caching);
 
     [RelayCommand]
     private void ShowImpact() => _host.ShowImpact(ToModel(), Response?.Model is { HasResponse: true } r ? r.Body : null,

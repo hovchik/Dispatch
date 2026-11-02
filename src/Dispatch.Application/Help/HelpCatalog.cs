@@ -71,7 +71,11 @@ public static class HelpCatalog
     public const string ClientFuzz = "client-fuzz";
     public const string Minimize = "minimize";
     public const string RateLimit = "rate-limit";
+    public const string Pagination = "pagination";
+    public const string Idempotency = "idempotency";
+    public const string Caching = "caching";
     public const string Capture = "capture";
+    public const string Webhooks = "webhooks";
     public const string ImportExport = "import-export";
     public const string Docs = "docs";
     public const string Protocols = "protocols";
@@ -388,6 +392,69 @@ public static class HelpCatalog
         ],
         ["rate limit", "ratelimit", "throttle", "429", "retry-after", "quota", "token bucket", "sliding window", "fixed window", "burst"],
         null, [LoadTest, Cli]),
+
+        new(Webhooks, "Tools", "Webhook receiver", "Receive callbacks locally, inspect and replay them, and check that a request causes one.",
+        [
+            new HelpParagraph("The webhook receiver is a local HTTP endpoint that records every callback it gets, whatever the method or path. Use it as the callback URL while developing against a payment, messaging or CI provider: each hook appears with its headers and body, and you can replay it to your own handler, open it as a request, or save it as an example so the mock server can serve the same payload later."),
+            new HelpSteps(
+            [
+                "Open More → Webhook receiver… (or search the command palette), pick a port and what every callback is answered with, and click Start.",
+                "Give the sender the address shown in the header plus any path, e.g. http://localhost:9000/hooks/orders. For senders on the internet, expose the port with a tunnel such as cloudflared or ngrok and use the public URL instead.",
+                "Select a callback to read it. Replay re-sends it to the replay target (your handler), Open as request puts it in a tab, and Save as example stores the payload on the matching request of the current collection.",
+                "Save everything as JSON or an HTML report, or load a JSON file saved earlier."
+            ]),
+            new HelpParagraph("Webhooks are also a message check. In a request's Checks tab choose Webhook receiver as the listener, put the callback path in the filter (/hooks/orders, or POST /hooks/* with wildcards) and the condition on the payload, e.g. $.status equals paid within 5000 ms. The receiver is started on demand, only callbacks that arrive after the request is sent count, and the result appears with the other tests in the app, the runner, flows, monitors and dispatch run."),
+            new HelpExample("From the command line", "dispatch webhooks --port 9000 --out hooks.json\ndispatch webhooks --path /hooks/orders --expect 1 --duration 30s\ndispatch webhooks --status 500 --delay 2s   # see how the sender retries"),
+            new HelpTip("Set DISPATCH_WEBHOOK_PORT to change the port message checks and the CLI use by default. Dispatch does not bundle a tunnel: cloudflared quick tunnels and ngrok's free tier work without an account for quick tests.")
+        ],
+        ["webhook", "webhooks", "callback", "receiver", "listener", "hook", "tunnel", "ngrok", "cloudflared", "replay", "payload", "callback url"],
+        null, [MessageChecks, Mock, Cli]),
+
+        new(Pagination, "Tools", "Pagination walker", "Follow every page of a list endpoint and check the paging.",
+        [
+            new HelpParagraph("The pagination walker follows a list endpoint to the end. It works out how the endpoint pages: a Link header with rel=\"next\", a next URL in the body, a cursor sent back as a query parameter, or page / offset parameters. Every item is identified by its id (or its whole content), so the walker can tell what each page added."),
+            new HelpParagraph("It reports items that appear on more than one page, an advertised total (total, totalCount, X-Total-Count, …) that doesn't match what can be reached, pages that loop or repeat, short pages in the middle, page sizes above the requested limit, and later pages that get slower. It then fetches page 1 again to check that the order is stable, and tries a page past the end, a negative or non-numeric page, a page size of 0 and a huge page size."),
+            new HelpSteps(
+            [
+                "Open a list request (for example GET /orders?limit=20) and choose Walk pagination… from the flask button next to Send.",
+                "Leave the strategy on Auto, or pick one and name the parameters if the endpoint is unusual. A small page size exercises more pages.",
+                "Click Run, then read the findings and export an HTML / JSON report if needed."
+            ]),
+            new HelpExample("Walk pages of 5 and fail CI on duplicates or a wrong total", "dispatch paginate \"My Collection\" --request \"List orders\" --page-size 5"),
+            new HelpTip("Duplicates and skipped items usually come from a sort that isn't unique: add a tie-breaker such as the id to ORDER BY.")
+        ],
+        ["pagination", "paging", "pages", "cursor", "offset", "limit", "next", "link header", "total", "duplicates", "x-total-count"],
+        null, [RateLimit, Cli]),
+
+        new(Idempotency, "Tools", "Idempotency & race probe", "Check that a request is safe to retry and to send twice at once.",
+        [
+            new HelpParagraph("Clients retry when a response is lost, and users double-click. The idempotency probe sends a mutating request the way that happens in practice and checks whether duplicates appear."),
+            new HelpParagraph("It sends the request with an Idempotency-Key, retries it with the same key, reuses the key with a changed body, and sends several copies at the same moment, with one key and with none. It compares the resources created (from the Location header or an id in the body) and the responses. PUT and DELETE are also repeated, because HTTP requires them to be idempotent."),
+            new HelpSteps(
+            [
+                "Open the POST, PUT, PATCH or DELETE request in a test environment and choose Check idempotency & races… from the flask button.",
+                "Set the key header if your API uses another name (for example X-Request-Id) and how many copies to send at once.",
+                "Click Run and read the findings: a second resource created by a retry, a reused key that is accepted with a new body, or 5xx under concurrency."
+            ]),
+            new HelpExample("Check an endpoint in CI", "dispatch idempotency \"My Collection\" --request \"Create order\" -e staging --parallel 8"),
+            new HelpTip("This creates data on every run. Use a test environment, never production.")
+        ],
+        ["idempotency", "idempotency-key", "idempotent", "retry", "duplicate", "race", "race condition", "concurrency", "double submit", "double charge"],
+        null, [RateLimit, Cli]),
+
+        new(Caching, "Tools", "Caching checker", "Check Cache-Control, Vary and ETag revalidation.",
+        [
+            new HelpParagraph("The caching checker reads a response's caching headers and tests them. It sends the request twice to see whether the ETag is stable, revalidates with If-None-Match and If-Modified-Since to check for 304 Not Modified, tries an unknown ETag (which must not answer 304) and compares HEAD with GET. CDN cache headers such as X-Cache and CF-Cache-Status are shown when present."),
+            new HelpParagraph("It flags responses to authenticated requests that shared caches may store, cookies on cacheable responses, compressed bodies without Vary: Accept-Encoding, a specific Access-Control-Allow-Origin without Vary: Origin, missing or malformed validators, ETags that change while the body doesn't, and 304 responses with a body."),
+            new HelpSteps(
+            [
+                "Open a GET request and choose Check caching… from the flask button next to Send.",
+                "Click Run, then read the policy summary and the findings."
+            ]),
+            new HelpExample("Fail CI on caching mistakes", "dispatch cache \"My Collection\" --request \"Get product\" --fail-on warning")
+        ],
+        ["cache", "caching", "cache-control", "etag", "304", "not modified", "if-none-match", "last-modified", "vary", "cdn", "max-age"],
+        null, [RateLimit, Cli]),
 
         new(Capture, "Tools", "Capture proxy", "Record traffic from a browser or app.",
         [

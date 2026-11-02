@@ -33,6 +33,7 @@ public sealed record MainServices(
     Dispatch.Application.Security.SecurityScanner Scanner,
     Dispatch.Application.Minimize.RequestMinimizer Minimizer,
     Dispatch.Application.RateLimits.RateLimitProber RateLimits,
+    Dispatch.Application.Probes.EndpointProbes Probes,
     IHistoryRepository HistoryStore,
     IFlowRepository Flows,
     Dispatch.Application.Flows.FlowRunner FlowRunner,
@@ -41,7 +42,8 @@ public sealed record MainServices(
     Dispatch.Infrastructure.Capture.CertificateAuthority CaptureAuthority,
     Func<Dispatch.Infrastructure.Capture.CaptureProxy> CaptureProxyFactory,
     GrpcSchemaProvider GrpcSchemas,
-    Infrastructure.Auth.SystemBrowserInteraction OAuth);
+    Infrastructure.Auth.SystemBrowserInteraction OAuth,
+    Dispatch.Application.Webhooks.IWebhookReceiver Webhooks);
 
 /// <summary>The panels the activity rail can show in the sidebar.</summary>
 public enum SidebarSection
@@ -58,6 +60,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
     private readonly MainServices _services;
     private HelpViewModel? _help;
+    private WebhookViewModel? _webhooks;
 
     public MainWindowViewModel(MainServices services, CollectionsViewModel collections, HistoryViewModel history,
         EnvironmentsViewModel environments)
@@ -218,6 +221,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
             : url;
         Dialogs.ShowTool(new TlsViewModel(new Dispatch.Application.Tls.TlsInspector(), Dialogs, _services.Tabs.Clipboard, target));
     }
+
+    public void ShowEndpointProbe(ApiRequest request, Dispatch.Application.Probes.ProbeKind kind) =>
+        Dialogs.ShowTool(new EndpointProbeViewModel(kind, request, _services.Probes, Dialogs, () => ActiveEnvironment,
+            FindCollection(request.CollectionId)?.Variables));
 
     public void ShowImpact(ApiRequest request, string? currentBody, string? previousBody)
     {
@@ -446,6 +453,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     [RelayCommand]
     private void OpenRunner() => OpenCollectionTool(CollectionAction.Run);
 
+    /// <summary>One window for the shared receiver: reopening shows the same callbacks, and closing keeps it listening.</summary>
+    [RelayCommand]
+    private void OpenWebhooks() => Dialogs.ShowTool(_webhooks ??= new WebhookViewModel(_services.Webhooks, _services.Tabs.Sender,
+        _services.Tabs.Collections, Dialogs, _services.Tabs.Clipboard, () => ActiveEnvironment,
+        () => FindCollection(SelectedTab?.CollectionId) ?? FindCollection(Collections.Items.FirstOrDefault()?.Id),
+        () => SafeAsync(Collections.LoadAsync), AddTab));
+
     [RelayCommand]
     private void OpenMockServer() => OpenCollectionTool(CollectionAction.Mock);
 
@@ -646,6 +660,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         yield return new PaletteItem("Capture proxy…", "Record browser / app traffic into a collection", OpenCapture);
         yield return new PaletteItem("Client fuzzing…", "Vary responses to an app through a proxy to find how it breaks", OpenClientFuzz);
         yield return new PaletteItem("TLS inspector…", "Certificate chain, expiry, protocol, cipher and ALPN of a host", OpenTlsInspector);
+        yield return new PaletteItem("Webhook receiver…", "Receive, inspect, replay and check callbacks locally", OpenWebhooks);
         foreach (var collection in Collections.Items)
             yield return new PaletteItem($"Generate API docs: {collection.Name}", "HTML reference page",
                 () => _ = RunCollectionActionAsync(collection, CollectionAction.DocsHtml));
