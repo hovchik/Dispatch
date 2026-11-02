@@ -78,7 +78,11 @@ public static partial class OpenApiWriter
         {
             if (Observations.FromHistory(entry) is not { } observation)
                 continue;
-            var target = requests.FirstOrDefault(r => r.Id == entry.Request.Id) ?? LawTests.FindRequest(observation.Endpoint, requests);
+            // Only this collection's history: its own requests, or (for file collections, whose ids differ) traffic to the
+            // same host that matches one of its endpoints. Another API with the same paths must not leak in.
+            var target = requests.FirstOrDefault(r => r.Id == entry.Request.Id);
+            if (target is null && (entry.Request.CollectionId == collection.Id || SameHost(observation.Url, server)))
+                target = LawTests.FindRequest(observation.Endpoint, requests);
             if (target is null)
                 continue;
             if (!observed.TryGetValue(target.Id, out var list))
@@ -451,6 +455,10 @@ public static partial class OpenApiWriter
         return "http://localhost";
     }
 
+    private static bool SameHost(string url, string server) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var a) && Uri.TryCreate(server, UriKind.Absolute, out var b)
+        && a.Host.Equals(b.Host, StringComparison.OrdinalIgnoreCase) && a.Port == b.Port;
+
     /// <summary>Replaces <c>{{variables}}</c> after the base part with collection values, so path parameters get real examples.</summary>
     private static string ResolveVariables(string url, IReadOnlyDictionary<string, string> variables)
     {
@@ -807,11 +815,10 @@ public static class SchemaInferrer
         if (present.Count == 0)
             return new JsonObject { ["nullable"] = true };
 
-        var byType = present.GroupBy(TypeOf).ToList();
+        // Integers also match "number", and the validator wants exactly one oneOf branch: fold both into number first.
+        var byType = present.GroupBy(n => TypeOf(n) == "integer" && present.Any(p => TypeOf(p) == "number") ? "number" : TypeOf(n)).ToList();
         JsonObject schema;
-        if (byType.Count == 2 && byType.All(g => g.Key is "integer" or "number"))
-            schema = new JsonObject { ["type"] = "number" };
-        else if (byType.Count == 1)
+        if (byType.Count == 1)
             schema = ForType(byType[0].Key, byType[0].ToList(), scalarsOnly, depth);
         else
         {

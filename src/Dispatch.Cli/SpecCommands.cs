@@ -37,6 +37,8 @@ public static class OpenApiCommand
             IncludeExamples = !args.Flag("no-examples")
         };
 
+        // With -o - the document is the only thing on stdout; progress goes to stderr.
+        var progress = outPath == "-" ? Console.Error : Console.Out;
         await using var services = Program.BuildServices(args.Option("db"));
         JsonObject spec;
         string slug;
@@ -44,7 +46,7 @@ public static class OpenApiCommand
         {
             spec = OpenApiWriter.FromHar(har, options);
             slug = DispatchFormat.Slug(Path.GetFileNameWithoutExtension(source));
-            Console.WriteLine($"Described {OpenApiWriter.OperationCount(spec)} operation(s) from {Path.GetFileName(source)}.");
+            progress.WriteLine($"Described {OpenApiWriter.OperationCount(spec)} operation(s) from {Path.GetFileName(source)}.");
         }
         else
         {
@@ -52,7 +54,7 @@ public static class OpenApiCommand
             var history = args.Flag("no-history") ? [] : await HistoryAsync(services, cancellationToken);
             spec = OpenApiWriter.FromCollection(collection, history, options);
             slug = DispatchFormat.Slug(collection.Name);
-            Console.WriteLine($"Described {OpenApiWriter.OperationCount(spec)} operation(s) of {collection.Name}" +
+            progress.WriteLine($"Described {OpenApiWriter.OperationCount(spec)} operation(s) of {collection.Name}" +
                               (history.Count > 0 ? $" (with {history.Count} history entries available)." : "."));
         }
 
@@ -110,6 +112,7 @@ public static class ScaffoldCommand
         if (args.Positionals.Count != 1)
             throw new UsageException(Usage);
         var source = args.Positionals[0];
+        var progress = args.Option("out") == "-" ? Console.Error : Console.Out;
         await using var services = Program.BuildServices(args.Option("db"));
 
         var (text, location) = await LoadSpecAsync(services, source, cancellationToken);
@@ -119,7 +122,7 @@ public static class ScaffoldCommand
             Negatives = !args.Flag("no-negatives"),
             SchemaAssertions = !args.Flag("no-schema")
         });
-        Console.WriteLine(report.Summary);
+        progress.WriteLine(report.Summary);
         foreach (var note in report.Notes)
             Console.Error.WriteLine($"note: {note}");
 

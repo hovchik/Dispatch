@@ -98,6 +98,28 @@ public class OpenApiWriterTests
         Assert.Equal("42", delete["parameters"]![0]!["example"]!.ToString());
     }
 
+    [Fact]
+    public void Uses_history_of_this_collection_only()
+    {
+        var collection = PetStore();
+        var get = collection.Requests.Single(r => r.Name == "Get a pet");
+        static HistoryEntry Entry(ApiRequest request, string url, string body) => new()
+        {
+            Method = HttpVerb.Get, Url = url, Request = request,
+            Response = new ResponseSnapshot { StatusCode = 200, EffectiveUrl = url, Body = body }
+        };
+        var otherApi = new ApiRequest { Name = "Other", Url = "https://other.test/pets/1", CollectionId = Guid.NewGuid() };
+        var history = new List<HistoryEntry>
+        {
+            Entry(get, "https://api.pets.test/v1/pets/7", """{"id":7,"name":"Rex","weight":12}"""),
+            Entry(otherApi, "https://other.test/pets/1", """{"id":1,"name":"x","foreign":true}""")
+        };
+
+        var schema = OpenApiWriter.FromCollection(collection, history)["paths"]!["/pets/{petId}"]!["get"]!["responses"]!["200"]!["content"]!["application/json"]!["schema"]!;
+        Assert.NotNull(schema["properties"]!["weight"]);
+        Assert.Null(schema["properties"]!["foreign"]);
+    }
+
     [Theory]
     [InlineData("/users/42/orders/7", "/users/{userId}/orders/{orderId}")]
     [InlineData("/v2/items/3fa85f64-5717-4562-b3fc-2c963f66afa6", "/v2/items/{itemId}")]
@@ -226,6 +248,9 @@ public class SchemaInferrerTests
         Assert.Equal("number", schema["properties"]!["items"]!["items"]!["properties"]!["price"]!["type"]!.ToString());
         Assert.Equal("date-time", schema["properties"]!["items"]!["items"]!["properties"]!["when"]!["format"]!.ToString());
         Assert.Equal(2, schema["properties"]!["mixed"]!["oneOf"]!.AsArray().Count);
+        // Integers fold into number even next to another type, so no sample matches two oneOf branches.
+        var tri = Infer("1", "1.5", "\"unknown\"")["oneOf"]!.AsArray();
+        Assert.Equal(["number", "string"], tri.Select(b => b!["type"]!.ToString()).Order());
 
         var statuses = Infer("\"paid\"", "\"shipped\"", "\"paid\"", "\"shipped\"", "\"paid\"");
         Assert.Equal(["paid", "shipped"], statuses["enum"]!.AsArray().Select(e => e!.ToString()));
@@ -403,6 +428,11 @@ public class CliSpecTests
         Assert.Contains("/ping:", output);
         Assert.Contains("url: https://h.test", output);
 
+        // On stdout the document is alone: progress goes to stderr, so the output parses as a whole.
+        var (stdoutExit, stdoutJson) = await Cli.RunStdoutAsync("openapi", har, "-o", "-", "--format", "json", "--db", Path.Combine(dir, "d.db"));
+        Assert.Equal(0, stdoutExit);
+        Assert.Equal("3.0.3", JsonNode.Parse(stdoutJson)!["openapi"]!.ToString());
+
         var (usage, _) = await Cli.RunAsync("openapi", "--db", Path.Combine(dir, "d.db"));
         Assert.Equal(2, usage);
     }
@@ -436,6 +466,10 @@ public class CliSpecTests
         Assert.Contains("3 happy-path request(s)", output);
         Assert.Contains("4 negative request(s)", output);
         Assert.Equal(7, DispatchFormat.Import(await File.ReadAllTextAsync(tests)).RequestCount);
+
+        var (stdoutExit, stdoutJson) = await Cli.RunStdoutAsync("scaffold", spec, "-o", "-", "--db", db);
+        Assert.Equal(0, stdoutExit);
+        Assert.Equal(7, DispatchFormat.Import(stdoutJson).RequestCount);
 
         var (runExit, runOutput) = await Cli.RunAsync("run", tests, "--db", db, "--no-color");
         Assert.True(runExit == 0, runOutput);
