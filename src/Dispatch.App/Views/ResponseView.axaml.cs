@@ -39,15 +39,33 @@ public partial class ResponseView : UserControl
             if (e.Property == BoundsProperty || e.Property == IsVisibleProperty)
                 UpdateHeaderInset();
         };
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == BoundsProperty)
+                UpdateHeaderInset();
+        };
     }
 
-    /// <summary>Keeps the tab headers clear of the status line, which shares their row and would otherwise cover them.</summary>
+    /// <summary>
+    /// Keeps the tab headers clear of the status line. Normally the line sits at the right of the header row and the
+    /// headers are inset by its width; when the pane is too narrow for both, the line gets its own row above the tabs.
+    /// </summary>
     private void UpdateHeaderInset()
     {
-        var width = StatusStrip.IsVisible ? StatusStrip.Bounds.Width + 8 : 0;
-        var inset = new Thickness(0, 0, width, 0);
+        const double minHeaderWidth = 220;
+        var stripWidth = StatusStrip.IsVisible ? StatusStrip.Bounds.Width + 8 : 0;
+        var stacked = stripWidth > 0 && Bounds.Width - stripWidth < minHeaderWidth;
+
+        var inset = stacked ? default : new Thickness(0, 0, stripWidth, 0);
         if (HeaderRightInset != inset)
             HeaderRightInset = inset;
+
+        var row = stacked ? 1 : 0;
+        if (Grid.GetRow(ResponseTabs) != row)
+        {
+            Grid.SetRow(ResponseTabs, row);
+            Grid.SetRowSpan(ResponseTabs, stacked ? 1 : 2);
+        }
     }
 
     private void Attach(ResponseViewModel? viewModel)
