@@ -74,6 +74,7 @@ public sealed partial class MonitorEditorViewModel : ObservableObject, ITool
     [ObservableProperty] private decimal _intervalMinutes = 5;
     [ObservableProperty] private string _cron = "*/5 * * * *";
     [ObservableProperty] private decimal _maxAverageMs;
+    [ObservableProperty] private decimal _certificateWarnDays;
     [ObservableProperty] private string _status = "Configure the schedule and alerts, then Save. Run now to test it.";
     [ObservableProperty] private bool _isRunning;
 
@@ -94,6 +95,7 @@ public sealed partial class MonitorEditorViewModel : ObservableObject, ITool
         IntervalMinutes = _monitor.IntervalMinutes;
         Cron = _monitor.Cron;
         MaxAverageMs = _monitor.MaxAverageMs;
+        CertificateWarnDays = _monitor.CertificateWarnDays;
         return this;
     }
 
@@ -116,6 +118,7 @@ public sealed partial class MonitorEditorViewModel : ObservableObject, ITool
         _monitor.IntervalMinutes = (int)IntervalMinutes;
         _monitor.Cron = Cron;
         _monitor.MaxAverageMs = (int)MaxAverageMs;
+        _monitor.CertificateWarnDays = (int)CertificateWarnDays;
         _monitor.RequestNames = Requests.All(r => r.IsSelected) ? [] : Requests.Where(r => r.IsSelected).Select(r => r.Request.Name).ToList();
         _monitor.Alerts = Alerts.Select(a => a.Model).ToList();
     }

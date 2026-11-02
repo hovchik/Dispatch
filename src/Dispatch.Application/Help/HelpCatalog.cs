@@ -81,6 +81,8 @@ public static class HelpCatalog
     public const string Protocols = "protocols";
     public const string Cli = "cli";
     public const string Shortcuts = "shortcuts";
+    public const string Tls = "tls";
+    public const string NetworkConditions = "network-conditions";
 
     public static HelpTopic? Find(string? id) => All.FirstOrDefault(t => t.Id == id);
 
@@ -520,6 +522,38 @@ public static class HelpCatalog
             new HelpTip("Double-click a tab title to rename it.")
         ],
         ["keyboard", "shortcut", "hotkey", "keys", "palette"],
-        null, [GettingStarted])
+        null, [GettingStarted]),
+
+        new(NetworkConditions, "Tools", "Network conditions", "Slow, lossy or offline links through the capture proxy.",
+        [
+            new HelpParagraph("The capture proxy (and the client-fuzzing proxy) can impose network conditions on the traffic it relays: added latency, a bandwidth cap on responses, randomly dropped connections and periodic offline windows. Point your browser, mobile app or SDK at the proxy and watch how it copes with a bad link: spinners, retries, timeouts, stale data."),
+            new HelpSteps(
+            [
+                "Open Capture, pick a profile under Network conditions (2g, 3g, 4g, dsl, satellite, flaky-wifi, offline) or choose custom and set latency, bandwidth, loss and offline windows yourself.",
+                "Start the proxy and point your client at it as usual; the status line shows the active conditions.",
+                "Dropped and offline connections appear in the traffic list as errors, so you can see what your app saw."
+            ]),
+            new HelpExample("From the CLI", "dispatch capture --network 3g --out traffic.har\ndispatch capture --latency 300ms --bandwidth 1mbps --loss 2% --offline-every 60s --offline-for 10s\ndispatch fuzz-client --network flaky-wifi --host api.myapp.com"),
+            new HelpTip("Latency is added once per request. The bandwidth cap paces response bodies; through a blind (undecrypted) HTTPS tunnel only latency and drops apply.")
+        ],
+        ["network", "latency", "bandwidth", "throttle", "packet loss", "offline", "3g", "slow", "flaky", "conditions", "proxy"],
+        null, [Capture, Cli]),
+
+        new(Tls, "Tools", "TLS inspector", "Certificate chain, expiry, protocol, cipher and ALPN of a host.",
+        [
+            new HelpParagraph("The TLS inspector makes one handshake with a host and reports what it negotiated: the certificate chain with subject, issuer, validity and Subject Alternative Names, days to expiry, the TLS version, the cipher suite, ALPN (whether HTTP/2 is offered), hostname and trust problems and revocation status. No request is sent."),
+            new HelpSteps(
+            [
+                "Open Tools → TLS inspector… (or Inspect TLS… in the flask menu next to Send, which prefills the request's host).",
+                "Enter a host, host:port or URL, set the expiry warning threshold and click Inspect.",
+                "Read the verdict, the chain and the insights; export an HTML or JSON report if needed.",
+                "The response Timeline tab shows the TLS summary of every HTTPS send next to the timings.",
+                "In a monitor, set \"Fail if a TLS certificate expires within N days\" to be alerted before a certificate runs out."
+            ]),
+            new HelpExample("From the CLI (exit code 1 on problems)", "dispatch tls api.example.com --warn-days 21\ndispatch tls \"My Collection\" -e Production -r cli,json"),
+            new HelpTip("A self-signed or untrusted chain is reported as a problem because clients that verify certificates will refuse it; use --no-revocation when OCSP responders are blocked.")
+        ],
+        ["tls", "ssl", "certificate", "cert", "expiry", "expires", "chain", "cipher", "alpn", "http/2", "san", "ocsp", "revocation", "https"],
+        null, [Monitors, Cli])
     ];
 }

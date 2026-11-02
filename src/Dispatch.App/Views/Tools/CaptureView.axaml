@@ -102,6 +102,33 @@
             </StackPanel>
           </Border>
 
+          <Border Classes="panel" IsEnabled="{Binding !IsRunning}">
+            <StackPanel Spacing="10">
+              <TextBlock Classes="panelTitle" Text="Network conditions" Margin="0" />
+              <StackPanel>
+                <TextBlock Classes="fieldLabel" Text="Profile" />
+                <ComboBox ItemsSource="{Binding NetworkProfiles}" SelectedItem="{Binding NetworkProfile}" HorizontalAlignment="Stretch" />
+                <TextBlock Classes="hint" Text="{Binding NetworkDescription}" TextWrapping="Wrap" Margin="0,3,0,0" />
+              </StackPanel>
+              <StackPanel Spacing="6" IsVisible="{Binding IsCustomNetwork}">
+                <Grid ColumnDefinitions="*,120" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="8">
+                  <TextBlock Text="Added latency (ms)" VerticalAlignment="Center" FontSize="12" />
+                  <NumericUpDown Grid.Column="1" Value="{Binding NetworkLatencyMs}" Minimum="0" Maximum="60000" FormatString="0" />
+                  <TextBlock Grid.Row="1" Text="Bandwidth (kbps, 0 = unlimited)" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap" />
+                  <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding NetworkBandwidthKbps}" Minimum="0" Maximum="10000000" FormatString="0" />
+                  <TextBlock Grid.Row="2" Text="Dropped connections (%)" VerticalAlignment="Center" FontSize="12" />
+                  <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding NetworkLossPercent}" Minimum="0" Maximum="100" Increment="0.5" FormatString="0.##" />
+                  <TextBlock Grid.Row="3" Text="Offline every (s, 0 = never)" VerticalAlignment="Center" FontSize="12" />
+                  <NumericUpDown Grid.Row="3" Grid.Column="1" Value="{Binding NetworkOfflineEverySeconds}" Minimum="0" Maximum="86400" FormatString="0" />
+                  <TextBlock Grid.Row="4" Text="Offline for (s)" VerticalAlignment="Center" FontSize="12" />
+                  <NumericUpDown Grid.Row="4" Grid.Column="1" Value="{Binding NetworkOfflineForSeconds}" Minimum="0" Maximum="86400" FormatString="0" />
+                </Grid>
+              </StackPanel>
+              <TextBlock Classes="hint" TextWrapping="Wrap"
+                         Text="Latency is added once per request; the bandwidth cap paces response bodies; dropped and offline connections are closed without a response. Through a blind HTTPS tunnel only latency and drops apply." />
+            </StackPanel>
+          </Border>
+
           <Border Classes="panel">
             <StackPanel Spacing="10">
               <TextBlock Classes="panelTitle" Text="HTTPS" Margin="0" />

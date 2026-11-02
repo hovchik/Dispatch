@@ -30,6 +30,7 @@
     <DataTemplate DataType="tools:CodeSnippetViewModel"><tv:CodeSnippetView /></DataTemplate>
     <DataTemplate DataType="tools:CollectionSettingsViewModel"><tv:CollectionSettingsView /></DataTemplate>
     <DataTemplate DataType="tools:HelpViewModel"><tv:HelpView /></DataTemplate>
+    <DataTemplate DataType="tools:TlsViewModel"><tv:TlsView /></DataTemplate>
     <DataTemplate DataType="tools:WebhookViewModel"><tv:WebhookView /></DataTemplate>
   </Window.DataTemplates>
   <DockPanel>

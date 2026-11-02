@@ -104,6 +104,10 @@
                         ToolTip.Tip="Discover the endpoint's real rate-limit policy and check its headers">
                 <MenuItem.Icon><PathIcon Data="{StaticResource IconGauge}" Width="12" Height="12" /></MenuItem.Icon>
               </MenuItem>
+              <MenuItem Header="Inspect TLS…" Command="{Binding InspectTlsCommand}"
+                        ToolTip.Tip="Certificate chain, expiry, protocol, cipher and ALPN of this request's host">
+                <MenuItem.Icon><PathIcon Data="{StaticResource IconLock}" Width="12" Height="12" /></MenuItem.Icon>
+              </MenuItem>
               <Separator />
               <MenuItem Header="Walk pagination…" Command="{Binding WalkPaginationCommand}"
                         ToolTip.Tip="Follow every page of a list endpoint: duplicates, gaps, totals, loops and unstable order">

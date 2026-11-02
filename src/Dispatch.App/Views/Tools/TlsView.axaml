@@ -1,0 +1,104 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tools="using:Dispatch.App.ViewModels.Tools"
+             x:Class="Dispatch.App.Views.Tools.TlsView"
+             x:DataType="tools:TlsViewModel">
+  <Grid ColumnDefinitions="300,*" Margin="12">
+    <!-- Settings -->
+    <ScrollViewer Margin="0,0,16,0">
+      <StackPanel Spacing="8">
+        <TextBlock Text="TLS inspector" FontSize="15" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap"
+                   Text="One TLS handshake with the host: certificate chain, expiry, protocol version, cipher suite, ALPN, hostname and trust problems. No request is sent." />
+
+        <TextBlock Classes="section" Text="TARGET" Margin="0,6,0,0" />
+        <TextBox Text="{Binding Target}" Watermark="api.example.com, host:8443 or https://…" FontFamily="{StaticResource MonoFont}" />
+        <TextBox Text="{Binding ServerName}" Watermark="SNI / expected name (optional)" FontFamily="{StaticResource MonoFont}" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBlock Text="Warn when expiring within (days)" VerticalAlignment="Center" TextWrapping="Wrap" />
+          <NumericUpDown Grid.Column="1" Value="{Binding WarnDays}" Minimum="0" Maximum="3650" Width="110" FormatString="0" />
+        </Grid>
+        <CheckBox Content="Check revocation online (OCSP / CRL)" IsChecked="{Binding CheckRevocation}" />
+
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,8,0,0">
+          <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding InspectCommand}" IsDefault="True">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <PathIcon Data="{StaticResource IconLock}" Width="12" Height="12" />
+              <TextBlock Text="Inspect" />
+            </StackPanel>
+          </Button>
+          <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding StopCommand}">
+            <TextBlock Text="Stop" />
+          </Button>
+        </Grid>
+        <DropDownButton Content="Export report" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+          <DropDownButton.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="HTML report…" Command="{Binding ExportCommand}" CommandParameter="html" />
+              <MenuItem Header="JSON…" Command="{Binding ExportCommand}" CommandParameter="json" />
+              <MenuItem Header="Copy as text" Command="{Binding CopyCommand}" />
+            </MenuFlyout>
+          </DropDownButton.Flyout>
+        </DropDownButton>
+        <TextBlock Text="{Binding Status}" Classes="muted" TextWrapping="Wrap" FontSize="12" />
+        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,8,0,0"
+                   Text="Tip: monitors can fail and alert when a certificate expires within N days (Monitor editor → certificate warning). The CLI equivalent is dispatch tls host --warn-days 21." />
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Results -->
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,*">
+      <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding HasReport}">
+        <Border CornerRadius="8" Padding="12,6" Background="{DynamicResource SurfaceAltBrush}">
+          <StackPanel>
+            <TextBlock Text="{Binding Verdict}" FontSize="22" FontWeight="Bold" Foreground="{Binding VerdictBrush}" />
+            <TextBlock Text="Verdict" Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+        <TextBlock Text="{Binding Summary}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="560" />
+      </StackPanel>
+
+      <ItemsControl Grid.Row="1" ItemsSource="{Binding Stats}" Margin="0,12,0,10">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+      </ItemsControl>
+
+      <Border Grid.Row="2" Classes="card" Padding="12" Margin="0,0,0,10" IsVisible="{Binding HasReport}" MaxHeight="260">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Classes="section" Text="CERTIFICATE CHAIN (LEAF FIRST)" Margin="0,0,0,6" />
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Chain}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="tools:TlsChainRow">
+                  <Grid ColumnDefinitions="24,*" Margin="0,0,0,8">
+                    <TextBlock Text="{Binding Number}" Classes="muted" FontSize="12" VerticalAlignment="Top" />
+                    <StackPanel Grid.Column="1" Spacing="1">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <SelectableTextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5" />
+                        <TextBlock Text="{Binding Issuer}" Classes="muted" FontSize="12" VerticalAlignment="Center" />
+                      </StackPanel>
+                      <TextBlock Text="{Binding Validity}" FontSize="12" FontFamily="{StaticResource MonoFont}" />
+                      <TextBlock Text="{Binding Details}" Classes="muted" FontSize="11.5" />
+                      <SelectableTextBlock Text="{Binding Sans}" FontSize="11.5" TextWrapping="Wrap" IsVisible="{Binding HasSans}" />
+                      <SelectableTextBlock Text="{Binding Fingerprint}" Classes="muted" FontSize="10.5" FontFamily="{StaticResource MonoFont}" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+
+      <Border Grid.Row="3" Classes="card" Padding="12">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Classes="section" Text="INSIGHTS" Margin="0,0,0,6" />
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Insights}" />
+          </ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

@@ -32,15 +32,19 @@ public static class CaptureCommand
             Console.WriteLine($"{mark} {e.Method,-6} {e.StatusCode} {e.Url}  ({e.ElapsedMs:0} ms)");
         };
 
+        var network = NetworkOptions.Parse(args);
         await proxy.StartAsync(new CaptureProxyOptions
         {
             Port = args.Int("port", 8899),
             Public = args.Flag("public"),
             HostFilter = args.Option("host") ?? "",
-            DecryptHttps = !args.Flag("no-decrypt")
+            DecryptHttps = !args.Flag("no-decrypt"),
+            Network = network
         });
 
         Console.WriteLine($"Capture proxy listening on http://127.0.0.1:{proxy.Port}");
+        if (network is not null)
+            Console.WriteLine($"Network conditions: {network.Describe()}");
         Console.WriteLine($"Point HTTP(S)_PROXY or your client at it. For HTTPS, trust the CA (--export-ca <file>).");
         Console.WriteLine("Press Ctrl+C to stop and save.");
         try
@@ -54,6 +58,8 @@ public static class CaptureCommand
 
         var exchanges = captured.ToList();
         Console.WriteLine($"\nCaptured {exchanges.Count} exchange(s).");
+        if (proxy.Shaper is { } shaper)
+            Console.WriteLine($"Network shaping: {shaper.Delayed} delayed, {shaper.Paced} paced, {shaper.Dropped} dropped, {shaper.RefusedOffline} refused while offline.");
         if (exchanges.Count == 0 || args.Option("out") is not { } outPath)
             return Program.ExitOk;
 

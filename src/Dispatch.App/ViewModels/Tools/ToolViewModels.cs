@@ -651,6 +651,35 @@ public sealed partial class CaptureViewModel : ObservableObject, ITool
 
     [ObservableProperty] private decimal _maxBodyKb = 1024;
 
+    // ---- Network conditions ----
+    /// <summary>Preset names plus "none" and "custom".</summary>
+    public static IReadOnlyList<string> NetworkProfiles { get; } =
+        ["none", .. Dispatch.Application.Capture.NetworkProfile.Presets.Select(p => p.Name), "custom"];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCustomNetwork), nameof(NetworkDescription))]
+    private string _networkProfile = "none";
+
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(NetworkDescription))] private decimal _networkLatencyMs = 300;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(NetworkDescription))] private decimal _networkBandwidthKbps = 1500;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(NetworkDescription))] private decimal _networkLossPercent = 1;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(NetworkDescription))] private decimal _networkOfflineEverySeconds;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(NetworkDescription))] private decimal _networkOfflineForSeconds = 10;
+
+    public bool IsCustomNetwork => NetworkProfile == "custom";
+
+    /// <summary>The profile the settings describe (null = no shaping).</summary>
+    public Dispatch.Application.Capture.NetworkProfile? SelectedNetwork => NetworkProfile switch
+    {
+        "none" => null,
+        "custom" => new Dispatch.Application.Capture.NetworkProfile("custom", TimeSpan.FromMilliseconds((double)NetworkLatencyMs),
+            (long)(NetworkBandwidthKbps * 1000), (double)NetworkLossPercent, TimeSpan.FromSeconds((double)NetworkOfflineEverySeconds),
+            TimeSpan.FromSeconds((double)NetworkOfflineForSeconds)),
+        var name => Dispatch.Application.Capture.NetworkProfile.FindPreset(name)
+    };
+
+    public string NetworkDescription => SelectedNetwork?.Describe() ?? "Traffic is relayed as is.";
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(StopCommand))]
     [NotifyPropertyChangedFor(nameof(StateText), nameof(ProxyAddress), nameof(ProxyEnvironment))]
@@ -823,11 +852,13 @@ public sealed partial class CaptureViewModel : ObservableObject, ITool
                 Public = AllowRemote,
                 HostFilter = HostFilter.Trim(),
                 DecryptHttps = DecryptHttps,
-                MaxBodyBytes = (int)Math.Clamp(MaxBodyKb, 1, 100 * 1024) * 1024
+                MaxBodyBytes = (int)Math.Clamp(MaxBodyKb, 1, 100 * 1024) * 1024,
+                Network = SelectedNetwork
             });
             IsRunning = true;
             Status = $"Listening on {ProxyAddress}" + (DecryptHttps ? " · HTTPS is decrypted (clients must trust the Dispatch CA)" : " · HTTPS is tunnelled, not recorded") +
-                     (HostFilter.Trim().Length > 0 ? $" · recording hosts matching \"{HostFilter.Trim()}\"" : "");
+                     (HostFilter.Trim().Length > 0 ? $" · recording hosts matching \"{HostFilter.Trim()}\"" : "") +
+                     (SelectedNetwork is { } network ? $" · network {network.Describe()}" : "");
         }
         catch (Exception ex)
         {

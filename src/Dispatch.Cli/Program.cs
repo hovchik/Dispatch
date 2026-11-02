@@ -42,8 +42,10 @@ public static class Program
           dispatch flow <collection> [--name n]   Run saved test flow(s) of a collection
           dispatch monitor [--once|--watch] [...]  Run scheduled monitors and send alerts
           dispatch capture [--port 8899] [...]     Record proxied traffic to a HAR or Dispatch collection
+                                                  (--network 3g, or --latency 300ms --bandwidth 1mbps --loss 2%)
           dispatch fuzz-client [--port 8899] [...] Vary responses to an app through a proxy to find how it breaks
                                                   (--host h, --window 5s, --kinds NullField,EmptyArray,…, --duration 10m)
+          dispatch tls <host[:port]|collection>    Inspect TLS: chain, expiry, protocol, cipher, ALPN (--warn-days 21)
           dispatch webhooks [--port 9000] [...]    Receive and record webhooks locally (--out hooks.json, --expect n,
                                                   --path /hooks/orders, --duration 10m, --status 200)
           dispatch version
@@ -113,6 +115,7 @@ public static class Program
                 "monitor" => await MonitorCommand.ExecuteAsync(rest, cancel.Token),
                 "capture" => await CaptureCommand.ExecuteAsync(rest, cancel.Token),
                 "fuzz-client" => await FuzzClientCommand.ExecuteAsync(rest, cancel.Token),
+                "tls" => await TlsCommand.ExecuteAsync(rest, cancel.Token),
                 "webhooks" or "webhook" => await WebhooksCommand.ExecuteAsync(rest, cancel.Token),
                 "version" or "--version" => Version(),
                 _ => throw new UsageException($"Unknown command '{command}'. Run 'dispatch --help'.")

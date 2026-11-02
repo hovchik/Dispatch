@@ -28,6 +28,7 @@ public interface ITabHost
     void ShowCode(ApiRequest request, ApiRequest resolved);
     void ShowMinimizer(ApiRequest request);
     void ShowRateLimit(ApiRequest request);
+    void ShowTls(ApiRequest request);
     void ShowEndpointProbe(ApiRequest request, Dispatch.Application.Probes.ProbeKind kind);
     void ShowImpact(ApiRequest request, string? currentBody, string? previousBody);
     void ShowDiff(string title, ResponseViewModel left, ResponseViewModel right);
@@ -705,6 +706,9 @@ public sealed partial class RequestTabViewModel : ObservableObject
 
     [RelayCommand]
     private void ProbeRateLimit() => _host.ShowRateLimit(ToModel());
+
+    [RelayCommand]
+    private void InspectTls() => _host.ShowTls(ToModel());
 
     [RelayCommand]
     private void WalkPagination() => _host.ShowEndpointProbe(ToModel(), Dispatch.Application.Probes.ProbeKind.Pagination);
