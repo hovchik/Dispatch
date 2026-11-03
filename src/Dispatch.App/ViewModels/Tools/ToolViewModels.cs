@@ -21,6 +21,13 @@ public interface ITool
     /// <summary>Help topic (<see cref="Dispatch.Application.Help.HelpCatalog"/>) linked from the window's Help button.</summary>
     string? HelpTopic => null;
 
+    /// <summary>
+    /// Whether the window blocks the window it was opened from until it is closed. Tools that run a server the
+    /// user talks to from the request editor (mock server, capture proxy, ...) stay non-modal, because closing
+    /// them stops the server.
+    /// </summary>
+    bool IsModal => true;
+
     /// <summary>Called when the window closes (stop servers, cancel runs).</summary>
     void OnClosed() { }
 }
@@ -1029,6 +1036,9 @@ public sealed partial class CaptureViewModel : ObservableObject, ITool
             return "127.0.0.1";
         }
     }
+
+    /// <summary>Requests are sent through the proxy from the request editor or a browser while this is open.</summary>
+    public bool IsModal => false;
 
     public void OnClosed() => _ = _proxy.StopAsync();
 }

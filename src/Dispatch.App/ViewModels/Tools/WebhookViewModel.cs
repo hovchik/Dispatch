@@ -398,6 +398,9 @@ public sealed partial class WebhookViewModel : ObservableObject, ITool
         }
     }
 
+    /// <summary>Webhook deliveries arrive while the user works in the request editor.</summary>
+    public bool IsModal => false;
+
     /// <summary>The receiver keeps running when the window closes, so message checks and tunnels are not interrupted.</summary>
     public void OnClosed()
     {

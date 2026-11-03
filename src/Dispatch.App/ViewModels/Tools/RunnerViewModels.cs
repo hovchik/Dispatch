@@ -622,6 +622,9 @@ public sealed partial class MockServerViewModel : ObservableObject, ITool
         Status = "Stored items cleared; lists start again from their examples.";
     }
 
+    /// <summary>The mock is exercised from the request editor and the runner while this is open.</summary>
+    public bool IsModal => false;
+
     public void OnClosed() => _ = _server.StopAsync();
 }
 
