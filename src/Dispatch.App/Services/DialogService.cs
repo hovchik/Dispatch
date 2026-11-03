@@ -13,8 +13,10 @@ public interface IDialogService
     Task<string?> SaveFileAsync(string title, string suggestedName, params FileFilter[] filters);
 
     /// <summary>
-    /// Shows a tool (runner, mock server, ...) in its own window owned by the main window. Showing a tool that is
-    /// already open brings its window to the front.
+    /// Shows a tool (runner, mock server, ...) in its own modal window. The window takes focus and disables the
+    /// window it was opened from (the main window, or the tool window that opened it) until it is closed, so only
+    /// one chain of tool windows can be open at a time. Showing a tool that is already open brings its window to
+    /// the front.
     /// </summary>
     void ShowTool(ViewModels.Tools.ITool tool);
 }
@@ -23,6 +25,8 @@ public interface IDialogService
 public sealed class DialogService : IDialogService
 {
     private readonly Dictionary<ViewModels.Tools.ITool, Window> _open = [];
+    /// <summary>Open tool windows in the order they were opened; the last one owns the next tool window.</summary>
+    private readonly List<Window> _stack = [];
     private Window? _owner;
 
     public void Attach(Window owner) => _owner = owner;
@@ -85,11 +89,17 @@ public sealed class DialogService : IDialogService
         window.Closed += (_, _) =>
         {
             _open.Remove(tool);
+            _stack.Remove(window);
             tool.OnClosed();
         };
-        if (_owner is null)
+        // A tool opened from another tool (a flow editor from the flow manager, help via F1, ...) is modal over that
+        // tool's window; anything else is modal over the main window. Either way the opener is disabled until the
+        // new window closes, which keeps the user from stacking up unrelated tool windows.
+        var owner = _stack.Count > 0 ? _stack[^1] : _owner;
+        _stack.Add(window);
+        if (owner is null)
             window.Show();
         else
-            window.Show(_owner);
+            _ = window.ShowDialog(owner);
     }
 }
