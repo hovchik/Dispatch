@@ -494,7 +494,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
         if (!string.IsNullOrWhiteSpace(operation.Endpoint))
             Url = operation.Endpoint;
         BodyText = envelope;
-        if (string.IsNullOrWhiteSpace(Name) || Name == "New Request")
+        if (RequestNaming.IsDefaultName(Name))
             Name = operation.Name;
     }
 
@@ -509,6 +509,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
     private async Task SendAsync(CancellationToken cancellationToken)
     {
         IsSending = true;
+        AutoName();
         LiveMessages.Clear();
         OutgoingText = string.Empty;
         _outgoing = Channel.CreateUnbounded<string>();
@@ -548,6 +549,18 @@ public sealed partial class RequestTabViewModel : ObservableObject
             _outgoing = null;
             IsSending = false;
         }
+    }
+
+    /// <summary>
+    /// An unsaved tab still called "New Request" takes a name from what it sends ("GET /users"), so a row of
+    /// new tabs stays readable. Names the user typed, and saved requests, are left alone.
+    /// </summary>
+    private void AutoName()
+    {
+        if (IsSaved || !RequestNaming.IsDefaultName(Name))
+            return;
+        if (RequestNaming.Suggest(ToModel()) is { } suggested)
+            Name = suggested;
     }
 
     /// <summary>Send = connect/send; while a session is open the same button disconnects.</summary>

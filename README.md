@@ -310,7 +310,8 @@ the exit code is 1.
 * **Variables**: layered scopes (globals < collection < environment < data row < runtime), `{{$guid}}`,
   `{{$timestamp}}`, `{{$randomInt}}` and other dynamic values. **Secret** variables are encrypted at rest with a key
   kept in the OS keychain (DPAPI / Keychain / Secret Service).
-* **Workspace**: collections with nested folders, history with a filter, multiple tabs, a **command palette**
+* **Workspace**: collections with nested folders, history with a filter, multiple tabs (an unsaved tab names itself
+  after what it sends, e.g. `GET /users`, until you rename it), a **command palette**
   (Ctrl+K) that searches every request and command, JSONPath / XPath filtering of response bodies, and a light or
   dark theme.
 
