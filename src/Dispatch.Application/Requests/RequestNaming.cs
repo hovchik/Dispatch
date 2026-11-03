@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Dispatch.Domain;
 
 namespace Dispatch.Application.Requests;
@@ -7,19 +6,49 @@ namespace Dispatch.Application.Requests;
 /// Names for requests the user has not named yet. A new tab starts as "New Request"; once it is sent
 /// the tab takes a name derived from what was sent (e.g. <c>GET /users</c>) so a row of tabs stays readable.
 /// </summary>
-public static partial class RequestNaming
+public static class RequestNaming
 {
     public const string DefaultName = "New Request";
 
-    /// <summary>
-    /// True for the placeholder names Dispatch generates itself ("New Request", "New GraphQL request",
-    /// their "(copy)" duplicates, "Untitled") and for blank names: anything the user did not choose.
-    /// </summary>
-    public static bool IsDefaultName(string? name) =>
-        string.IsNullOrWhiteSpace(name) || DefaultNamePattern().IsMatch(name.Trim());
+    /// <summary>The placeholder a new tab of this kind starts with: "New Request" for HTTP, "New GraphQL request", …</summary>
+    public static string DefaultNameFor(RequestKind kind) =>
+        kind == RequestKind.Http ? DefaultName : $"New {KindLabel(kind)} request";
 
-    [GeneratedRegex(@"^(New(\s+.+)?\s+request|Untitled)(\s+\(copy\))*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex DefaultNamePattern();
+    private static readonly HashSet<string> DefaultNames = new(
+        Enum.GetValues<RequestKind>().Select(DefaultNameFor).Append("Untitled"),
+        StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True only for the placeholder names Dispatch generates itself ("New Request", "New GraphQL request",
+    /// their "(copy)" duplicates, "Untitled") and for blank names. A name the user typed that happens to
+    /// look similar ("New customer request") is not a default name.
+    /// </summary>
+    public static bool IsDefaultName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return true;
+        var trimmed = name.Trim();
+        while (trimmed.EndsWith("(copy)", StringComparison.Ordinal))
+            trimmed = trimmed[..^"(copy)".Length].TrimEnd();
+        return DefaultNames.Contains(trimmed);
+    }
+
+    private static string KindLabel(RequestKind kind) => kind switch
+    {
+        RequestKind.Http => "HTTP",
+        RequestKind.GraphQl => "GraphQL",
+        RequestKind.Grpc => "gRPC",
+        RequestKind.Soap => "SOAP",
+        RequestKind.WebSocket => "WebSocket",
+        RequestKind.Sse => "Server-Sent Events",
+        RequestKind.SocketIo => "Socket.IO",
+        RequestKind.Mqtt => "MQTT",
+        RequestKind.Kafka => "Kafka",
+        RequestKind.Amqp => "AMQP (RabbitMQ)",
+        RequestKind.Tcp => "TCP",
+        RequestKind.Udp => "UDP",
+        _ => kind.ToString()
+    };
 
     /// <summary>
     /// A short name describing the request, or null when there is nothing to name it after (no URL).

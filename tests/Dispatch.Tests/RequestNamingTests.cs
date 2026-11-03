@@ -23,10 +23,22 @@ public class RequestNamingTests
     [InlineData("Login")]
     [InlineData("GET /users")]
     [InlineData("New user")]
+    [InlineData("New customer request")]
+    [InlineData("New token request")]
+    [InlineData("New Request v2")]
     [InlineData("Create new request token")]
     [InlineData("Requests")]
     public void Keeps_names_the_user_chose(string name) =>
         Assert.False(RequestNaming.IsDefaultName(name));
+
+    [Fact]
+    public void Default_names_match_what_new_tabs_are_called()
+    {
+        Assert.Equal("New Request", RequestNaming.DefaultNameFor(RequestKind.Http));
+        Assert.Equal("New gRPC request", RequestNaming.DefaultNameFor(RequestKind.Grpc));
+        foreach (var kind in Enum.GetValues<RequestKind>())
+            Assert.True(RequestNaming.IsDefaultName(RequestNaming.DefaultNameFor(kind)), kind.ToString());
+    }
 
     [Theory]
     [InlineData(HttpVerb.Get, "https://api.example.com/users?page=2", "GET /users")]

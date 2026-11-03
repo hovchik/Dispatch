@@ -360,7 +360,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     {
         Kind = kind,
         Method = HttpVerb.Get,
-        Name = kind == RequestKind.Http ? RequestNaming.DefaultName : $"New {Converters.EnumLabelConverter.Label(kind)} request",
+        Name = RequestNaming.DefaultNameFor(kind),
         Headers = kind is RequestKind.Http or RequestKind.GraphQl or RequestKind.Soap ? DefaultHeaders.Create() : []
     });
 
