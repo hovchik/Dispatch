@@ -21,6 +21,8 @@ internal static class Program
     /// visual tree. With the composition tree, a window that stays minimized (or behind the lock screen) for
     /// a long time comes back as an empty frame: Windows drops the composition surface and the content
     /// is never resubmitted. The app uses no Mica / acrylic effects, so nothing is lost by switching.
+    /// The flip side is that a frame drawn before the window is on screen is dropped rather than kept, so every
+    /// window repaints itself right after it is shown (<see cref="Views.WindowRepaint"/>).
     /// <para>
     /// DISPATCH_RENDERING overrides this for troubleshooting: "composition" goes back to the composition tree,
     /// "software" renders on the CPU, "software-composition" does both.

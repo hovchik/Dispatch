@@ -15,6 +15,14 @@ public partial class ToolWindow : Window
         DataContextChanged += (_, _) => HelpBar.IsVisible = (DataContext as ITool)?.HelpTopic is not null;
     }
 
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        // The content is built before the window is shown and never changes on its own afterwards, so a first
+        // frame lost on the way to the screen would leave the window blank until the user resizes it.
+        WindowRepaint.AfterShow(this);
+    }
+
     /// <summary>Opens a help topic; set by the dialog service.</summary>
     public Action<string?>? HelpRequested { get; set; }
 
