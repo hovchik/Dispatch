@@ -13,10 +13,11 @@ public interface IDialogService
     Task<string?> SaveFileAsync(string title, string suggestedName, params FileFilter[] filters);
 
     /// <summary>
-    /// Shows a tool (runner, mock server, ...) in its own modal window. The window takes focus and disables the
-    /// window it was opened from (the main window, or the tool window that opened it) until it is closed, so only
-    /// one chain of tool windows can be open at a time. Showing a tool that is already open brings its window to
-    /// the front.
+    /// Shows a tool (runner, import, ...) in its own window. A modal tool (<see cref="ViewModels.Tools.ITool.IsModal"/>)
+    /// takes focus and disables the window it was opened from (the main window, or the tool window that opened it)
+    /// until it is closed, so only one chain of tool windows can be open at a time. Server tools such as the mock
+    /// server stay non-modal so the request editor can talk to them. Showing a tool that is already open brings
+    /// its window to the front.
     /// </summary>
     void ShowTool(ViewModels.Tools.ITool tool);
 }
@@ -25,7 +26,7 @@ public interface IDialogService
 public sealed class DialogService : IDialogService
 {
     private readonly Dictionary<ViewModels.Tools.ITool, Window> _open = [];
-    /// <summary>Open tool windows in the order they were opened; the last one owns the next tool window.</summary>
+    /// <summary>Open modal tool windows in the order they were opened; the last one owns the next tool window.</summary>
     private readonly List<Window> _stack = [];
     private Window? _owner;
 
@@ -94,12 +95,18 @@ public sealed class DialogService : IDialogService
         };
         // A tool opened from another tool (a flow editor from the flow manager, help via F1, ...) is modal over that
         // tool's window; anything else is modal over the main window. Either way the opener is disabled until the
-        // new window closes, which keeps the user from stacking up unrelated tool windows.
+        // new window closes, which keeps the user from stacking up unrelated tool windows. Server tools (mock
+        // server, capture proxy, ...) are the exception: they are plain owned windows, because the user sends
+        // requests to them from the main window while they run.
         var owner = _stack.Count > 0 ? _stack[^1] : _owner;
-        _stack.Add(window);
         if (owner is null)
             window.Show();
+        else if (!tool.IsModal)
+            window.Show(owner);
         else
+        {
+            _stack.Add(window);
             _ = window.ShowDialog(owner);
+        }
     }
 }

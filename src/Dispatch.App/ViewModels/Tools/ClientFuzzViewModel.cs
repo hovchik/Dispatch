@@ -290,6 +290,9 @@ public sealed partial class ClientFuzzViewModel : ObservableObject, ITool
         }
     }
 
+    /// <summary>The client under test sends through the fuzzing proxy while this is open.</summary>
+    public bool IsModal => false;
+
     public void OnClosed()
     {
         _timer?.Stop();
