@@ -98,13 +98,13 @@ public partial class MainWindow : Window
         if (change.Property == WindowStateProperty &&
             change.GetOldValue<WindowState>() == WindowState.Minimized &&
             change.GetNewValue<WindowState>() != WindowState.Minimized)
-            Dispatcher.UIThread.Post(RepaintAll, DispatcherPriority.Render);
+            Dispatcher.UIThread.Post(() => WindowRepaint.RepaintAll(this), DispatcherPriority.Render);
     }
 
-    private void RepaintAll()
+    protected override void OnOpened(EventArgs e)
     {
-        foreach (var visual in this.GetSelfAndVisualDescendants())
-            visual.InvalidateVisual();
+        base.OnOpened(e);
+        WindowRepaint.AfterShow(this);
     }
 
     /// <summary>Tabs that are scrolled out of (or clipped by) the visible part of the tab strip.</summary>
