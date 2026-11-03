@@ -18,6 +18,8 @@ public partial class ToolWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+        // Tool windows are modal over the window that opened them, so the keyboard focus belongs here now.
+        Activate();
         // The content is built before the window is shown and never changes on its own afterwards, so a first
         // frame lost on the way to the screen would leave the window blank until the user resizes it.
         WindowRepaint.AfterShow(this);
