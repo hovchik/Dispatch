@@ -1,4 +1,5 @@
 using Avalonia;
+using Dispatch.Infrastructure;
 
 namespace Dispatch.App;
 
@@ -7,7 +8,21 @@ internal static class Program
     // Avalonia configuration; don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called.
     [STAThread]
-    public static void Main(string[] args) => BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    public static void Main(string[] args)
+    {
+        // Anything that escapes to here (startup failures, background threads, unobserved tasks) ends the process,
+        // so leave a stack trace in %LOCALAPPDATA%\Dispatch\logs before Windows gets to report it.
+        CrashLog.Install();
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("Fatal error on the UI thread", ex);
+            throw;
+        }
+    }
 
     // Also used by the visual designer.
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
