@@ -27,9 +27,11 @@ public sealed class App : Avalonia.Application
             _services.GetRequiredService<DialogService>().Attach(window);
             _services.GetRequiredService<DialogService>().HelpRequested = viewModel.ShowHelp;
 
-            // Last line of defence: surface unexpected UI-thread errors instead of crashing.
+            // Last line of defence: surface unexpected UI-thread errors instead of crashing, and keep the
+            // stack trace in the crash log so the cause can still be found afterwards.
             Dispatcher.UIThread.UnhandledException += (_, e) =>
             {
+                CrashLog.Write("Unhandled exception on the UI thread", e.Exception);
                 viewModel.ReportError(e.Exception.Message);
                 e.Handled = true;
             };

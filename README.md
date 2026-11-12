@@ -401,6 +401,9 @@ Dispatch.App / Dispatch.Cli   Avalonia UI (MVVM, CommunityToolkit.Mvvm) · comma
 
 Data is stored in `%LOCALAPPDATA%\Dispatch\dispatch.db` (`~/.local/share/Dispatch` on Linux/macOS).
 
+If the app crashes, the exception and stack trace are appended to `%LOCALAPPDATA%\Dispatch\logs\crash-<date>.log`
+(the newest 20 files are kept). Errors caught on the UI thread are shown in the app and logged there too.
+
 ## Build & run
 
 ```bash
