@@ -52,6 +52,7 @@ public sealed class CodeEditor : UserControl
         _editor.TextArea.TextView.Margin = new Thickness(8, 0, 0, 0);
         _editor.TextChanged += OnEditorTextChanged;
         _editor.TextArea.TextEntered += OnTextEntered;
+        SafeSelectionLayer.Install(_editor.TextArea);
 
         _textMate = _editor.InstallTextMate(Registry);
         ActualThemeVariantChanged += (_, _) => UpdateTheme();
@@ -86,7 +87,11 @@ public sealed class CodeEditor : UserControl
             if (!_syncing && _editor.Document.Text != text)
             {
                 _syncing = true;
+                // The content is being replaced wholesale (a new response, another tab's request): a selection
+                // or caret position from the old text means nothing in the new one.
+                _editor.TextArea.ClearSelection();
                 _editor.Document.Text = text;
+                _editor.CaretOffset = 0;
                 _editor.ScrollToHome();
                 _syncing = false;
             }
