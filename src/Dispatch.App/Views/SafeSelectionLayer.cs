@@ -33,8 +33,19 @@ internal sealed class SafeSelectionLayer : Control
     }
 
     /// <summary>Replaces the editor's built-in selection layer with this one.</summary>
-    public static void Install(TextArea textArea) =>
-        textArea.TextView.InsertLayer(new SafeSelectionLayer(textArea), KnownLayer.Selection, LayerInsertionPosition.Replace);
+    public static void Install(TextArea textArea)
+    {
+        var textView = textArea.TextView;
+        // InsertLayer(Replace) records the layer position and slots the layer into Layers below the text,
+        // but AvaloniaEdit 11.3 appends the replacement to the visual children instead of reusing the old
+        // index, which would paint the selection over the glyphs. Rebuilding the collection re-adds every
+        // layer in Layers order, and that path keeps the visual children in step.
+        textView.InsertLayer(new SafeSelectionLayer(textArea), KnownLayer.Selection, LayerInsertionPosition.Replace);
+        var ordered = textView.Layers.ToList();
+        textView.Layers.Clear();
+        foreach (var layer in ordered)
+            textView.Layers.Add(layer);
+    }
 
     public override void Render(DrawingContext context)
     {
