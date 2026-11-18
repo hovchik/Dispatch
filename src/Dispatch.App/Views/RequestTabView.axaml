@@ -458,7 +458,7 @@
           <views:KeyValueEditor DataContext="{Binding Headers}" Margin="0,6,0,0" />
         </TabItem>
 
-        <TabItem Header="Body" IsVisible="{Binding ShowHttpBody}">
+        <TabItem x:Name="BodyTab" Header="Body" IsVisible="{Binding ShowHttpBody}">
           <DockPanel Margin="0,6,0,0">
             <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
               <ComboBox ItemsSource="{x:Static vm:RequestTabViewModel.BodyModes}" SelectedItem="{Binding BodyMode}" MinWidth="200"
