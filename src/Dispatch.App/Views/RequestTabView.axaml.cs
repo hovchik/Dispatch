@@ -83,9 +83,14 @@ public partial class RequestTabView : UserControl
             SelectFirstVisibleTab();
     }
 
-    /// <summary>Tabs depend on the protocol; after switching, show the first tab that applies to it.</summary>
+    /// <summary>
+    /// When the app starts, a tab opens or the protocol changes, show the request body: the Body tab for HTTP, and
+    /// for the other protocols their first tab, which is where their message, query or envelope is written.
+    /// </summary>
     private void SelectFirstVisibleTab() => Dispatcher.UIThread.Post(() =>
     {
-        EditorTabs.SelectedItem = EditorTabs.Items.OfType<TabItem>().FirstOrDefault(i => i.IsVisible);
+        EditorTabs.SelectedItem = BodyTab.IsVisible
+            ? BodyTab
+            : EditorTabs.Items.OfType<TabItem>().FirstOrDefault(i => i.IsVisible);
     }, DispatcherPriority.Background);
 }
