@@ -99,6 +99,10 @@ Shot("01-welcome");
 vm.IsWelcomeOpen = false;
 Pump(100);
 Shot("02-empty-first-tab");
+vm.ShowAbout();
+Shot("02b-about");
+vm.IsAboutOpen = false;
+Pump(100);
 
 Wait(vm.LoadSamplesAsync());
 Pump(800);

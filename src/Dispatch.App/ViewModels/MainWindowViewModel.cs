@@ -8,6 +8,7 @@ using Dispatch.App.Services;
 using Dispatch.App.ViewModels.Tools;
 using Dispatch.Application.Abstractions;
 using Dispatch.Application.Help;
+using Dispatch.Infrastructure;
 using Dispatch.Application.Interop;
 using Dispatch.Application.Load;
 using Dispatch.Application.Requests;
@@ -117,6 +118,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
 
     /// <summary>The getting-started card shown over the workspace on first launch (and from Help).</summary>
     [ObservableProperty] private bool _isWelcomeOpen;
+
+    /// <summary>The About card (Help → About Dispatch): version, build date, copyright and a short description.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CloseAboutCommand))]
+    private bool _isAboutOpen;
+
+    public AppInfo About { get; } = AppInfo.For(typeof(MainWindowViewModel).Assembly);
 
     public bool HasTabs => Tabs.Count > 0;
     public bool IsCollectionsActive => IsSidebarOpen && Sidebar == SidebarSection.Collections;
@@ -674,6 +682,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
     public void ShowWelcome() => IsWelcomeOpen = true;
 
     [RelayCommand]
+    public void ShowAbout() => IsAboutOpen = true;
+
+    // Only enabled while the card is open, so its Escape key binding leaves Escape alone everywhere else.
+    [RelayCommand(CanExecute = nameof(IsAboutOpen))]
+    private void CloseAbout() => IsAboutOpen = false;
+
+    [RelayCommand]
     private async Task DismissWelcomeAsync()
     {
         IsWelcomeOpen = false;
@@ -759,6 +774,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         yield return new PaletteItem("Help", "User guide (F1)", () => ShowHelp(null));
         yield return new PaletteItem("Load example collection", "Ready-made requests that show each feature", () => _ = LoadSamplesAsync());
         yield return new PaletteItem("Show welcome screen", "Getting started", ShowWelcome);
+        yield return new PaletteItem("About Dispatch", $"Version {About.Version}", ShowAbout);
         foreach (var topic in HelpCatalog.All)
             yield return new PaletteItem($"Help: {topic.Title}", topic.Summary, () => ShowHelp(topic.Id));
         if (SelectedTab is { } tab)
