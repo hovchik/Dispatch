@@ -95,10 +95,9 @@ public sealed class SecretProtector : ISecretProtector
         var path = Path.Combine(dataDirectory, "secrets.key.dpapi");
         if (File.Exists(path))
             return ProtectedData.Unprotect(File.ReadAllBytes(path), null, DataProtectionScope.CurrentUser);
-        var key = RandomNumberGenerator.GetBytes(32);
-        Directory.CreateDirectory(dataDirectory);
-        File.WriteAllBytes(path, ProtectedData.Protect(key, null, DataProtectionScope.CurrentUser));
-        return key;
+        return ReadOrCreate(path,
+            () => ProtectedData.Unprotect(File.ReadAllBytes(path), null, DataProtectionScope.CurrentUser),
+            key => ProtectedData.Protect(key, null, DataProtectionScope.CurrentUser), restrict: false);
     }
 
     internal const string FileKeyName = "secrets.key";
@@ -108,12 +107,45 @@ public sealed class SecretProtector : ISecretProtector
         var path = Path.Combine(dataDirectory, FileKeyName);
         if (File.Exists(path))
             return Convert.FromBase64String(File.ReadAllText(path).Trim());
-        Directory.CreateDirectory(dataDirectory);
+        return ReadOrCreate(path,
+            () => Convert.FromBase64String(File.ReadAllText(path).Trim()),
+            key => Encoding.ASCII.GetBytes(Convert.ToBase64String(key)), restrict: true);
+    }
+
+    /// <summary>
+    /// Creates the key file once, under a lock file. Two processes starting together (the app and the CLI) must not
+    /// each keep a key of their own, and the key goes to a temporary file that is then moved into place: a key file cut
+    /// short by a crash or power loss would make every secret unreadable and every later save fail.
+    /// </summary>
+    private static byte[] ReadOrCreate(string path, Func<byte[]> read, Func<byte[], byte[]> encode, bool restrict)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using var _ = AcquireLock(path + ".lock");
+        if (File.Exists(path))
+            return read(); // Another process created it while this one waited.
         var key = RandomNumberGenerator.GetBytes(32);
-        File.WriteAllText(path, Convert.ToBase64String(key));
-        if (!OperatingSystem.IsWindows())
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        var temp = path + ".tmp";
+        File.WriteAllBytes(temp, encode(key));
+        if (restrict && !OperatingSystem.IsWindows())
+            File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        File.Move(temp, path, overwrite: true);
         return key;
+    }
+
+    private static FileStream AcquireLock(string lockPath)
+    {
+        var deadline = Environment.TickCount64 + 10_000;
+        while (true)
+        {
+            try
+            {
+                return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException) when (Environment.TickCount64 < deadline)
+            {
+                Thread.Sleep(25);
+            }
+        }
     }
 
     private static byte[]? CommandKey(string command, string[] args)

@@ -346,15 +346,34 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         OnPropertyChanged(nameof(HasTabs));
     }
 
+    private int _cookieSaveRequested;
+    private int _cookieSaveRunning;
+
+    /// <summary>
+    /// The jar changes on whatever thread a response arrives, up to thousands of times a second in a load test or
+    /// runner. One save runs at a time and always writes the latest jar, so saves neither pile up on the database
+    /// nor finish out of order with an older jar written last.
+    /// </summary>
     private async Task SaveCookiesAsync()
     {
-        try
+        Volatile.Write(ref _cookieSaveRequested, 1);
+        while (Volatile.Read(ref _cookieSaveRequested) == 1)
         {
-            await _services.Settings.SetAsync(SettingKeys.Cookies, _services.Cookies.Export());
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Could not save cookies: {ex.Message}");
+            if (Interlocked.CompareExchange(ref _cookieSaveRunning, 1, 0) != 0)
+                return; // The running save picks this change up.
+            try
+            {
+                while (Interlocked.Exchange(ref _cookieSaveRequested, 0) == 1)
+                    await _services.Settings.SetAsync(SettingKeys.Cookies, _services.Cookies.Export()).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Could not save cookies: {ex.Message}");
+            }
+            finally
+            {
+                Volatile.Write(ref _cookieSaveRunning, 0);
+            }
         }
     }
 
