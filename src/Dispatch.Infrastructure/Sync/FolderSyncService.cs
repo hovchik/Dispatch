@@ -57,14 +57,33 @@ public sealed class FolderSyncService(ICollectionRepository collections, string 
 {
     public const string CollectionKey = "collection";
 
+    /// <summary>
+    /// One sync at a time. "Sync now", the watcher and conflict resolution can otherwise overlap, and a sync that reads
+    /// the folder while another is rewriting it sees half the files missing and deletes those requests in the app.
+    /// </summary>
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
     /// <summary>Folders synced with this collection before (most recent first), from the recorded state.</summary>
     public string? LastFolder(Guid collectionId) => LoadState(collectionId)?["folder"]?.ToString();
 
     public async Task<SyncResult> SyncAsync(Guid collectionId, string folder, SyncSide? resolveAll = null, CancellationToken ct = default)
     {
-        folder = Path.GetFullPath(folder);
-        var (app, folderCollection, warnings) = await LoadSidesAsync(collectionId, folder);
-        var last = LoadLast(collectionId, folder);
+        await _gate.WaitAsync(ct);
+        try
+        {
+            return await SyncCoreAsync(collectionId, Path.GetFullPath(folder), resolveAll, ct);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<SyncResult> SyncCoreAsync(Guid collectionId, string folder, SyncSide? resolveAll, CancellationToken ct)
+    {
+        var (app, folderCollection, loadWarnings) = await LoadSidesAsync(collectionId, folder);
+        var warnings = loadWarnings.ToList();
+        var last = LoadLast(collectionId, folder, folderCollection, warnings);
         var appMap = Canonical(app);
         var folderMap = Canonical(folderCollection);
         var plan = SyncEngine.Plan(appMap, folderMap, last);
@@ -144,15 +163,23 @@ public sealed class FolderSyncService(ICollectionRepository collections, string 
     public async Task<SyncResult> ResolveAsync(Guid collectionId, string folder, string key, SyncSide keep, CancellationToken ct = default)
     {
         folder = Path.GetFullPath(folder);
-        var (app, folderCollection, _) = await LoadSidesAsync(collectionId, folder);
-        var last = LoadLast(collectionId, folder);
-        var plan = SyncEngine.Plan(Canonical(app), Canonical(folderCollection), last);
-        if (plan.FirstOrDefault(d => d.Key == key && d.Action == SyncAction.Conflict) is { } conflict)
+        await _gate.WaitAsync(ct);
+        try
         {
-            SyncEngine.Resolve(last, conflict, keep);
-            SaveState(collectionId, folder, last);
+            var (app, folderCollection, _) = await LoadSidesAsync(collectionId, folder);
+            var last = LoadLast(collectionId, folder, folderCollection, []);
+            var plan = SyncEngine.Plan(Canonical(app), Canonical(folderCollection), last);
+            if (plan.FirstOrDefault(d => d.Key == key && d.Action == SyncAction.Conflict) is { } conflict)
+            {
+                SyncEngine.Resolve(last, conflict, keep);
+                SaveState(collectionId, folder, last);
+            }
+            return await SyncCoreAsync(collectionId, folder, null, ct);
         }
-        return await SyncAsync(collectionId, folder, null, ct);
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     /// <summary>
@@ -172,7 +199,15 @@ public sealed class FolderSyncService(ICollectionRepository collections, string 
     {
         var app = await LoadAppAsync(collectionId);
         Directory.CreateDirectory(folder);
-        var imported = DispatchFormat.ImportFolder(folder);
+        // Of two files with one id (a copied file), the original is the one still matching the last sync or the app.
+        var last = LoadLast(collectionId, folder);
+        var appJson = app.Requests.ToDictionary(r => r.Id.ToString(), DispatchFormat.RequestJson);
+        var imported = DispatchFormat.ImportFolder(folder, r =>
+        {
+            var key = r.Id.ToString();
+            var json = DispatchFormat.RequestJson(r);
+            return (last.TryGetValue(key, out var synced) && synced == json) || (appJson.TryGetValue(key, out var current) && current == json);
+        });
         if (imported.Warnings.Count > 0)
         {
             // A file that cannot be read would look like a deletion; never sync over it.
@@ -259,7 +294,24 @@ public sealed class FolderSyncService(ICollectionRepository collections, string 
         }
     }
 
-    /// <summary>The state recorded at the last sync with this same folder; another folder starts from nothing.</summary>
+    /// <summary>
+    /// The state recorded at the last sync with this same folder; another folder starts from nothing. So does a folder
+    /// that has become completely empty (deleted, moved, a fresh clone or a branch without it): measured against the
+    /// recorded state, every request would look deleted in the folder and be deleted in the app. Starting over
+    /// writes the collection back to the folder instead.
+    /// </summary>
+    private Dictionary<string, string> LoadLast(Guid collectionId, string folder, RequestCollection folderCollection, List<string> warnings)
+    {
+        var last = LoadLast(collectionId, folder);
+        if (last.Keys.Any(k => k != CollectionKey) && folderCollection.Requests.Count == 0
+            && !File.Exists(Path.Combine(folder, DispatchFormat.CollectionFileName)))
+        {
+            warnings.Add("The folder is empty, so the collection was written to it again (nothing was deleted in the app).");
+            last.Clear();
+        }
+        return last;
+    }
+
     private Dictionary<string, string> LoadLast(Guid collectionId, string folder)
     {
         var last = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -287,7 +339,11 @@ public sealed class FolderSyncService(ICollectionRepository collections, string 
             ["syncedAt"] = DateTimeOffset.UtcNow.ToString("O"),
             ["items"] = new JsonObject(items.OrderBy(i => i.Key, StringComparer.Ordinal).Select(i => KeyValuePair.Create(i.Key, (JsonNode?)i.Value)))
         };
-        File.WriteAllText(StatePath(collectionId), node.ToJsonString(new JsonSerializerOptions { WriteIndented = false }));
+        // Write a temporary file and swap it in: a state file cut short by a crash would lose the baseline.
+        var path = StatePath(collectionId);
+        var temp = path + ".tmp";
+        File.WriteAllText(temp, node.ToJsonString(new JsonSerializerOptions { WriteIndented = false }));
+        File.Move(temp, path, overwrite: true);
     }
 }
 
@@ -328,8 +384,19 @@ public sealed class FolderSyncWatcher : IDisposable
 
     private void OnFileEvent(object sender, FileSystemEventArgs e)
     {
+        if (_disposed)
+            return;
         if (e.Name is null || e.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || e is RenamedEventArgs || Directory.Exists(e.FullPath))
-            _debounce.Change(TimeSpan.FromMilliseconds(400), Timeout.InfiniteTimeSpan);
+        {
+            try
+            {
+                _debounce.Change(TimeSpan.FromMilliseconds(400), Timeout.InfiniteTimeSpan);
+            }
+            catch (ObjectDisposedException)
+            {
+                // An event raised while the watcher was being disposed. On the watcher's thread this would end the process.
+            }
+        }
     }
 
     /// <summary>Runs a sync now (coalescing with one already running).</summary>
@@ -343,26 +410,32 @@ public sealed class FolderSyncWatcher : IDisposable
 
     private async Task RunAsync()
     {
-        if (!await _gate.WaitAsync(0))
-            return;
-        try
+        // A trigger that arrives after the loop's last check but before the gate is released finds the gate taken;
+        // look at the flag again once released so that change is not left waiting for the next poll.
+        while (Volatile.Read(ref _pending) == 1 && !_disposed)
         {
-            while (Interlocked.Exchange(ref _pending, 0) == 1 && !_disposed)
+            if (!await _gate.WaitAsync(0))
+                return;
+            try
             {
-                try
+                while (Interlocked.Exchange(ref _pending, 0) == 1 && !_disposed)
                 {
-                    var result = await _service.SyncAsync(_collectionId, _folder);
-                    _onSynced(result);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException or FormatException)
-                {
-                    _onError(ex);
+                    try
+                    {
+                        var result = await _service.SyncAsync(_collectionId, _folder);
+                        _onSynced(result);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Any failure (a database error included) goes to the caller; this task is fire-and-forget.
+                        _onError(ex);
+                    }
                 }
             }
-        }
-        finally
-        {
-            _gate.Release();
+            finally
+            {
+                _gate.Release();
+            }
         }
     }
 

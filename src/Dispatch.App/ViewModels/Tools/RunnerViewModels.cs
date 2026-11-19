@@ -537,6 +537,12 @@ public sealed partial class MockServerViewModel : ObservableObject, ITool
                 Seed = Seed is { } seed ? (int)seed : null,
                 SessionSpeed = (double)SessionSpeed
             });
+            if (_closed)
+            {
+                // The window was closed while the server was starting; its OnClosed found nothing to stop.
+                await _server.StopAsync();
+                return;
+            }
             BaseUrl = _server.BaseUrl?.ToString().TrimEnd('/');
             GrpcUrl = _server.GrpcUrl?.ToString().TrimEnd('/');
             IsRunning = true;
@@ -625,7 +631,13 @@ public sealed partial class MockServerViewModel : ObservableObject, ITool
     /// <summary>The mock is exercised from the request editor and the runner while this is open.</summary>
     public bool IsModal => false;
 
-    public void OnClosed() => _ = _server.StopAsync();
+    private bool _closed;
+
+    public void OnClosed()
+    {
+        _closed = true;
+        _ = _server.StopAsync();
+    }
 }
 
 public sealed record TimelineBar(double Height, string Tooltip, bool HasErrors);

@@ -307,11 +307,9 @@ public sealed class SettingsRepository(IDbContextFactory<DispatchDbContext> fact
     public async Task SetAsync(string key, string? value, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        var entry = await db.Settings.FindAsync([key], ct);
-        if (entry is null)
-            db.Settings.Add(new SettingEntry { Key = key, Value = value });
-        else
-            entry.Value = value;
-        await db.SaveChangesAsync(ct);
+        // One statement: a find-then-insert lets two writers of a new key (theme toggles, cookie saves) both insert,
+        // and the second fails on the primary key, losing its value.
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"INSERT INTO \"Settings\" (\"Key\", \"Value\") VALUES ({key}, {value}) ON CONFLICT(\"Key\") DO UPDATE SET \"Value\" = excluded.\"Value\"", ct);
     }
 }

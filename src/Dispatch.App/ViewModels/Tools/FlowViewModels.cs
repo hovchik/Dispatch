@@ -384,8 +384,11 @@ public sealed partial class FlowManagerViewModel : ObservableObject, ITool
 
     private async Task LoadAsync()
     {
+        // Clear after loading: two overlapping loads (opening the window, then New) would otherwise both clear
+        // before either adds, and list every flow twice.
+        var flows = (await _repository.GetAllAsync()).Where(f => f.CollectionId == _collection.Id).ToList();
         Flows.Clear();
-        foreach (var flow in (await _repository.GetAllAsync()).Where(f => f.CollectionId == _collection.Id))
+        foreach (var flow in flows)
             Flows.Add(flow);
         Hint = Flows.Count == 0 ? "No flows yet. Create one to chain requests with conditions, loops and waits." : $"{Flows.Count} flow(s).";
     }

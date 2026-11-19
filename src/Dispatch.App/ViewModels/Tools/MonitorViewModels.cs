@@ -164,8 +164,9 @@ public sealed partial class MonitorEditorViewModel : ObservableObject, ITool
 
     private async Task LoadHistoryAsync()
     {
+        var runs = await _repository.GetRunsAsync(_monitor.Id, 30);
         History.Clear();
-        foreach (var run in await _repository.GetRunsAsync(_monitor.Id, 30))
+        foreach (var run in runs)
             History.Add(run);
     }
 }
@@ -200,8 +201,10 @@ public sealed partial class MonitorManagerViewModel : ObservableObject, ITool
 
     private async Task LoadAsync()
     {
+        // Clear after loading, so overlapping loads cannot list every monitor twice.
+        var monitors = (await _repository.GetAllAsync()).Where(m => m.CollectionId == _collection.Id).ToList();
         Monitors.Clear();
-        foreach (var m in (await _repository.GetAllAsync()).Where(m => m.CollectionId == _collection.Id))
+        foreach (var m in monitors)
             Monitors.Add(m);
         Hint = Monitors.Count == 0
             ? "No monitors yet. Create one to run this collection on a schedule and alert on failures (run 'dispatch monitor --watch' to execute them)."

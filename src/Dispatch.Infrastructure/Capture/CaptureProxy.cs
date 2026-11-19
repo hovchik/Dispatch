@@ -61,13 +61,23 @@ public sealed class CaptureProxy(CertificateAuthority authority) : IAsyncDisposa
     {
         if (_listener is not null)
             throw new InvalidOperationException("The capture proxy is already running.");
+        var listener = new TcpListener(options.Public ? IPAddress.Any : IPAddress.Loopback, options.Port);
+        try
+        {
+            listener.Start();
+        }
+        catch
+        {
+            // A port in use: the proxy must stay stopped, or every later Start would say "already running".
+            listener.Dispose();
+            throw;
+        }
         _options = options;
         _shaper = options.Network is { IsNone: false } profile ? new NetworkShaper(profile) : null;
-        _listener = new TcpListener(options.Public ? IPAddress.Any : IPAddress.Loopback, options.Port);
-        _listener.Start();
-        Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+        _listener = listener;
+        Port = ((IPEndPoint)listener.LocalEndpoint).Port;
         _cts = new CancellationTokenSource();
-        _ = AcceptLoopAsync(_listener, _cts.Token);
+        _ = AcceptLoopAsync(listener, _cts.Token);
         return Task.CompletedTask;
     }
 
