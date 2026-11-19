@@ -7,8 +7,13 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <Version>0.1.0</Version>
     <Product>Dispatch</Product>
+    <Authors>Hovhannes</Authors>
+    <Company>Hovhannes</Company>
+    <Copyright>© $([System.DateTime]::UtcNow.Year) Hovhannes</Copyright>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Shown on the About card (Help → About Dispatch). -->
+    <AssemblyMetadata Include="BuildDate" Value="$([System.DateTime]::UtcNow.ToString('yyyy-MM-dd'))" />
     <InternalsVisibleTo Include="Dispatch.Tests" />
   </ItemGroup>
 </Project>

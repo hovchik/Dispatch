@@ -26,6 +26,7 @@
     <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}" />
     <KeyBinding Gesture="Ctrl+Shift+L" Command="{Binding ToggleLayoutCommand}" />
     <KeyBinding Gesture="F1" Command="{Binding ShowHelpCommand}" />
+    <KeyBinding Gesture="Escape" Command="{Binding CloseAboutCommand}" />
   </Window.KeyBindings>
 
   <Window.Styles>
@@ -158,6 +159,8 @@
                   <MenuItem Header="Getting started" Command="{Binding ShowWelcomeCommand}" />
                   <MenuItem Header="Load example collection" Command="{Binding LoadSamplesCommand}" />
                   <MenuItem Header="Keyboard shortcuts" Command="{Binding ShowHelpCommand}" CommandParameter="shortcuts" />
+                  <Separator />
+                  <MenuItem Header="About Dispatch" Command="{Binding ShowAboutCommand}" />
                 </MenuFlyout>
               </Button.Flyout>
             </Button>
@@ -458,6 +461,46 @@
         </Grid>
       </Border>
     </StackPanel>
+
+    <!-- ================= About card (Help → About Dispatch) ================= -->
+    <Border Background="{DynamicResource ScrimBrush}" IsVisible="{Binding IsAboutOpen}">
+      <Border Classes="card raised" Width="440" VerticalAlignment="Center" HorizontalAlignment="Center" Padding="24,20"
+              CornerRadius="14" BoxShadow="0 24 64 0 #70000000">
+        <StackPanel Spacing="14">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Width="44" Height="44" CornerRadius="12" Margin="0,0,14,0" Background="{StaticResource AccentGradientBrush}">
+              <Image Source="/Assets/dispatch-logo.png" Width="28" Height="28" RenderOptions.BitmapInterpolationMode="HighQuality" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+              <TextBlock Text="{Binding About.Product}" FontSize="18" FontWeight="SemiBold" LetterSpacing="-0.3" />
+              <TextBlock Classes="muted" FontSize="12" Text="{Binding About.Version, StringFormat='Version {0}'}" />
+            </StackPanel>
+            <Button Grid.Column="2" Classes="icon" VerticalAlignment="Top" Command="{Binding CloseAboutCommand}" ToolTip.Tip="Close">
+              <PathIcon Data="{StaticResource IconClose}" />
+            </Button>
+          </Grid>
+
+          <TextBlock TextWrapping="Wrap" FontSize="13" LineHeight="19" Text="{Binding About.Description}" />
+
+          <Border Classes="step">
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="14" RowSpacing="5">
+              <TextBlock Classes="muted" FontSize="12" Text="Version" />
+              <SelectableTextBlock Grid.Column="1" FontSize="12" Text="{Binding About.Version}" />
+              <TextBlock Grid.Row="1" Classes="muted" FontSize="12" Text="Built" IsVisible="{Binding About.BuildDate, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              <TextBlock Grid.Row="1" Grid.Column="1" FontSize="12" Text="{Binding About.BuildDateText}" IsVisible="{Binding About.BuildDate, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              <TextBlock Grid.Row="2" Classes="muted" FontSize="12" Text="Runtime" />
+              <TextBlock Grid.Row="2" Grid.Column="1" FontSize="12" Text="{Binding About.Runtime}" />
+            </Grid>
+          </Border>
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="muted" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding About.Copyright}" />
+            <Button Grid.Column="1" Classes="accent" Padding="14,6" Margin="12,0,0,0" Content="Close"
+                    Command="{Binding CloseAboutCommand}" />
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Border>
 
     <!-- ================= Welcome card (first launch, or Help → Getting started) ================= -->
     <Border Background="{DynamicResource ScrimBrush}" IsVisible="{Binding IsWelcomeOpen}">

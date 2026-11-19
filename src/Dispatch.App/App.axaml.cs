@@ -50,11 +50,30 @@ public sealed class App : Avalonia.Application
                 var snapshot = viewModel.SnapshotOpenTabs();
                 Task.Run(() => viewModel.SaveOpenTabsAsync(snapshot)).GetAwaiter().GetResult();
             };
-            desktop.Exit += (_, _) => _services.Dispose();
+            // Several singletons (webhook receiver, mock server, capture proxy) are only IAsyncDisposable, so the
+            // synchronous Dispose() throws. Dispose asynchronously off the UI thread, and never let a failure while
+            // shutting down crash the exit.
+            desktop.Exit += (_, _) => DisposeServices();
             desktop.MainWindow = window;
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void DisposeServices()
+    {
+        var services = _services;
+        _services = null;
+        if (services is null)
+            return;
+        try
+        {
+            Task.Run(() => services.DisposeAsync().AsTask()).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            CrashLog.Write("Error while shutting down services", ex);
+        }
     }
 
     private static ServiceProvider ConfigureServices()
