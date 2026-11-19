@@ -466,6 +466,40 @@ public class FolderSyncServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_edited_copy_that_sorts_first_does_not_take_over_the_original()
+    {
+        await _sync.SyncAsync(_collection.Id, Folder);
+        var original = (await AppAsync()).Requests.Single(r => r.Name == "List");
+        var listFile = RequestFile("List");
+        // "000-a-copy" sorts before "000-list", and the copy was edited before the sync.
+        File.WriteAllText(Path.Combine(Folder, "000-a-copy.request.json"),
+            File.ReadAllText(listFile).Replace("\"name\": \"List\"", "\"name\": \"Copy\"").Replace("{{baseUrl}}/list", "{{baseUrl}}/copy"));
+
+        await _sync.SyncAsync(_collection.Id, Folder);
+
+        var app = await AppAsync();
+        var list = app.Requests.Single(r => r.Id == original.Id);
+        Assert.Equal("List", list.Name);
+        Assert.Equal("{{baseUrl}}/list", list.Url);
+        Assert.Contains(app.Requests, r => r.Name == "Copy" && r.Id != original.Id);
+    }
+
+    [Fact]
+    public async Task Two_edited_files_with_one_id_stop_the_sync()
+    {
+        await _sync.SyncAsync(_collection.Id, Folder);
+        var listFile = RequestFile("List");
+        var text = File.ReadAllText(listFile);
+        File.WriteAllText(Path.Combine(Folder, "000-a-copy.request.json"), text.Replace("{{baseUrl}}/list", "{{baseUrl}}/one"));
+        File.WriteAllText(listFile, text.Replace("{{baseUrl}}/list", "{{baseUrl}}/two"));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _sync.SyncAsync(_collection.Id, Folder));
+
+        Assert.Contains("same id", ex.Message);
+        Assert.Equal("{{baseUrl}}/list", (await AppAsync()).Requests.Single(r => r.Name == "List").Url);
+    }
+
+    [Fact]
     public async Task Overlapping_syncs_run_one_at_a_time_and_lose_nothing()
     {
         await _sync.SyncAsync(_collection.Id, Folder);

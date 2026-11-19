@@ -199,7 +199,15 @@ public sealed class FolderSyncService(ICollectionRepository collections, string 
     {
         var app = await LoadAppAsync(collectionId);
         Directory.CreateDirectory(folder);
-        var imported = DispatchFormat.ImportFolder(folder);
+        // Of two files with one id (a copied file), the original is the one still matching the last sync or the app.
+        var last = LoadLast(collectionId, folder);
+        var appJson = app.Requests.ToDictionary(r => r.Id.ToString(), DispatchFormat.RequestJson);
+        var imported = DispatchFormat.ImportFolder(folder, r =>
+        {
+            var key = r.Id.ToString();
+            var json = DispatchFormat.RequestJson(r);
+            return (last.TryGetValue(key, out var synced) && synced == json) || (appJson.TryGetValue(key, out var current) && current == json);
+        });
         if (imported.Warnings.Count > 0)
         {
             // A file that cannot be read would look like a deletion; never sync over it.

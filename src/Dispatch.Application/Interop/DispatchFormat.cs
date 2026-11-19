@@ -115,7 +115,12 @@ public static class DispatchFormat
                 File.Delete(stale);
     }
 
-    public static ImportResult ImportFolder(string directory)
+    /// <param name="isOriginal">
+    /// When two files carry the same request id (a file copied to make a new request), says which one is the request
+    /// that id already belongs to, e.g. the one still matching the last synced copy. Without it the first file by path
+    /// keeps the id. When it matches none or several of them, the clash is reported as a warning instead of guessed.
+    /// </param>
+    public static ImportResult ImportFolder(string directory, Func<ApiRequest, bool>? isOriginal = null)
     {
         var metaPath = Path.Combine(directory, CollectionFileName);
         var collection = File.Exists(metaPath) && JsonNode.Parse(File.ReadAllText(metaPath))?["collection"] is JsonObject meta
@@ -127,32 +132,26 @@ public static class DispatchFormat
             .ToList();
         var result = new ImportResult { Format = "Dispatch folder" };
         var order = 0;
-        var ids = new HashSet<Guid>();
+        var paths = new Dictionary<ApiRequest, string>(ReferenceEqualityComparer.Instance);
         foreach (var file in files)
         {
             try
             {
                 var node = JsonNode.Parse(File.ReadAllText(file))!;
                 var request = ReadRequest(node["request"] ?? node, collection.Id, order++);
-                // A file copied to make a new request (the usual way in git) still carries the original's id. Two
-                // requests with one id would collide when saved and break anything keyed by id (folder sync), so the
-                // copy becomes a request of its own.
-                if (!ids.Add(request.Id))
-                {
-                    request.Id = Guid.NewGuid();
-                    ids.Add(request.Id);
-                }
                 // The folder layout is the source of truth for folders (files may be moved around in git).
                 var relativeDir = Path.GetDirectoryName(Path.GetRelativePath(directory, file))?.Replace('\\', '/') ?? "";
                 if (relativeDir.Length > 0 && string.IsNullOrEmpty(request.Folder))
                     request.Folder = relativeDir;
                 collection.Requests.Add(request);
+                paths[request] = Path.GetRelativePath(directory, file);
             }
             catch (Exception ex) when (ex is JsonException or FormatException)
             {
                 result.Warnings.Add($"{Path.GetRelativePath(directory, file)}: {ex.Message}");
             }
         }
+        SeparateCopies(collection.Requests, paths, isOriginal, result.Warnings);
         result.Collections.Add(collection);
 
         var envDir = Path.Combine(directory, "environments");
@@ -161,6 +160,33 @@ public static class DispatchFormat
                 if (JsonNode.Parse(File.ReadAllText(file))?["environment"] is JsonObject env)
                     result.Environments.Add(ReadEnvironment(env));
         return result;
+    }
+
+    /// <summary>
+    /// A file copied to make a new request (the usual way in git) still carries the original's id. Two requests with one
+    /// id would collide when saved and break anything keyed by id (folder sync, flow steps), so every copy gets an id of
+    /// its own and the original keeps its id, which flows and monitors refer to.
+    /// </summary>
+    private static void SeparateCopies(List<ApiRequest> requests, Dictionary<ApiRequest, string> paths, Func<ApiRequest, bool>? isOriginal,
+        List<string> warnings)
+    {
+        foreach (var group in requests.GroupBy(r => r.Id).Where(g => g.Count() > 1).ToList())
+        {
+            var candidates = group.ToList();
+            ApiRequest keeper;
+            if (isOriginal is null)
+                keeper = candidates[0];
+            else if (candidates.Where(isOriginal).ToList() is [var original])
+                keeper = original;
+            else
+            {
+                warnings.Add($"{string.Join(", ", candidates.Select(r => paths[r]))} have the same id, and it is not clear which one is the " +
+                             "original. Remove the \"id\" line from the copies.");
+                keeper = candidates[0];
+            }
+            foreach (var copy in candidates.Where(r => !ReferenceEquals(r, keeper)))
+                copy.Id = Guid.NewGuid();
+        }
     }
 
     private static void WriteIfChanged(string path, string content)
