@@ -127,12 +127,21 @@ public static class DispatchFormat
             .ToList();
         var result = new ImportResult { Format = "Dispatch folder" };
         var order = 0;
+        var ids = new HashSet<Guid>();
         foreach (var file in files)
         {
             try
             {
                 var node = JsonNode.Parse(File.ReadAllText(file))!;
                 var request = ReadRequest(node["request"] ?? node, collection.Id, order++);
+                // A file copied to make a new request (the usual way in git) still carries the original's id. Two
+                // requests with one id would collide when saved and break anything keyed by id (folder sync), so the
+                // copy becomes a request of its own.
+                if (!ids.Add(request.Id))
+                {
+                    request.Id = Guid.NewGuid();
+                    ids.Add(request.Id);
+                }
                 // The folder layout is the source of truth for folders (files may be moved around in git).
                 var relativeDir = Path.GetDirectoryName(Path.GetRelativePath(directory, file))?.Replace('\\', '/') ?? "";
                 if (relativeDir.Length > 0 && string.IsNullOrEmpty(request.Folder))

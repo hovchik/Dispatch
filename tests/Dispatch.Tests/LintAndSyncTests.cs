@@ -416,6 +416,72 @@ public class FolderSyncServiceTests : IAsyncLifetime
         Assert.Equal("{{baseUrl}}/watched", (await AppAsync()).Requests.Single(r => r.Name == "List").Url);
     }
 
+    [Fact]
+    public async Task A_folder_that_was_emptied_gets_the_collection_back_instead_of_deleting_it_in_the_app()
+    {
+        await _sync.SyncAsync(_collection.Id, Folder);
+        // Deleted, moved away, or a branch / fresh clone without it.
+        Directory.Delete(Folder, recursive: true);
+
+        var result = await _sync.SyncAsync(_collection.Id, Folder);
+
+        Assert.Equal(0, result.ToApp);
+        Assert.Equal(3, result.ToFolder);
+        Assert.Contains(result.Warnings, w => w.Contains("empty"));
+        Assert.Equal(3, (await AppAsync()).Requests.Count);
+        Assert.Equal(3, Directory.EnumerateFiles(Folder, "*.request.json", SearchOption.AllDirectories).Count());
+        Assert.True((await _sync.SyncAsync(_collection.Id, Folder)).InSync);
+    }
+
+    [Fact]
+    public async Task Deleting_every_request_file_but_keeping_the_collection_file_still_deletes_in_the_app()
+    {
+        await _sync.SyncAsync(_collection.Id, Folder);
+        foreach (var file in Directory.EnumerateFiles(Folder, "*.request.json", SearchOption.AllDirectories).ToList())
+            File.Delete(file);
+
+        var result = await _sync.SyncAsync(_collection.Id, Folder);
+
+        Assert.Equal(3, result.ToApp);
+        Assert.Empty((await AppAsync()).Requests);
+    }
+
+    [Fact]
+    public async Task A_copied_request_file_becomes_a_new_request()
+    {
+        await _sync.SyncAsync(_collection.Id, Folder);
+        var listFile = RequestFile("List");
+        File.WriteAllText(Path.Combine(Folder, "list-copy.request.json"),
+            File.ReadAllText(listFile).Replace("\"name\": \"List\"", "\"name\": \"Copy\""));
+
+        var result = await _sync.SyncAsync(_collection.Id, Folder);
+
+        Assert.Empty(result.Conflicts);
+        var app = await AppAsync();
+        Assert.Equal(4, app.Requests.Count);
+        Assert.Equal(4, app.Requests.Select(r => r.Id).Distinct().Count());
+        Assert.Contains(app.Requests, r => r.Name == "Copy");
+        Assert.Contains(app.Requests, r => r.Name == "List");
+        Assert.True((await _sync.SyncAsync(_collection.Id, Folder)).InSync);
+    }
+
+    [Fact]
+    public async Task Overlapping_syncs_run_one_at_a_time_and_lose_nothing()
+    {
+        await _sync.SyncAsync(_collection.Id, Folder);
+        var app = await AppAsync();
+        var list = app.Requests.Single(r => r.Name == "List");
+        list.Name = "List all";
+        await _repository.SaveRequestAsync(list);
+
+        // "Sync now" while the watcher syncs: each run rewrites files the other is reading.
+        var results = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => Task.Run(() => _sync.SyncAsync(_collection.Id, Folder))));
+
+        Assert.All(results, r => Assert.Equal(0, r.ToApp));
+        Assert.Equal(3, (await AppAsync()).Requests.Count);
+        Assert.True((await _sync.SyncAsync(_collection.Id, Folder)).InSync);
+    }
+
     private sealed class DbFactory(string path) : IDbContextFactory<DispatchDbContext>
     {
         public DispatchDbContext CreateDbContext() =>
