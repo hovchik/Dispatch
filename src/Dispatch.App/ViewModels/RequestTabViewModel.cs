@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dispatch.App.Services;
 using Dispatch.App.ViewModels.Editors;
+using Dispatch.Application.Auth;
 using Dispatch.Application.Formatting;
 using Dispatch.Application.Requests;
 using Dispatch.Domain;
@@ -109,7 +110,11 @@ public sealed partial class RequestTabViewModel : ObservableObject
         };
         EventHandler markDirty = (_, _) => MarkDirty();
         FormFields.Changed += markDirty;
-        Auth.Changed += markDirty;
+        Auth.Changed += (_, _) =>
+        {
+            MarkDirty();
+            UpdateTokenSuggestion();
+        };
         Settings.Changed += markDirty;
         GraphQl.Changed += markDirty;
         Grpc.Changed += markDirty;
@@ -429,6 +434,7 @@ public sealed partial class RequestTabViewModel : ObservableObject
 
     partial void OnKindChanged(RequestKind value)
     {
+        UpdateTokenSuggestion();
         if (!_loading && value == RequestKind.Grpc && Grpc.Services.Count <= 1 && !string.IsNullOrWhiteSpace(Url))
             _ = Grpc.LoadSchemaAsync(refresh: false, CancellationToken.None);
         MarkDirty();
@@ -503,6 +509,88 @@ public sealed partial class RequestTabViewModel : ObservableObject
 
     private ApiRequest Resolve(ApiRequest request) => RequestResolver.Resolve(request, Variables());
 
+    // ---- Copied token suggestion ----------------------------------------------------------------
+
+    private CopiedToken? _tokenCandidate;
+    private string? _dismissedToken;
+
+    /// <summary>The copied token offered for this request's Auth (null: nothing to offer).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTokenSuggestion), nameof(TokenSuggestionText), nameof(TokenSuggestionAction))]
+    private CopiedToken? _suggestedToken;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TokenSuggestionText), nameof(TokenSuggestionAction))]
+    private TokenSuggestion _tokenSuggestionKind;
+
+    public bool HasTokenSuggestion => SuggestedToken is not null;
+
+    public string TokenSuggestionText
+    {
+        get
+        {
+            if (SuggestedToken is not { } copied)
+                return "";
+            var details = new List<string> { copied.Origin };
+            try
+            {
+                if (Application.Auth.Jwt.Decode(copied.Token).ExpiresAt is { } exp)
+                    details.Add($"expires {exp.ToLocalTime():t}");
+            }
+            catch (FormatException)
+            {
+            }
+            var about = string.Join(", ", details);
+            return TokenSuggestionKind == TokenSuggestion.Replace
+                ? $"You copied a different token ({about}). Replace this request's bearer token with it?"
+                : $"You copied a token ({about}). Use it as this request's bearer token?";
+        }
+    }
+
+    public string TokenSuggestionAction => TokenSuggestionKind == TokenSuggestion.Replace ? "Replace token" : "Use in Auth";
+
+    /// <summary>Raised after a suggested token was put into Auth, so the view can show the Auth tab.</summary>
+    public event EventHandler? AuthFilled;
+
+    /// <summary>Looks at the clipboard (and the last token copied from a response) and offers it when Auth needs one.</summary>
+    public async Task RefreshTokenSuggestionAsync()
+    {
+        _tokenCandidate = await _services.Tokens.CurrentAsync();
+        UpdateTokenSuggestion();
+    }
+
+    private void UpdateTokenSuggestion()
+    {
+        var candidate = _tokenCandidate;
+        var kind = TokenSuggestion.None;
+        if (candidate is not null && ShowAuth && candidate.SourceRequestId != _requestId
+            && !string.Equals(candidate.Token, _dismissedToken, StringComparison.Ordinal))
+        {
+            // "New" is an unsaved request that was never sent: a fresh tab, not the login request that produced the token.
+            kind = BearerTokens.Suggest(Auth.ToModel(), isNewRequest: !IsSaved && Response is null, candidate.Token, DateTimeOffset.UtcNow);
+        }
+        TokenSuggestionKind = kind;
+        SuggestedToken = kind == TokenSuggestion.None ? null : candidate;
+    }
+
+    [RelayCommand]
+    private void UseSuggestedToken()
+    {
+        if (SuggestedToken is not { } copied)
+            return;
+        Auth.Mode = AuthMode.Bearer;
+        Auth.Token = copied.Token;
+        UpdateTokenSuggestion();
+        AuthFilled?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
+    private void DismissTokenSuggestion()
+    {
+        _dismissedToken = SuggestedToken?.Token;
+        UpdateTokenSuggestion();
+    }
+
     // ---- Commands ----------------------------------------------------------------------------
 
     [RelayCommand(IncludeCancelCommand = true)]
@@ -530,7 +618,9 @@ public sealed partial class RequestTabViewModel : ObservableObject
 
             if (Response is not null)
                 PreviousResponse = Response;
-            Response = await ResponseViewModel.CreateAsync(response, _services.Clipboard, _services.Dialogs);
+            Response = await ResponseViewModel.CreateAsync(response, _services.Clipboard, _services.Dialogs,
+                new TokenCopySource(_services.Tokens, _requestId, DisplayName));
+            UpdateTokenSuggestion();
             Assertions.ApplySnapshots(response.SnapshotUpdates);
             Assertions.ShowResults(response.TestResults);
             Expectations.ShowResults(response.TestResults);

@@ -20,10 +20,16 @@ public partial class RequestTabView : UserControl
         DataContextChanged += (_, _) =>
         {
             if (_viewModel is not null)
+            {
                 _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+                _viewModel.AuthFilled -= OnAuthFilled;
+            }
             _viewModel = DataContext as RequestTabViewModel;
             if (_viewModel is not null)
+            {
                 _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+                _viewModel.AuthFilled += OnAuthFilled;
+            }
             SelectFirstVisibleTab();
         };
         ApplyLayout();
@@ -76,6 +82,9 @@ public partial class RequestTabView : UserControl
             ResponsePane.Margin = new Thickness(0, 6, 0, 0);
         }
     }
+
+    /// <summary>A copied token was just put into Auth: show it there.</summary>
+    private void OnAuthFilled(object? sender, EventArgs e) => EditorTabs.SelectedItem = AuthTab;
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {

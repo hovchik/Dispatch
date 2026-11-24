@@ -33,7 +33,15 @@ _ = Task.Run(async () =>
     {
         var ctx = await listener.GetContextAsync();
         var json = """{"id":42,"name":"Ada Lovelace","email":"ada@example.com","roles":["admin","analyst"],"address":{"city":"London","zip":"SW1A"},"active":true,"score":98.6,"tags":[],"createdAt":"2026-10-08T09:12:00Z"}""";
-        if (ctx.Request.Url!.AbsolutePath == "/items")
+        if (ctx.Request.Url!.AbsolutePath == "/token")
+        {
+            // A login response carrying a JWT, for the token bar and the "use the copied token" suggestion.
+            static string Part(string text) => Convert.ToBase64String(Encoding.UTF8.GetBytes(text)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var jwt = Part("""{"alg":"RS256","typ":"JWT"}""") + "." + Part($$"""{"scope":"qrRegister","client_id":"Demo","nbf":{{now}},"exp":{{now + 3600}},"iat":{{now}}}""") + ".c2lnbmF0dXJl";
+            json = $$"""{"access_token":"{{jwt}}","expires_in":3600,"token_type":"Bearer","refresh_token":null}""";
+        }
+        else if (ctx.Request.Url!.AbsolutePath == "/items")
         {
             // A paged list with a classic bug for the pagination walker: page 2 starts one item early.
             var page = int.TryParse(ctx.Request.QueryString["page"], out var p) ? p : 1;
@@ -135,6 +143,24 @@ Pump(300);
 Shot("08-side-by-side");
 vm.IsSideBySide = false;
 Pump(100);
+
+// JWT in a login response: the token bar, then the suggestion on a new tab after "Copy token".
+vm.NewRequestCommand.Execute(Dispatch.Domain.RequestKind.Http);
+var login = vm.SelectedTab!;
+login.Name = "Login";
+login.Method = Dispatch.Domain.HttpVerb.Post;
+login.Url = "http://127.0.0.1:18777/token";
+Pump(100);
+Wait(login.SendCommand.ExecuteAsync(null));
+Pump(800);
+Shot("08b-jwt-response");
+Wait(login.Response!.CopyTokenCommand.ExecuteAsync(null));
+vm.NewRequestCommand.Execute(Dispatch.Domain.RequestKind.Http);
+Pump(600);
+Shot("08c-token-suggestion");
+vm.SelectedTab!.UseSuggestedTokenCommand.Execute(null);
+Pump(400);
+Shot("08d-token-applied");
 
 // The lifetime only tracks windows once it has been started, so ask the dialog service (via reflection) instead.
 IEnumerable<Window> OpenToolWindows()

@@ -221,3 +221,121 @@ public sealed class DigestAuthTests
         Assert.Equal(200, response.StatusCode);
     }
 }
+
+public class BearerTokenTests
+{
+    private static string Part(string json) => Convert.ToBase64String(Encoding.UTF8.GetBytes(json)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private static string Token(long exp, string sub = "42") =>
+        $"{Part("""{"alg":"RS256","typ":"JWT"}""")}.{Part($$"""{"sub":"{{sub}}","exp":{{exp}}}""")}.c2ln";
+
+    private static readonly long Future = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
+
+    [Fact]
+    public void Finds_the_access_token_of_a_token_response()
+    {
+        var access = Token(Future);
+        var body = $$"""
+            {
+              "id_token": "{{Token(Future, "id")}}",
+              "access_token": "{{access}}",
+              "expires_in": 3600,
+              "token_type": "Bearer",
+              "refresh_token": null
+            }
+            """;
+
+        var match = BearerTokens.FindJwt(body);
+
+        Assert.NotNull(match);
+        Assert.Equal(access, match.Token);
+        Assert.Equal("access_token", match.Field);
+    }
+
+    [Fact]
+    public void Finds_nested_and_bearer_prefixed_tokens_and_plain_text_ones()
+    {
+        var token = Token(Future);
+        var nested = BearerTokens.FindJwt("""{"data":{"session":{"jwt":"Bearer """ + token + "\"}}}");
+        Assert.Equal(token, nested?.Token);
+        Assert.Equal("jwt", nested?.Field);
+
+        var text = BearerTokens.FindJwt($"token={token}; path=/");
+        Assert.Equal(token, text?.Token);
+        Assert.Null(text?.Field);
+
+        Assert.Null(BearerTokens.FindJwt("""{"name":"eyJ not a token"}"""));
+        Assert.Null(BearerTokens.FindJwt("""{"value":"eyJabc.eyJdef.ghi"}""")); // JWT-shaped but not decodable
+    }
+
+    [Fact]
+    public void Suggests_filling_new_requests_and_bearer_requests_without_a_token()
+    {
+        var token = Token(Future);
+        var now = DateTimeOffset.UtcNow;
+
+        Assert.Equal(TokenSuggestion.Fill, BearerTokens.Suggest(new AuthSettings(), isNewRequest: true, token, now));
+        Assert.Equal(TokenSuggestion.None, BearerTokens.Suggest(new AuthSettings(), isNewRequest: false, token, now));
+        Assert.Equal(TokenSuggestion.Fill, BearerTokens.Suggest(new AuthSettings { Mode = AuthMode.Bearer }, false, token, now));
+        Assert.Equal(TokenSuggestion.Fill, BearerTokens.Suggest(new AuthSettings { Mode = AuthMode.Bearer }, false, "Bearer " + token, now));
+    }
+
+    [Fact]
+    public void Suggests_replacing_another_literal_token_but_leaves_variables_and_other_auth_alone()
+    {
+        var token = Token(Future);
+        var now = DateTimeOffset.UtcNow;
+
+        Assert.Equal(TokenSuggestion.Replace,
+            BearerTokens.Suggest(new AuthSettings { Mode = AuthMode.Bearer, Token = Token(Future, "old") }, false, token, now));
+        Assert.Equal(TokenSuggestion.None,
+            BearerTokens.Suggest(new AuthSettings { Mode = AuthMode.Bearer, Token = token }, false, token, now));
+        Assert.Equal(TokenSuggestion.None,
+            BearerTokens.Suggest(new AuthSettings { Mode = AuthMode.Bearer, Token = "Bearer " + token }, false, token, now));
+        Assert.Equal(TokenSuggestion.None,
+            BearerTokens.Suggest(new AuthSettings { Mode = AuthMode.Bearer, Token = "{{token}}" }, false, token, now));
+        Assert.Equal(TokenSuggestion.None,
+            BearerTokens.Suggest(new AuthSettings { Mode = AuthMode.Basic }, true, token, now));
+        Assert.Equal(TokenSuggestion.None,
+            BearerTokens.Suggest(new AuthSettings { Mode = AuthMode.OAuth2 }, true, token, now));
+    }
+
+    [Fact]
+    public void Never_suggests_expired_or_non_jwt_text()
+    {
+        var now = DateTimeOffset.UtcNow;
+        Assert.Equal(TokenSuggestion.None, BearerTokens.Suggest(new AuthSettings(), true, Token(now.AddMinutes(-1).ToUnixTimeSeconds()), now));
+        Assert.Equal(TokenSuggestion.None, BearerTokens.Suggest(new AuthSettings(), true, "hello world", now));
+    }
+
+    [Fact]
+    public void Apply_sets_bearer_auth_with_the_bare_token()
+    {
+        var token = Token(Future);
+        var auth = new AuthSettings { Mode = AuthMode.None };
+
+        BearerTokens.Apply(auth, "Bearer " + token);
+
+        Assert.Equal(AuthMode.Bearer, auth.Mode);
+        Assert.Equal(token, auth.Token);
+        Assert.Equal("Bearer " + token, BearerTokens.AsBearer(token));
+    }
+
+    [Fact]
+    public void Finds_the_token_in_the_example_login_response()
+    {
+        const string body = """
+            {
+              "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZSI6InFyUmVnaXN0ZXJQZm8iLCJmb2lkIjoiMTAwNiIsIm5hbWVpZCI6IjIwMTkiLCJjbGllbnRfaWQiOiJJZHJhbVFSUGZvIiwibmJmIjoxNzk1NTEzMzg1LCJleHAiOjE3OTU1MTY5ODUsImlhdCI6MTc5NTUxMzM4NX0.FoNk3IewSbuNMk2ftHY_z78JWD0hQJa3QFj1xIBjjDr6RCj4ghq_v4BQQAiXZFZpZJ_XU8YbvBneYl2yVrgJfg7wqabfGb4qY_2wQ6E4fkfh5E8zaowPLgmeR6uVnv2vjQoCcKWXZ75VJ0781_KKvGKBjcFUqFzvoL8InyLVUewcBR_FpkMKDH3gjn3GUfKvt0pXYPLs1pMXH-PL8eEd5RNrSL1OnqnA4PmttQbx3nddVAqRJPCZPqcc61U8Brk3sg2wK-JBXzukNXr5Yzn0dGsKH8R4k8lT4wM2uqteSfdFqzK5mWR4grJiVoFWI2NUFEjNGi0bJn3YcL03arteQg",
+              "expires_in": 3600,
+              "token_type": "Bearer",
+              "refresh_token": null
+            }
+            """;
+
+        var match = BearerTokens.FindJwt(body);
+
+        Assert.Equal("access_token", match?.Field);
+        Assert.Equal("RS256", Jwt.Decode(match!.Token).Algorithm);
+    }
+}

@@ -206,7 +206,8 @@ public static class HelpCatalog
                 "Client certificates (mTLS) are under the Settings tab."
             ]),
             new HelpTip("Store secrets in an environment variable marked Secret and reference it, so the value never ends up in exports."),
-            new HelpTip("JWTs in responses are decoded for you in the response's JWT tab.")
+            new HelpTip("JWTs in responses are decoded for you in the response's JWT tab. The bar above the body copies the token as is or as \"Bearer <token>\"."),
+            new HelpTip("After you copy a token, a new request (or one on Bearer with an empty or different token) offers to put it in Auth. Tokens copied from a browser count too; expired ones are not offered.")
         ],
         ["auth", "authorization", "bearer", "token", "basic", "api key", "oauth", "oauth2", "pkce", "aws", "sigv4", "digest", "ntlm", "mtls", "certificate", "jwt"],
         "Bearer token", [Variables, Extraction]),

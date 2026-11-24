@@ -86,6 +86,7 @@ public sealed class App : Avalonia.Application
         services.AddSingleton<DialogService>();
         services.AddSingleton<IDialogService>(sp => sp.GetRequiredService<DialogService>());
         services.AddSingleton<Func<Dispatch.Infrastructure.Capture.CaptureProxy>>(sp => sp.GetRequiredService<Dispatch.Infrastructure.Capture.CaptureProxy>);
+        services.AddSingleton<CopiedTokenTracker>();
         services.AddSingleton<RequestTabServices>();
         services.AddSingleton<MainServices>();
 

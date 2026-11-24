@@ -20,7 +20,7 @@
     </DataTemplate>
   </UserControl.Resources>
 
-  <Grid RowDefinitions="Auto,*" Margin="10,8,10,8">
+  <Grid RowDefinitions="Auto,Auto,*" Margin="10,8,10,8">
 
     <!-- Address bar: PROTOCOL | METHOD | URL  [Send]  [layout] [code] [tools] -->
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,8">
@@ -128,7 +128,23 @@
     </Grid>
 
     <!-- Request editors / response: stacked by default, side by side with the layout toggle (see code-behind). -->
-    <Grid x:Name="SplitGrid" Grid.Row="1" RowDefinitions="*,6,1.25*">
+    <!-- A token the user copied (from a response or elsewhere), offered when this request's Auth needs one. -->
+    <Border Grid.Row="1" Classes="banner info" Margin="0,0,0,8" IsVisible="{Binding HasTokenSuggestion}">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+        <PathIcon Data="{StaticResource IconKey}" Width="13" Height="13" Foreground="{DynamicResource AccentBrush}"
+                  VerticalAlignment="Center" Margin="0,0,8,0" />
+        <TextBlock Grid.Column="1" Text="{Binding TokenSuggestionText}" TextWrapping="Wrap" FontSize="12.5" VerticalAlignment="Center" />
+        <Button Grid.Column="2" Classes="accent compact" Padding="10,3" Margin="8,0,0,0" FontSize="12"
+                Content="{Binding TokenSuggestionAction}" Command="{Binding UseSuggestedTokenCommand}"
+                ToolTip.Tip="Set Auth to Bearer Token with the copied token" />
+        <Button Grid.Column="3" Classes="icon" Command="{Binding DismissTokenSuggestionCommand}" ToolTip.Tip="Not for this request"
+                Margin="6,0,0,0" VerticalAlignment="Center">
+          <PathIcon Data="{StaticResource IconClose}" Width="10" Height="10" />
+        </Button>
+      </Grid>
+    </Border>
+
+    <Grid x:Name="SplitGrid" Grid.Row="2" RowDefinitions="*,6,1.25*">
       <TabControl x:Name="EditorTabs" Grid.Row="0" Padding="0">
 
         <!-- ===== Protocol-specific main tabs (first so they are selected by default) ===== -->
@@ -486,7 +502,7 @@
           </DockPanel>
         </TabItem>
 
-        <TabItem Header="Auth" IsVisible="{Binding ShowAuth}">
+        <TabItem x:Name="AuthTab" Header="Auth" IsVisible="{Binding ShowAuth}">
           <ScrollViewer Margin="0,8,0,0" DataContext="{Binding Auth}" x:DataType="ed:AuthEditor">
             <Grid ColumnDefinitions="240,*">
               <StackPanel Spacing="8" Margin="0,0,24,0">
