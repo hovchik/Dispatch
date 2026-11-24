@@ -80,6 +80,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         History.OpenRequested += OpenRequest;
         History.CompareRequested += CompareHistory;
         _services.Cookies.Changed += (_, _) => _ = SaveCookiesAsync();
+        _services.Tabs.Tokens.Changed += (_, _) => RefreshTokenSuggestion();
         _services.OAuth.DeviceCodeRequested += (code, uri, _completeUri) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             _ = _services.Tabs.Clipboard.SetTextAsync(code);
@@ -137,6 +138,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, ITabHost, IH
         _ => "Collections"
     };
     private IDialogService Dialogs => _services.Tabs.Dialogs;
+
+    // Opening, creating or switching to a tab offers a copied token for its Auth when it needs one.
+    partial void OnSelectedTabChanged(RequestTabViewModel? value) => RefreshTokenSuggestion();
+
+    /// <summary>Re-checks the clipboard for a token to offer the shown tab (also called when the window is activated).</summary>
+    public void RefreshTokenSuggestion()
+    {
+        if (SelectedTab is { } tab)
+            _ = SafeAsync(tab.RefreshTokenSuggestionAsync);
+    }
 
     // ---- ITabHost ------------------------------------------------------------------------------
 

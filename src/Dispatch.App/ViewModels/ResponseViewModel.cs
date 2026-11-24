@@ -11,6 +11,9 @@ namespace Dispatch.App.ViewModels;
 
 public sealed record TimingBar(string Label, string Text, double Fraction);
 
+/// <summary>Where a response came from, so a token copied from it can be offered to other tabs.</summary>
+public sealed record TokenCopySource(CopiedTokenTracker Tracker, Guid RequestId, string RequestName);
+
 public sealed partial class ResponseViewModel : ObservableObject
 {
     private readonly IClipboardService _clipboard;
@@ -37,11 +40,14 @@ public sealed partial class ResponseViewModel : ObservableObject
 
     private readonly IDialogService? _dialogs;
 
+    private readonly TokenCopySource? _tokenSource;
+
     private ResponseViewModel(ApiResponse response, BodyFormat format, string prettyBody, IClipboardService clipboard,
-        IDialogService? dialogs = null, JsonTable? table = null)
+        IDialogService? dialogs = null, JsonTable? table = null, TokenCopySource? tokenSource = null)
     {
         _clipboard = clipboard;
         _dialogs = dialogs;
+        _tokenSource = tokenSource;
         _table = table;
         HasTable = table is not null;
         Preview = BodyPreview.Detect(response.ContentType, response.BodyBytes, response.Body);
@@ -62,7 +68,12 @@ public sealed partial class ResponseViewModel : ObservableObject
         _prettyBody = prettyBody;
         Messages = response.Messages.Select(m => new MessageItemViewModel(m)).ToList();
         Timings = BuildTimings(response);
-        Jwt = DecodeJwtInBody(response.Body);
+        if (BearerTokens.FindJwt(response.Body) is { } found)
+        {
+            JwtToken = found.Token;
+            JwtField = found.Field;
+            Jwt = Application.Auth.Jwt.Decode(found.Token);
+        }
         if (response.Kind == RequestKind.Http && response.Timings is not null && TlsLookup is { } lookup)
             _ = LoadTlsAsync(lookup, response.EffectiveUrl);
     }
@@ -90,28 +101,14 @@ public sealed partial class ResponseViewModel : ObservableObject
         }
     }
 
-    /// <summary>Decodes a JWT returned in the body (e.g. a login response's access_token), for the JWT tab.</summary>
-    private static JwtInfo? DecodeJwtInBody(string body)
-    {
-        if (FindJwt(body) is not { } token)
-            return null;
-        try
-        {
-            return Application.Auth.Jwt.Decode(token);
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
-    }
-
     public static IReadOnlyList<BodyFormat> Formats { get; } = Enum.GetValues<BodyFormat>();
 
     /// <summary>Formats the body off the UI thread so large payloads don't freeze the window.</summary>
-    public static async Task<ResponseViewModel> CreateAsync(ApiResponse response, IClipboardService clipboard, IDialogService? dialogs = null)
+    public static async Task<ResponseViewModel> CreateAsync(ApiResponse response, IClipboardService clipboard, IDialogService? dialogs = null,
+        TokenCopySource? tokenSource = null)
     {
         if (!response.HasResponse)
-            return new ResponseViewModel(response, BodyFormat.Text, string.Empty, clipboard, dialogs);
+            return new ResponseViewModel(response, BodyFormat.Text, string.Empty, clipboard, dialogs, tokenSource: tokenSource);
 
         var (format, pretty, table) = await Task.Run(() =>
         {
@@ -119,7 +116,7 @@ public sealed partial class ResponseViewModel : ObservableObject
             var grid = detected == BodyFormat.Json && response.BodyBytes is null ? JsonTable.Build(response.Body) : null;
             return (detected, BodyFormatter.Pretty(response.Body, detected), grid);
         });
-        return new ResponseViewModel(response, format, pretty, clipboard, dialogs, table);
+        return new ResponseViewModel(response, format, pretty, clipboard, dialogs, table, tokenSource);
     }
 
     // ---- Table, preview, visualization and saving -----------------------------------------------
@@ -316,6 +313,36 @@ public sealed partial class ResponseViewModel : ObservableObject
     public JwtInfo? Jwt { get; }
     public bool HasJwt => Jwt is not null;
 
+    /// <summary>The raw token found in the body, and the JSON field holding it (null outside JSON).</summary>
+    public string? JwtToken { get; }
+    public string? JwtField { get; }
+
+    /// <summary>"JWT in access_token" for the body's token bar.</summary>
+    public string JwtLabel => string.IsNullOrEmpty(JwtField) ? "JWT in the body" : $"JWT in {JwtField}";
+    public string JwtSummary => Jwt?.Summary(DateTimeOffset.UtcNow) ?? "";
+    public bool IsJwtExpired => Jwt?.IsExpired(DateTimeOffset.UtcNow) == true;
+
+    [ObservableProperty] private string? _tokenCopyFeedback;
+
+    [RelayCommand]
+    private Task CopyTokenAsync() => CopyJwtAsync(asBearer: false);
+
+    [RelayCommand]
+    private Task CopyBearerTokenAsync() => CopyJwtAsync(asBearer: true);
+
+    private async Task CopyJwtAsync(bool asBearer)
+    {
+        if (JwtToken is not { } token)
+            return;
+        if (_tokenSource is { } source)
+            await source.Tracker.CopyAsync(token, asBearer, JwtField, source.RequestId, source.RequestName);
+        else
+            await _clipboard.SetTextAsync(asBearer ? BearerTokens.AsBearer(token) : token);
+        TokenCopyFeedback = asBearer ? "Copied as Bearer" : "Token copied";
+        await Task.Delay(1500);
+        TokenCopyFeedback = null;
+    }
+
     private static string Truncate(string s) => s.Length > 120 ? s[..117] + "…" : s;
 
     private static IReadOnlyList<TimingBar> BuildTimings(ApiResponse r)
@@ -335,15 +362,6 @@ public sealed partial class ResponseViewModel : ObservableObject
         Add("Content download", t.Download);
         bars.Add(new TimingBar("Total", Format.Duration(r.Elapsed), 1));
         return bars;
-    }
-
-    /// <summary>Finds a JWT-looking string value in a JSON body (e.g. access_token).</summary>
-    private static string? FindJwt(string body)
-    {
-        if (body.Length is 0 or > 200_000 || !body.Contains("eyJ", StringComparison.Ordinal))
-            return null;
-        var match = System.Text.RegularExpressions.Regex.Match(body, @"eyJ[\w-]+\.eyJ[\w-]+\.[\w-]*");
-        return match.Success ? match.Value : null;
     }
 
     [RelayCommand]

@@ -56,6 +56,8 @@ public partial class MainWindow : Window
         TabStrip.AddHandler(DragDrop.DragOverEvent, OnTabStripDragOver);
         TabStrip.AddHandler(DragDrop.DropEvent, OnTabStripDrop);
         TabStrip.LayoutUpdated += (_, _) => UpdateTabOverflow();
+        // Coming back from a browser or another app with a token on the clipboard: offer it to the shown tab.
+        Activated += (_, _) => _viewModel?.RefreshTokenSuggestion();
         TabStrip.AddHandler(ScrollViewer.ScrollChangedEvent, (_, _) => UpdateTabOverflow());
     }
 

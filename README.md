@@ -287,7 +287,8 @@ the exit code is 1.
 * **Code generation**: cURL, HTTPie, C#, Python, JavaScript, Go, grpcurl and websocat.
 * **Auth**: Bearer, Basic, API key, **OAuth 2.0** (client credentials, password, authorization code with PKCE,
   device code; tokens are cached and refreshed), **AWS Signature v4**, Digest, NTLM / Negotiate, and **mTLS** client
-  certificates. A JWT decoder shows the claims of tokens found in responses.
+  certificates. A JWT decoder shows the claims of tokens found in responses; copy the token bare or as
+  `Bearer <token>`, and other tabs that need a bearer token offer to use the one you copied.
 * **Network**: per-request timeout, redirects, TLS verification, proxy, HTTP version, and a cookie jar with a
   manager. A **timeline** shows DNS, connect, TLS, time to first byte and download, plus the raw request.
 * **Capture proxy**: point a browser, app or `HTTP(S)_PROXY` at Dispatch and it records traffic — HTTP, and HTTPS

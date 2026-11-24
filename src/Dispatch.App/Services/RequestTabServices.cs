@@ -13,4 +13,5 @@ public sealed record RequestTabServices(
     IDialogService Dialogs,
     GraphQlExecutor GraphQl,
     GrpcSchemaProvider GrpcSchemas,
-    WsdlLoader Wsdl);
+    WsdlLoader Wsdl,
+    CopiedTokenTracker Tokens);
