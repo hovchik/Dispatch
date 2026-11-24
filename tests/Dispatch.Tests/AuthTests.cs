@@ -339,3 +339,16 @@ public class BearerTokenTests
         Assert.Equal("RS256", Jwt.Decode(match!.Token).Algorithm);
     }
 }
+
+public class JwtShapeTests
+{
+    [Fact]
+    public void A_payload_that_is_not_an_object_is_not_a_token()
+    {
+        const string arrayPayload = "eyJhbGciOiJIUzI1NiJ9.W10.c2ln"; // payload "[]"
+        Assert.Throws<FormatException>(() => Jwt.Decode(arrayPayload));
+        Assert.False(BearerTokens.IsDecodable(arrayPayload));
+        Assert.Null(BearerTokens.FindJwt($$"""{"token":"{{arrayPayload}}"}"""));
+        Assert.Equal(TokenSuggestion.None, BearerTokens.Suggest(new AuthSettings(), true, arrayPayload, DateTimeOffset.UtcNow));
+    }
+}

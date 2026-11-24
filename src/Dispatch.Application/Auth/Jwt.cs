@@ -83,7 +83,9 @@ public static class Jwt
     {
         try
         {
-            return JsonNode.Parse(Encoding.UTF8.GetString(Base64Url(part))) ?? throw new FormatException($"Empty JWT {name}.");
+            // Claims are read by name, so a header or payload that is an array or a bare value is not a JWT.
+            return JsonNode.Parse(Encoding.UTF8.GetString(Base64Url(part))) as JsonObject
+                   ?? throw new FormatException($"The JWT {name} is not a JSON object.");
         }
         catch (Exception ex) when (ex is JsonException or FormatException)
         {

@@ -37,7 +37,8 @@ public sealed class CopiedTokenTracker(IClipboardService clipboard)
 
     /// <summary>
     /// The token to offer now: the clipboard's when it holds a JWT (so a token copied by hand counts too), else the
-    /// last one copied with the response buttons, while the clipboard has not been read or can't be.
+    /// last one copied with the response buttons while the clipboard can't be read. An empty clipboard, or one holding
+    /// other text or an image, offers nothing: the copied token is no longer what the user has in hand.
     /// </summary>
     public async Task<CopiedToken?> CurrentAsync()
     {
@@ -51,10 +52,8 @@ public sealed class CopiedTokenTracker(IClipboardService clipboard)
             return _last;
         }
 
-        if (text is null)
-            return _last;
         if (BearerTokens.Normalize(text) is not { } bare)
-            return null; // the user copied something else since: don't offer a stale token
+            return null; // empty, or the user copied something else since: don't offer a stale token
         if (_last is not null && string.Equals(_last.Token, bare, StringComparison.Ordinal))
             return _last;
         return new CopiedToken(bare, null, null, null);
